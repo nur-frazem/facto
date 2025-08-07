@@ -1,28 +1,15 @@
 import React from 'react';
+import ContinuarButton from '../components/Button';
 
 const Home = () => {
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>¡Bienvenido a Facto!</h1>
-      <p style={styles.description}>Tu aplicación de escritorio con Electron + React + Vite.</p>
+    <div className="text-center mt-[15%] font-sans">
+      <h1 className="text-4xl text-blue-600">¡Bienvenido a Facto!</h1>
+      <p className="text-lg mt-4">Tu aplicación de escritorio con Electron + React + Vite.</p>
+      <ContinuarButton />
     </div>
-  );
-};
 
-const styles = {
-  container: {
-    textAlign: 'center',
-    marginTop: '15%',
-    fontFamily: 'sans-serif'
-  },
-  title: {
-    fontSize: '2.5rem',
-    color: '#007acc',
-  },
-  description: {
-    fontSize: '1.2rem',
-    marginTop: '1rem',
-  },
+  );
 };
 
 export default Home;

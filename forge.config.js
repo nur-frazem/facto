@@ -38,7 +38,7 @@ module.exports = {
             target: 'main',
           },
           {
-            entry: 'src/preload/preload.js',
+            entry: 'src/preload.js',
             config: 'vite.preload.config.mjs',
             target: 'preload',
           },
