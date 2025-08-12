@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import IniciarSesion from './pages/IniciarSesion';
+import RIndex from './pages/recepcion/RIndex';
 
 function App() {
   return (
@@ -9,6 +10,7 @@ function App() {
         <Routes>
           <Route path="/home" element={<Home/>} />
           <Route path="/" element={<IniciarSesion/>} />
+          <Route path="/recepcion-index" element={<RIndex/>} />
         </Routes>
       </HashRouter>
     </div>
