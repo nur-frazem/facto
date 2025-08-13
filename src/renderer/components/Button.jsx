@@ -1,4 +1,5 @@
 import { CButton } from "./Container";
+import arrowLeftWhite from "../assets/Logos/arrowLeftWhite.png";
 
 export function YButton({ onClick, text, className="" }) {
     return (
@@ -24,5 +25,22 @@ export function XButton({ onClick, text, className="" }) {
                 {text}
             </button>
         </CButton>
+    );
+}
+
+export function VolverButton({onClick, className=""}){
+    return (
+        <button
+            onClick={onClick}
+            className="px-2 h-10 flex rounded-2xl items-center justify-start hover:bg-[#373c8d] active:bg-[#1f2252] transition-colors gap-2"
+        >
+            <img
+                src={arrowLeftWhite}
+                alt="Continue button arrow"
+                className="w-6 h-6 object-contain"
+            />
+            <p className="text-white font-medium">Volver</p>
+            
+        </button>
     );
 }

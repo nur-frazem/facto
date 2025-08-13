@@ -1,5 +1,5 @@
 import { Children } from "react";
-import arrowRight from "../assets/Logos/arrowRight.png";
+import arrowRightWhite from "../assets/Logos/arrowRightWhite.png";
 
 export function CButton({ children }){
     return(
@@ -20,26 +20,42 @@ export function CGrid({children, rowSizes = "auto 1fr"}){
 }
 
 
-export function Card({ logo, title, description, onClick }) {
+export function Card({ logo = "", title, description = "", onClick }) {
+    const hasDescription = description.trim() !== "";
+
     return (
-        <div className="bg-[#17183B] min-h-56 rounded-2xl p-4 w-96 flex flex-col gap-y-2 h-fit">
-            <div className="flex items-center gap-3 just">
-                <img src={logo} alt="logo" className="w-6 h-6 object-contain" />
+        <div
+            className={`bg-[#17183B] shadow-2xl shadow-purple-950 rounded-2xl p-4 w-96 flex ${
+                hasDescription ? "flex-col gap-y-2 relative" : "items-center justify-between"
+            } h-fit`}
+        >
+            {/* Header */}
+            <div className="flex items-center gap-3">
+                {logo && (
+                    <img src={logo} alt="logo" className="w-6 h-6 object-contain" />
+                )}
                 <h2 className="text-white text-lg font-bold">{title}</h2>
             </div>
-        
-            <div className="flex flex-col items-start justify-between mt-2">
-                <p className="text-gray-300 text-sm max-w-[90%] break-words max-h-72 overflow-y-auto">
+
+            {/* Descripción si existe */}
+            {hasDescription && (
+                <p className="text-gray-300 text-sm max-w-[90%] break-words max-h-72 overflow-y-auto pr-12">
                     {description}
                 </p>
-        
-                <button
-                    onClick={onClick}
-                    className="bg-[#388697] w-10 h-10 rounded-full flex items-center justify-center hover:bg-[#28606d] active:bg-[#15343b] transition-colors self-end"
-                >
-                    <img src={arrowRight} alt="Continue button arrow" className="w-6 h-6 object-contain"/>
-                </button>
-            </div>
+            )}
+
+            {/* Botón */}
+            <button
+                onClick={onClick}
+                className={` w-10 h-10 flex rounded-full items-center justify-center hover:bg-[#373c8d] active:bg-[#1f2252] transition-colors
+                    ${hasDescription ? "absolute bottom-4 right-4" : ""}`}
+            >
+                <img
+                    src={arrowRightWhite}
+                    alt="Continue button arrow"
+                    className="w-6 h-6 object-contain"
+                />
+            </button>
         </div>
     );
-  }
+}

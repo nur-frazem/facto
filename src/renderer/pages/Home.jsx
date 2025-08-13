@@ -28,6 +28,7 @@ const Home = () => {
                       de los documentos." />
         
         <Card title="Emisión"
+              onClick={() => navigate("/emision-index")}
               logo={outDocLogo}
          description="Todo lo relacionado a documentos emitidos, configurado para que la emisión
                       de estos se agreguen automáticamente en esta sección al momento de su facturación,
@@ -39,6 +40,7 @@ const Home = () => {
                           a la papelera temporal, configurar duración de créditos por cliente, etc." />
         
         <Card title="Informes"
+              onClick={() => navigate("/informes-index")}
               logo={reportLogo}
          description="En esta sección podrá descargar informes de forma detallada para revisar recepción o emisión,
                       donde podrá visualizar el estado de cuentas de clientes o proveedores con una cartola general
