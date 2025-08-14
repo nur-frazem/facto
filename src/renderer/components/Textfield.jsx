@@ -8,6 +8,9 @@ import {
 
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
 
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+
 import { useState, useRef, useEffect } from "react";
 
 export function Textfield ({ label, type = "text", value, onChange, placeholder, className="w-full", classNameLabel="" }) {
@@ -89,5 +92,25 @@ export function DropdownMenu({
           ))}
         </MenuList>
       </Menu>
+    );
+  }
+
+  export function DatepickerField({ label, selectedDate, onChange, placeholder, className="w-full", classNameLabel="" }) {
+    return (
+      <div className={`flex flex-col space-y-1 ${className}`}>
+        {label && <label className={`text-sm font-medium text-white ${classNameLabel}`}>{label}</label>}
+  
+        <DatePicker
+          selected={selectedDate}
+          onChange={onChange}
+          placeholderText={placeholder}
+          className="px-4 py-2 rounded-lg bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200 w-full"
+          dateFormat="dd/MM/yyyy"
+          calendarClassName="bg-blue-700 text-white rounded-lg border border-blue-400 p-2 shadow-lg"
+          dayClassName={date =>
+            "hover:bg-blue-500 rounded-md transition-colors"
+          }
+        />
+      </div>
     );
   }
