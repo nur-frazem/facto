@@ -6,7 +6,7 @@ import { Card } from "../../components/Container";
 import { VolverButton } from "../../components/Button";
 import { useNavigate } from "react-router-dom";
 
-const RIndex = () => {
+const CIndex = () => {
     const navigate = useNavigate();
 
     return(
@@ -21,14 +21,14 @@ const RIndex = () => {
                 <div className="absolute left-5">
                     <VolverButton onClick={() => navigate("/home")}/>
                 </div>
-                <H1Tittle text="Recepción de documentos" />
+                <H1Tittle text="Configuración" />
             </div>
 
             {/* Contenido principal */}
             <div className="flex flex-col flex-wrap justify-start content-center gap-6 mt-10">
-                <Card title="Ingreso de documentos" onClick={() => navigate("/recepcion-index/ingresar")} />
-                <Card title="Procesar documentos" />
-                <Card title="Revisión de documentos" />
+                <Card title="Cuenta" />
+                <Card title="Papelera temporal" />
+                <Card title="Configurar créditos" />
             </div>
 
             {/* Footer fijo */}
@@ -40,4 +40,4 @@ const RIndex = () => {
     );
 }
 
-export default RIndex;
+export default CIndex;

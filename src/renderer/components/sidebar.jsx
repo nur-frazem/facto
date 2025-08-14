@@ -15,7 +15,6 @@ import {
   DocumentArrowDownIcon,
   PaperAirplaneIcon,
   PresentationChartLineIcon,
-  UserCircleIcon,
   Cog6ToothIcon,
   PowerIcon,
   Bars3Icon,
@@ -58,7 +57,7 @@ export function SidebarWithContentSeparator() {
     recepcion: false,
     emision: false,
   });
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const [isLockedCollapsed, setIsLockedCollapsed] = useState(false); // Bloqueo
 
   const toggleAccordion = (name) => {
@@ -251,7 +250,9 @@ export function SidebarWithContentSeparator() {
         </ListItem>
 
 
-        <ListItem className="cursor-pointer text-gray-100 hover:bg-blue-800 transition-all duration-300">
+        <ListItem className="cursor-pointer text-gray-100 hover:bg-blue-800 transition-all duration-300"
+          onClick={() => navigate("/configuracion-index")}
+          >
           <ListItemPrefix>
             <Cog6ToothIcon className="h-5 w-5 mr-2" />
           </ListItemPrefix>

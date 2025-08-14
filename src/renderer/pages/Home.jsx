@@ -35,6 +35,7 @@ const Home = () => {
                       donde podrá revisar, modificar estados de pago, anular etc." />
 
         <Card title="Configuración"
+              onClick={() => navigate("/configuracion-index")}
               logo={configLogo}
               description="Ingrese para configurar su sitio, su perfil, documentos eliminados que son enviados
                           a la papelera temporal, configurar duración de créditos por cliente, etc." />
