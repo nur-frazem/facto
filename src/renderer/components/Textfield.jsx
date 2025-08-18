@@ -13,26 +13,66 @@ import "react-datepicker/dist/react-datepicker.css";
 
 import { useState, useRef, useEffect } from "react";
 
-export function Textfield ({ label, type = "text", value, onChange, placeholder, className="w-full", classNameLabel="" }) {
-    return (
-        <div className={`flex flex-col space-y-1 ${className}`}>
-        {label && <label className={`text-sm font-medium text-white ${classNameLabel}`}>{label}</label>}
-            <input
-                type={type}
-                value={value}
-                onChange={onChange}
-                placeholder={placeholder}
-                className="px-4 py-2 rounded-lg hover:border-blue-400 bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200"
-            />
-        </div>
-    );
+export function Textfield ({ 
+  label, 
+  type = "text", 
+  value, 
+  onChange, 
+  placeholder, 
+  readOnly, 
+  className="w-full", 
+  classNameLabel="",
+  currency = false,
+}) {
+
+  const isReadOnly = readOnly || (!onChange && value !== undefined);
+
+  const formatCurrency = (val) => {
+    if (val === "" || val === null || val === undefined) return "";
+    return new Intl.NumberFormat("es-CL", {
+      style: "currency",
+      currency: "CLP",
+      minimumFractionDigits: 0,
+    }).format(val);
+  };
+
+  // Si currency es true, el valor mostrado debe estar formateado
+  const displayValue = currency ? formatCurrency(value) : value;
+
+  // Cuando cambia, devolvemos solo números limpios si es moneda
+  const handleChange = (e) => {
+    if (currency) {
+      const raw = e.target.value.replace(/\D/g, ""); // deja solo dígitos
+      onChange?.({
+        ...e,
+        target: { ...e.target, value: raw ? parseInt(raw, 10) : "" }
+      });
+    } else {
+      onChange?.(e);
+    }
+  };
+
+  return (
+      <div className={`flex flex-col space-y-1 ${className}`}>
+      {label && <label className={`text-sm font-medium text-white ${classNameLabel}`}>{label}</label>}
+          <input
+              type={type}
+              value={displayValue}
+              onChange={handleChange}
+              placeholder={placeholder}
+              readOnly={isReadOnly}
+              className="px-4 py-2 rounded-lg hover:border-blue-400 bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200"
+          />
+      </div>
+  );
 }
 
 export function DropdownMenu({
     tittle = "Opción",
     items = [],
     classNameMenu = "",
-    classNameList = ""
+    classNameList = "",
+    onSelect,
   }) {
     const [selected, setSelected] = useState(tittle);
     const [open, setOpen] = useState(false);
@@ -51,6 +91,12 @@ export function DropdownMenu({
   
       return () => resizeObserver.disconnect();
     }, [handlerRef]);
+
+    const handleSelect = (item) => {
+      setSelected(item);
+      setOpen(false);
+      if (onSelect) onSelect(item);
+    };
   
     return (
       <Menu open={open} handler={setOpen}>
@@ -58,7 +104,7 @@ export function DropdownMenu({
             <span className="text-white text-sm mb-1 font-bold">{tittle}</span>
             <MenuHandler
             ref={handlerRef}
-            className={`rounded-lg hover:border-blue-400 bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200 ${classNameMenu}`}
+            className={`rounded-lg py-2 hover:border-blue-400 bg-white/10 text-white placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200 ${classNameMenu}`}
             >
             <Button className="p-2 bg-blue-500 text-white w-full">
                 <div className="flex items-center justify-between w-full">
@@ -81,10 +127,7 @@ export function DropdownMenu({
           {items.map((item, index) => (
             <MenuItem
               key={index}
-              onClick={() => {
-                setSelected(item);
-                setOpen(false);
-              }}
+              onClick={() => handleSelect(item)}
               className="w-full px-3 py-1 text-white font-semibold hover:bg-black/10"
             >
               {item}

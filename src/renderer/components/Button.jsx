@@ -1,9 +1,9 @@
 import { CButton } from "./Container";
 import arrowLeftWhite from "../assets/Logos/arrowLeftWhite.png";
 
-export function YButton({ onClick, text, className="" }) {
+export function YButton({ onClick, text, className="", classNameContainer="" }) {
     return (
-        <CButton>
+        <CButton className={`${classNameContainer}`}>
             <button
                 onClick={onClick}
                 className={`bg-[#17183B] hover:bg-[#2b2e5f] active:bg-[#080813] min-w-32 h-12 leading-none

@@ -162,7 +162,9 @@ export function SidebarWithContentSeparator() {
             <AccordionContent isOpen={openAccordions.recepcion}>
               <AccordionBody className="py-1 text-gray-100">
                 <List className="p-0">
-                  <ListItem className=" hover:bg-blue-800 transition-all duration-100">
+                  <ListItem className=" hover:bg-blue-800 transition-all duration-100"
+                            onClick={() => navigate("/recepcion-index/ingresar")}
+                            >
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                     </ListItemPrefix>

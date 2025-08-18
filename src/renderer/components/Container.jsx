@@ -1,9 +1,9 @@
 import { Children } from "react";
 import arrowRightWhite from "../assets/Logos/arrowRightWhite.png";
 
-export function CButton({ children }){
+export function CButton({ children, className }){
     return(
-        <div className="m-2 inline-block">
+        <div className={`m-2 inline-block ${className}`}>
             {children}
         </div>
     );
