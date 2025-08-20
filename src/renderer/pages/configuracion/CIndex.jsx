@@ -28,7 +28,7 @@ const CIndex = () => {
             <div className="flex flex-col flex-wrap justify-start content-center gap-6 mt-10">
                 <Card title="Cuenta" />
                 <Card title="Papelera temporal" />
-                <Card title="Configurar créditos" />
+                <Card title="Editar Clientes/proveedores" />
             </div>
 
             {/* Footer fijo */}
