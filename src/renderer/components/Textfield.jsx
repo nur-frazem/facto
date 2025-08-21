@@ -143,6 +143,87 @@ export function DropdownMenu({
     );
   }
 
+  export function DropdownMenuList({
+    tittle = "Opciones",
+    items = [],
+    onSelect,
+  }) {
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [open, setOpen] = useState(false);
+    const menuRef = useRef(null);
+  
+    const toggleItem = (item) => {
+      let newSelection;
+      setSelectedItems((prev) => {
+        newSelection = prev.includes(item)
+          ? prev.filter((i) => i !== item)
+          : [...prev, item];
+        return newSelection;
+      });
+      // Llamamos a onSelect fuera del setState
+      if (onSelect) onSelect(newSelection);
+    };
+  
+    // Detectar click fuera
+    useEffect(() => {
+      const handleClickOutside = (e) => {
+        if (menuRef.current && !menuRef.current.contains(e.target)) {
+          setOpen(false);
+        }
+      };
+  
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+  
+    return (
+      <div ref={menuRef} className="relative inline-block text-left w-full">
+        <span className="text-white text-sm mb-1 font-bold">{tittle}</span>
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-full p-2 flex justify-between items-center font-bold
+                    rounded-lg py-2 hover:border-blue-400 bg-white/10 text-white placeholder-gray-300 border border-white/20 
+                    focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200"
+        >
+          {selectedItems.length > 0
+            ? `${selectedItems.length} seleccionado(s)`
+            : "Seleccionar..."}
+          <ChevronDownIcon
+            className={`w-4 h-4 transition-transform ${
+              open ? "rotate-180" : "rotate-0"
+            }`}
+          />
+        </button>
+  
+        {open && (
+          <div
+            className="absolute mt-1 shadow-lg z-10 border-[1px] justify-self-center
+                          px-0 py-1 max-w-96 min-w-44 max-h-52 overflow-auto rounded-lg bg-gradient-to-tl border-blue-400 from-purple-700 to-blue-500
+                          flex flex-col scrollbar-custom"
+          >
+            {items.map((item, index) => {
+              const isSelected = selectedItems.includes(item);
+              return (
+                <div
+                  key={index}
+                  onClick={() => toggleItem(item)}
+                  className={`px-3 py-1 font-medium cursor-pointer text-center text-[15px] hover:transition duration-200 ${
+                    isSelected
+                      ? "bg-black/30 text-white"
+                      : "text-white hover:bg-black/10"
+                  }`}
+                >
+                  {item}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+
   export function DatepickerField({ label, selectedDate, onChange, placeholder, className="w-full", classNameDatePicker="", classNameLabel="", minDate }) {
     return (
       <div className={`flex flex-col space-y-1 ${className}`}>

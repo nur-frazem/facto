@@ -6,6 +6,7 @@ import EIndex from './pages/emision/EIndex';
 import IIndex from './pages/informes/IIndex';
 import CIndex from './pages/configuracion/CIndex';
 import RIngresar from './pages/recepcion/Ringresar';
+import RProcesar from './pages/recepcion/RProcesar';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/informes-index" element={<IIndex/>} />
           <Route path="/configuracion-index" element={<CIndex/>} />
           <Route path="/recepcion-index/ingresar" element={<RIngresar/>} />
+          <Route path="/recepcion-index/procesar" element={<RProcesar/>} />
         </Routes>
       </HashRouter>
     </div>

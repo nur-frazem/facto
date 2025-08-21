@@ -16,8 +16,8 @@ const RIngresar = () => {
   const [neto, setNeto] = useState("");
   const [iva, setIva] = useState("");
   const [otros, setOtros] = useState("");
-  const [flete, setFlete] = useState("");
-  const [retencion, setRetencion] = useState("");
+  const [flete, setFlete] = useState(0);
+  const [retencion, setRetencion] = useState(0);
 
   useEffect(() => {
   const netoNumber = Number(neto) || 0;
@@ -103,6 +103,7 @@ const RIngresar = () => {
       {/* Contenido principal */}
       <div className="flex flex-col flex-wrap justify-start gap-6 mt-10 ml-5 mr-5">
         <div className="grid grid-cols-3 grid-rows-5 gap-y-3 gap-x-10">
+          
           {/* Selección de giro */}
           <DropdownMenu
             tittle={

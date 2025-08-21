@@ -1,9 +1,12 @@
 import {SidebarWithContentSeparator} from "../../components/sidebar";
 import React from 'react';
+import { useNavigate } from "react-router-dom";
 import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
+import { VolverButton } from "../components/Button";
 
 const Example = () => {
+    const navigate = useNavigate();
     return(
         <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
             {/* Sidebar */}
@@ -12,8 +15,11 @@ const Example = () => {
             </div>
 
             {/* Título */}
-            <div className="p-4 justify-center flex">
-                <H1Tittle text="Titulo" />
+            <div className="p-4 relative flex items-center justify-center">
+            <div className="absolute left-5">
+                <VolverButton onClick={() => navigate("/recepcion-index")} />
+            </div>
+            <H1Tittle text="Titulo" />
             </div>
 
             {/* Contenido principal */}
