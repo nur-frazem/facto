@@ -20,14 +20,14 @@ export function CGrid({children, rowSizes = "auto 1fr"}){
 }
 
 
-export function Card({ logo = "", title, description = "", onClick }) {
+export function Card({ logo = "", title, description = "", onClick, hasButton = true, content = null, contentClassName }) {
     const hasDescription = description.trim() !== "";
 
     return (
         <div
             className={`bg-[#17183B] shadow-2xl shadow-purple-950 rounded-2xl p-4 w-96 flex ${
                 hasDescription ? "flex-col gap-y-2 relative" : "items-center justify-between"
-            } h-fit`}
+            } h-fit ${content !== null && "w-auto"}`}
         >
             {/* Header */}
             <div className="flex items-center gap-3">
@@ -44,18 +44,28 @@ export function Card({ logo = "", title, description = "", onClick }) {
                 </p>
             )}
 
+            {/* Content */}
+            {content !== null && (
+                <div className={` w-auto text-white ${contentClassName}`}>
+                    {content}
+                </div>
+            )}
+
             {/* Botón */}
-            <button
-                onClick={onClick}
-                className={` w-10 h-10 flex rounded-full items-center justify-center hover:bg-[#373c8d] active:bg-[#1f2252] transition-colors
-                    ${hasDescription ? "absolute bottom-4 right-4" : ""}`}
-            >
-                <img
-                    src={arrowRightWhite}
-                    alt="Continue button arrow"
-                    className="w-6 h-6 object-contain"
-                />
-            </button>
+            {hasButton && (
+                <button
+                    onClick={onClick}
+                    className={` w-10 h-10 flex rounded-full items-center justify-center hover:bg-[#373c8d] active:bg-[#1f2252] transition-colors
+                        ${hasDescription ? "absolute bottom-4 right-4" : ""}`}
+                >
+                    <img
+                        src={arrowRightWhite}
+                        alt="Continue button arrow"
+                        className="w-6 h-6 object-contain"
+                    />
+                </button>
+            )}
+            
         </div>
     );
 }
