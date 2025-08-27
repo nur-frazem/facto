@@ -122,7 +122,7 @@ export function DropdownMenu({
           className={`rounded-lg py-2 hover:border-blue-400 bg-white/10 text-white placeholder-gray-300 border border-white/20 
                       focus:outline-none focus:ring-2 focus:ring-blue-400 transition duration-200 ${classNameMenu}`}
         >
-          <Button className="p-2 bg-blue-500 text-white w-full">
+          <Button className="p-2 bg-sky-950 text-white w-full">
             <div className="flex items-center justify-between w-full">
               <span className="ml-5">{internalSelected || tittle}</span>
               <ChevronDownIcon
@@ -137,7 +137,7 @@ export function DropdownMenu({
 
       <MenuList
         style={{ width: menuWidth }}
-        className={`px-0 py-1 max-w-96 min-w-52 overflow-hidden rounded-lg bg-gradient-to-tl border-blue-400 from-purple-700 to-blue-500 ${classNameList}`}
+        className={`px-0 py-1 max-w-96 min-w-52 overflow-hidden rounded-lg bg-gradient-to-tl border-sky-600 from-sky-950 to-sky-900 ${classNameList}`}
       >
         {items.map((item, index) => (
           <MenuItem
@@ -169,17 +169,14 @@ export function DropdownMenu({
     }, [value]);
 
     const toggleItem = (item) => {
-      let newSelection;
-      setSelectedItems((prev) => {
-        newSelection = prev.includes(item)
+      setSelectedItems((prev) => 
+        prev.includes(item)
           ? prev.filter((i) => i !== item)
-          : [...prev, item];
-        return newSelection;
-      });
-      if (onSelect) onSelect(newSelection);
+          : [...prev, item]
+      );
     };
   
-    // 👇 cuando cambian los seleccionados, avisamos al padre
+    // cuando cambian los seleccionados, avisamos al padre
     useEffect(() => {
       if (onSelect) {
         onSelect(selectedItems);
@@ -219,7 +216,7 @@ export function DropdownMenu({
         {open && (
           <div
             className="absolute mt-1 shadow-lg z-10 border-[1px] justify-self-center
-                          px-0 py-1 max-w-96 min-w-44 max-h-52 overflow-auto rounded-lg bg-gradient-to-tl border-blue-400 from-purple-700 to-blue-500
+                          px-0 py-1 max-w-96 min-w-44 max-h-52 overflow-auto rounded-lg bg-gradient-to-tl border-sky-700 from-sky-950 to-sky-900
                           flex flex-col scrollbar-custom"
           >
             {items.map((item, index) => {

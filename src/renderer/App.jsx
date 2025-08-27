@@ -7,22 +7,38 @@ import IIndex from './pages/informes/IIndex';
 import CIndex from './pages/configuracion/CIndex';
 import RIngresar from './pages/recepcion/Ringresar';
 import RProcesar from './pages/recepcion/RProcesar';
+import Fondo from "./assets/background/FondoModernoAzul.png";
 
 function App() {
   return (
-    <div className="absolute inset-0 bg-gradient-to-tl from-purple-950 to-blue-500">
-      <HashRouter>
-        <Routes>
-          <Route path="/home" element={<Home/>} />
-          <Route path="/" element={<IniciarSesion/>} />
-          <Route path="/recepcion-index" element={<RIndex/>} />
-          <Route path="/emision-index" element={<EIndex/>} />
-          <Route path="/informes-index" element={<IIndex/>} />
-          <Route path="/configuracion-index" element={<CIndex/>} />
-          <Route path="/recepcion-index/ingresar" element={<RIngresar/>} />
-          <Route path="/recepcion-index/procesar" element={<RProcesar/>} />
-        </Routes>
-      </HashRouter>
+    <div className="absolute inset-0">
+
+      {/* Capa gradiente encima */}
+      <div className="absolute inset-0 bg-gradient-to-tl from-sky-950 to-sky-900" />
+
+      {/* Capa fondo con imagen */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${Fondo})`, opacity: 0.5 }}
+      />
+      
+      
+      
+      {/* Contenido principal */}
+      <div className="relative z-60">
+        <HashRouter>
+          <Routes>
+            <Route path="/home" element={<Home/>} />
+            <Route path="/" element={<IniciarSesion/>} />
+            <Route path="/recepcion-index" element={<RIndex/>} />
+            <Route path="/emision-index" element={<EIndex/>} />
+            <Route path="/informes-index" element={<IIndex/>} />
+            <Route path="/configuracion-index" element={<CIndex/>} />
+            <Route path="/recepcion-index/ingresar" element={<RIngresar/>} />
+            <Route path="/recepcion-index/procesar" element={<RProcesar/>} />
+          </Routes>
+        </HashRouter>
+      </div>
     </div>
   );
 }

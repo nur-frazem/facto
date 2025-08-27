@@ -25,7 +25,7 @@ export function Card({ logo = "", title, description = "", onClick, hasButton = 
 
     return (
         <div
-            className={`bg-[#17183B] shadow-2xl shadow-purple-950 rounded-2xl p-4 w-96 flex ${
+            className={`bg-[#062235] shadow-2xl shadow-black rounded-2xl p-4 w-96 flex ${
                 hasDescription ? "flex-col gap-y-2 relative" : "items-center justify-between"
             } h-fit ${content !== null && "w-auto"}`}
         >

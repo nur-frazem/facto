@@ -89,10 +89,10 @@ export function SidebarWithContentSeparator() {
   return (
     <Card
       className={`
-        h-full 
+        h-full rounded-none
         p-4 
         shadow-xl shadow-blue-gray-900/5
-        bg-gradient-to-tl from-purple-800 to-blue-500
+        bg-gradient-to-t from-sky-900 to-sky-950
         flex flex-col
         transition-width duration-300
         ${collapsed ? "w-20" : "w-72 max-w-[20rem]"}
@@ -120,8 +120,8 @@ export function SidebarWithContentSeparator() {
       <List className="flex-1 overflow-y-auto p-0">
 
         {/* Home */}
-        <ListItem className="cursor-pointer text-gray-100 hover:bg-blue-800   
-                          active:bg-blue-950 transition-all duration-300"
+        <ListItem className="cursor-pointer text-gray-100 hover:bg-black/20  
+                          active:bg-black/40 transition-all duration-300"
                   onClick={() => navigate("/home")}>
             <ListItemPrefix>
               <HomeIcon className="h-5 w-5 mr-2" />
@@ -147,7 +147,8 @@ export function SidebarWithContentSeparator() {
             onClick={() => toggleAccordion("recepcion")}
             style={{ cursor: "pointer" }}
           >
-            <AccordionHeader className="border-b-0 text-base p-3 flex items-center gap-2  rounded-lg hover:bg-blue-800  transition-all duration-300">
+            <AccordionHeader className="border-b-0 text-base p-3 flex items-center gap-2  rounded-lg hover:bg-black/20 
+                                      active:bg-black/40  transition-all duration-300">
               <ListItemPrefix>
                 <DocumentArrowDownIcon className="h-5 w-5 text-gray-100" />
               </ListItemPrefix>
@@ -162,7 +163,7 @@ export function SidebarWithContentSeparator() {
             <AccordionContent isOpen={openAccordions.recepcion}>
               <AccordionBody className="py-1 text-gray-100">
                 <List className="p-0">
-                  <ListItem className=" hover:bg-blue-800 transition-all duration-100"
+                  <ListItem className=" hover:bg-black/20 transition-all duration-100"
                             onClick={() => navigate("/recepcion-index/ingresar")}
                             >
                     <ListItemPrefix>
@@ -170,7 +171,7 @@ export function SidebarWithContentSeparator() {
                     </ListItemPrefix>
                     Ingreso de documentos
                   </ListItem>
-                  <ListItem className=" hover:bg-blue-800 transition-all duration-100"
+                  <ListItem className=" hover:bg-black/20 transition-all duration-100"
                             onClick={() => navigate("/recepcion-index/procesar")}
                             >
                     <ListItemPrefix>
@@ -178,7 +179,7 @@ export function SidebarWithContentSeparator() {
                     </ListItemPrefix>
                     Procesar documentos
                   </ListItem>
-                  <ListItem className= " hover:bg-blue-800  transition-all duration-100">
+                  <ListItem className= " hover:bg-black/20  transition-all duration-100">
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                     </ListItemPrefix>
@@ -208,7 +209,7 @@ export function SidebarWithContentSeparator() {
             onClick={() => toggleAccordion("emision")}
             style={{ cursor: "pointer" }}
           >
-            <AccordionHeader className="border-b-0 p-3 flex items-center gap-2 rounded-lg hover:bg-blue-800 transition-all duration-300">
+            <AccordionHeader className="border-b-0 p-3 flex items-center gap-2 rounded-lg hover:bg-black/20 active:bg-black/40 transition-all duration-300">
               <ListItemPrefix>
                 <PaperAirplaneIcon className="h-5 w-5 text-gray-100" />
               </ListItemPrefix>
@@ -223,13 +224,13 @@ export function SidebarWithContentSeparator() {
             <AccordionContent isOpen={openAccordions.emision}>
               <AccordionBody className="py-1 text-gray-100 ">
                 <List className="p-0">
-                  <ListItem className="hover:bg-blue-800 transition-all duration-100">
+                  <ListItem className="hover:bg-black/20 transition-all duration-100">
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5 " />
                     </ListItemPrefix>
                     Revisión de documentos
                   </ListItem>
-                  <ListItem className="hover:bg-blue-800 transition-all duration-100">
+                  <ListItem className="hover:bg-black/20 transition-all duration-100">
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                     </ListItemPrefix>
@@ -246,7 +247,7 @@ export function SidebarWithContentSeparator() {
 
         <ListItem 
           onClick={() => navigate("/informes-index")}
-          className="cursor-pointer text-gray-100 hover:bg-blue-800 transition-all duration-300">
+          className="cursor-pointer text-gray-100 hover:bg-black/20 transition-all duration-300">
           <ListItemPrefix>
             <PresentationChartLineIcon className="h-5 w-5 mr-2" />
           </ListItemPrefix>
@@ -254,7 +255,7 @@ export function SidebarWithContentSeparator() {
         </ListItem>
 
 
-        <ListItem className="cursor-pointer text-gray-100 hover:bg-blue-800 transition-all duration-300"
+        <ListItem className="cursor-pointer text-gray-100 hover:bg-black/20 transition-all duration-300"
           onClick={() => navigate("/configuracion-index")}
           >
           <ListItemPrefix>
@@ -266,7 +267,7 @@ export function SidebarWithContentSeparator() {
 
         <ListItem
           onClick={() => navigate("/")}
-          className="cursor-pointer flex items-center gap-2 text-gray-100 hover:bg-blue-800 transition-all duration-300"
+          className="cursor-pointer flex items-center gap-2 text-gray-100 hover:bg-black/20 transition-all duration-300"
         >
           <ListItemPrefix>
             <PowerIcon className="h-5 w-5" />

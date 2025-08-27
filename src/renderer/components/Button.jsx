@@ -32,7 +32,7 @@ export function VolverButton({onClick, className=""}){
     return (
         <button
             onClick={onClick}
-            className="px-2 h-10 flex rounded-2xl items-center justify-start hover:bg-[#373c8d] active:bg-[#1f2252] transition-colors gap-2"
+            className="px-2 h-10 flex rounded-2xl items-center justify-start hover:bg-[#393c6d] active:bg-[#1f2252] transition-colors gap-2"
         >
             <img
                 src={arrowLeftWhite}

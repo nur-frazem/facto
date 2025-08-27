@@ -8,7 +8,7 @@ export function Modal({children, onClickOutside, onClickButton}){
                 ></div>
 
                 {/* Ventana modal */}
-                <div className="relative w-auto max-w-2xl p-6 rounded-xl bg-gradient-to-tl from-purple-950 to-blue-500 text-white shadow-lg z-50">
+                <div className="relative w-auto max-w-2xl p-6 rounded-xl bg-gradient-to-tl from-sky-950 to-sky-900 text-white shadow-lg z-50">
                     {children}
                 </div>
 
