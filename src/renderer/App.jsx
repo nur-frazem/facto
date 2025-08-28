@@ -7,6 +7,7 @@ import IIndex from './pages/informes/IIndex';
 import CIndex from './pages/configuracion/CIndex';
 import RIngresar from './pages/recepcion/Ringresar';
 import RProcesar from './pages/recepcion/RProcesar';
+import CClientesProveedores from './pages/configuracion/CClientesProveedores';
 import Fondo from "./assets/background/FondoModernoAzul.png";
 
 function App() {
@@ -34,6 +35,7 @@ function App() {
             <Route path="/emision-index" element={<EIndex/>} />
             <Route path="/informes-index" element={<IIndex/>} />
             <Route path="/configuracion-index" element={<CIndex/>} />
+            <Route path="/configuracion-clientesProveedores" element={<CClientesProveedores/>} />
             <Route path="/recepcion-index/ingresar" element={<RIngresar/>} />
             <Route path="/recepcion-index/procesar" element={<RProcesar/>} />
           </Routes>

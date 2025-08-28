@@ -6,7 +6,7 @@ import { Card } from "../../components/Container";
 import { VolverButton } from "../../components/Button";
 import { useNavigate } from "react-router-dom";
 
-const CIndex = () => {
+const CClientesProveedores = () => {
     const navigate = useNavigate();
 
     return(
@@ -28,7 +28,7 @@ const CIndex = () => {
             <div className="flex flex-col flex-wrap justify-start content-center gap-6 mt-10">
                 <Card title="Cuenta" />
                 <Card title="Papelera temporal" />
-                <Card title="Editar Clientes/proveedores" />
+                <Card title="Configurar Clientes/proveedores" onClick={() => navigate("/configuracion-clientesProveedores")}/>
             </div>
 
             {/* Footer fijo */}
@@ -40,4 +40,4 @@ const CIndex = () => {
     );
 }
 
-export default CIndex;
+export default CClientesProveedores;
