@@ -44,3 +44,14 @@ export function VolverButton({onClick, className=""}){
         </button>
     );
 }
+
+export function TextButton({onClick, text="", className="", classNameText=""}){
+    return (
+        <button
+            onClick={onClick}
+            className={`px-2 h-10 flex rounded-2xl items-center justify-start hover:bg-[#393c6d] active:bg-[#1f2252] transition-colors gap-2 ${className}`}
+        >
+            <p className={`${classNameText}`}>{text}</p>
+        </button>
+    );
+}

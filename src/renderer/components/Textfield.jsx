@@ -71,6 +71,31 @@ export function Textfield ({
   );
 }
 
+export function SearchBar({
+  placeholder = "",
+
+}) {
+
+  return (
+    <div className="w-full max-w-sm min-w-[200px]">
+      <div className="relative">
+        <input
+          className="w-full bg-transparent placeholder:text-slate-400 text-white text-sm border border-slate-200 rounded-md pl-3 pr-28 py-2 transition duration-300 ease focus:outline-none focus:border-slate-400 hover:border-slate-300 shadow-sm focus:shadow"
+          placeholder={placeholder} 
+        />
+        <button
+          className="absolute top-1 right-1 w-min flex items-center rounded-full py-1 px-2.5 border border-transparent text-center text-sm text-white transition-all shadow-sm hover:shadow focus:bg-slate-700 focus:shadow-none active:bg-slate-700 hover:bg-slate-700 active:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
+          type="button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4">
+            <path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 0 13.5 6.75 6.75 0 0 0 0-13.5ZM2.25 10.5a8.25 8.25 0 1 1 14.59 5.28l4.69 4.69a.75.75 0 1 1-1.06 1.06l-4.69-4.69A8.25 8.25 0 0 1 2.25 10.5Z"  clipRule="evenodd" />
+          </svg>
+        </button> 
+      </div>
+    </div>
+  );
+}
+
 export function DropdownMenu({
   tittle = "Opción",
   items = [],
@@ -264,6 +289,66 @@ export function DropdownMenu({
           }
           minDate={minDate}
         />
+      </div>
+    );
+  }
+
+  export function CheckboxDropdown({ label, items }) {
+    const [checked, setChecked] = useState(false);
+  
+    return (
+      <div className="inline-block my-4 w-full">
+        <label className="flex items-center justify-between space-x-2 cursor-pointer bg-black/30 hover:bg-black/50 transition-colors rounded-full py-1 px-2">
+          {/* Checkbox personalizado */}
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={() => setChecked(!checked)}
+            className="hidden"
+          />
+          <span
+            className={`
+              w-6 h-6 flex items-center justify-center 
+              rounded-lg border-2 
+              transition-colors duration-300
+              ${checked ? "bg-black border-sky-700" : "bg-black/90 border-black"}
+              hover:${checked ? "bg-black border-black" : "bg-black hover:border-sky-950"}
+            `}
+          >
+            {checked && (
+              <svg
+                className="w-4 h-4 text-white"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                viewBox="0 0 24 24"
+              >
+                <path d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </span>
+  
+          {/* Label */}
+          <span className="text-white">{label}</span>
+          <div></div>
+        </label>
+        {/* Dropdown ahora ocupa espacio (no absolute) */}
+        <div
+          className={`mt-2 w-full bg-sky-900 border-sky-950 border rounded-lg shadow-md transition-all duration-300 overflow-hidden ${
+            checked ? "max-h-60 opacity-100" : "max-h-0 opacity-0"
+          }`}
+        >
+          <ul className="divide-y divide-gray-200">
+            {items.map((item, index) => (
+              <li
+                key={index}
+                className="p-2 cursor-pointer transition-colors"
+              >
+                {item}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     );
   }
