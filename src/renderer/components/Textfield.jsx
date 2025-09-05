@@ -13,7 +13,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { useState, useRef, useEffect } from "react";
 import React from "react";
 
-export function Textfield ({ 
+export function Textfield({ 
   label, 
   type = "text", 
   value, 
@@ -25,9 +25,12 @@ export function Textfield ({
   classNameInput="",
   currency = false,
 }) {
+  const [countryCode, setCountryCode] = useState("+56"); // default Chile 🇨🇱
+  const [internalValue, setInternalValue] = useState(""); // para RUT u otros casos
 
   const isReadOnly = readOnly || (!onChange && value !== undefined);
 
+  // === FORMATTERS ===
   const formatCurrency = (val) => {
     if (val === "" || val === null || val === undefined) return "";
     return new Intl.NumberFormat("es-CL", {
@@ -37,37 +40,108 @@ export function Textfield ({
     }).format(val);
   };
 
-  // Si currency es true, el valor mostrado debe estar formateado
-  const displayValue = currency ? formatCurrency(value) : value;
+  const formatRut = (val) => {
+    if (!val) return "";
+    let clean = val.replace(/[^0-9kK]/g, "").toUpperCase();
+    let body = clean.slice(0, -1);
+    let dv = clean.slice(-1);
+    body = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return body + (dv ? "-" + dv : "");
+  };
 
-  // Cuando cambia, devolvemos solo números limpios si es moneda
+  // === DISPLAY VALUE ===
+  let displayValue = value ?? internalValue;
+  if (currency) displayValue = formatCurrency(value ?? internalValue);
+  if (type === "rut") displayValue = formatRut(value ?? internalValue);
+
+  // === ON CHANGE HANDLER ===
   const handleChange = (e) => {
     if (currency) {
-      const raw = e.target.value.replace(/\D/g, ""); // deja solo dígitos
+      const raw = e.target.value.replace(/\D/g, ""); 
       onChange?.({
         ...e,
         target: { ...e.target, value: raw ? parseInt(raw, 10) : "" }
       });
+      if (!onChange) setInternalValue(raw);
+  
+    } else if (type === "rut") {
+      const raw = e.target.value.replace(/[^0-9kK]/g, "").toUpperCase();
+      onChange?.({
+        ...e,
+        target: { ...e.target, value: raw }
+      });
+      if (!onChange) setInternalValue(raw);
+  
+    } else if (type === "phone") {
+      const raw = e.target.value.replace(/\D/g, ""); // ⬅️ solo dígitos
+      onChange?.({
+        ...e,
+        target: { ...e.target, value: raw }
+      });
+      if (!onChange) setInternalValue(raw);
+  
     } else {
       onChange?.(e);
+      if (!onChange) setInternalValue(e.target.value);
     }
   };
 
+  const countryCodes = [
+    { code: "+56", country: "CL" }
+  ];
+
   return (
-      <div className={`flex flex-col space-y-1 ${className}`}>
-      {label && <label className={`text-sm font-medium text-white ${classNameLabel}`}>{label}</label>}
+    <div className={`flex flex-col space-y-1 ${className}`}>
+      {label && (
+        <label className={`text-sm font-medium text-white ${classNameLabel}`}>
+          {label}
+        </label>
+      )}
+
+      {type === "phone" ? (
+        <div
+          className={`flex items-center rounded-lg border border-white/20 bg-white/10 
+            focus-within:ring-2 focus-within:ring-blue-400 transition duration-200 ${classNameInput}`}
+        >
+          {/* Dropdown de códigos */}
+          <select
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value)}
+            className="bg-transparent w-24 text-white py-2 focus:outline-none border-r border-white/20 "
+          >
+            {countryCodes.map(({ code, country }) => (
+              <option key={code} value={code} className="text-white bg-sky-900">
+                {country} {code}
+              </option>
+            ))}
+          </select>
+
+          {/* Input del número */}
           <input
-              type={type}
-              value={displayValue}
-              onChange={handleChange}
-              placeholder={placeholder}
-              readOnly={isReadOnly}
-              className={`px-4 py-2 rounded-lg hover:border-blue-400 bg-white/10 text-white 
-                      placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 
-                      focus:ring-blue-400 transition duration-200 [&::-webkit-inner-spin-button]:appearance-none 
-                      [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield] ${classNameInput}`}
+            type="tel"
+            value={displayValue}
+            onChange={handleChange}
+            placeholder={placeholder || "987654321"}
+            readOnly={isReadOnly}
+            className={`px-4 py-2 rounded-e-lg hover:border-blue-400 bg-black/5 text-white 
+              placeholder-gray-300 border border-white/20 focus:outline-none transition duration-200 [&::-webkit-inner-spin-button]:appearance-none 
+              [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield] ${classNameInput}`}
           />
-      </div>
+        </div>
+      ) : (
+        <input
+          type={type === "rut" ? "text" : type}
+          value={displayValue}
+          onChange={handleChange}
+          placeholder={placeholder}
+          readOnly={isReadOnly}
+          className={`px-4 py-2 rounded-lg hover:border-blue-400 bg-white/10 text-white 
+            placeholder-gray-300 border border-white/20 focus:outline-none focus:ring-2 
+            focus:ring-blue-400 transition duration-200 [&::-webkit-inner-spin-button]:appearance-none 
+            [&::-webkit-outer-spin-button]:appearance-none [appearance:textfield] ${classNameInput}`}
+        />
+      )}
+    </div>
   );
 }
 
@@ -293,9 +367,14 @@ export function DropdownMenu({
     );
   }
 
-  export function CheckboxDropdown({ label, items }) {
-    const [checked, setChecked] = useState(false);
+  export function CheckboxDropdown({ label, items, value, onChange }) {
+    const [checked, setChecked] = useState(value);
   
+    const handleChange = (e) => {
+      setChecked(prev => !prev);
+      onChange?.(!checked); // notifica al padre
+    };
+
     return (
       <div className="inline-block my-4 w-full">
         <label className="flex items-center justify-between space-x-2 cursor-pointer bg-black/30 hover:bg-black/50 transition-colors rounded-full py-1 px-2">
@@ -303,7 +382,7 @@ export function DropdownMenu({
           <input
             type="checkbox"
             checked={checked}
-            onChange={() => setChecked(!checked)}
+            onChange={handleChange}
             className="hidden"
           />
           <span
@@ -332,7 +411,6 @@ export function DropdownMenu({
           <span className="text-white">{label}</span>
           <div></div>
         </label>
-        {/* Dropdown ahora ocupa espacio (no absolute) */}
         <div
           className={`mt-2 w-full bg-sky-900 border-sky-950 border rounded-lg shadow-md transition-all duration-300 overflow-hidden ${
             checked ? "max-h-60 opacity-100" : "max-h-0 opacity-0"

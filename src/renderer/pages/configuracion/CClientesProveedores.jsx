@@ -11,15 +11,58 @@ import { Modal } from "../../components/modal";
 const RProcesar = () => {
     const navigate = useNavigate();
 
-    const [giro, setGiro] = useState(null);
-    const [tipoDoc, setTipoDoc] = useState(null);
-    const [docs, setDocs] = useState([]);
+    {/* Variables de textfields */}
+    const [rut, setRut]                 = useState("");
+    const [razon, setRazon]             = useState("");
+    const [giro, setGiro]               = useState("");
+    const [comuna, setComuna]           = useState("");
+    const [direccion, setDireccion]     = useState("");
+    const [telefono, setTelefono]       = useState("");
+    const [correo, setCorreo]           = useState("");
+
+    const [esCliente, setEsCliente]                 = useState(false);
+    const [esProveedor, setEsProveedor]             = useState(false);
+    const [creditoCliente, setCreditoCliente]       = useState(0);
+    const [creditoProveedor, setCreditoProveedor]   = useState(0);
+
+    // Estado de errores
+    const [errors, setErrors] = useState({});
+    const ECampo = "!";
+    const handleNewEmpresa = () => {
+        let newErrors = {};
+        
+        // rut obligatorio
+        if (!rut) newErrors.rut = ECampo;
+        if (!razon) newErrors.razon = ECampo;
+        if (!giro) newErrors.giro = ECampo;
+        if (!comuna) newErrors.comuna = ECampo;
+        if (!direccion) newErrors.direccion = ECampo;
+        
+        setErrors(newErrors);
+
+        if (Object.keys(newErrors).length === 0) {
+            setShowModal(false);
+        }
+    };
+    
     const [rows, setRows] = useState([]); // <- Aquí guardamos las filas de la "tabla"
 
     const [showModal, setShowModal] = useState(false);
 
     const handleModal = () => {
         setShowModal(true);
+    }
+
+    const handleNewEmpresaa = () => {
+        console.log("rut: " + rut);
+        console.log("razon: " + razon);
+        console.log("giro: " + giro);
+        console.log("comuna: " + comuna);
+        console.log("dirección: " + direccion);
+        console.log("teléfono: " + telefono);
+        console.log("correo: " + correo);
+        console.log("es cliente: " + esCliente);
+        console.log("es proveedor: " + esProveedor);
     }
 
     return (
@@ -68,8 +111,6 @@ const RProcesar = () => {
                             {rows.map((row, index) => (
                                 <div key={index} className="flex justify-between mb-2">
                                     <div className="w-1/3 text-center">{row.giro}</div>
-                                    <div className="w-1/3 text-center">{row.tipoDoc}</div>
-                                    <div className="w-1/3 text-center">{row.doc}</div>
                                 </div>
                             ))}
 
@@ -89,25 +130,144 @@ const RProcesar = () => {
                             >
                         <H1Tittle text="Nuevo cliente/proveedor" marginTop="mt-1"/>
                         <div className="grid grid-rows-3 grid-cols-3 gap-x-12 gap-y-4">
-                            <Textfield label="RUT:"/>
-                            <Textfield label="Razón social:" />
-                            <Textfield label="Giro:" />
-                            <Textfield label="Comuna:" />
-                            <Textfield label="Dirección:" />
-                            <Textfield label="Teléfono:" />
-                            <Textfield label="Correo:" />
+                            {/* RUT */}
+                            <Textfield 
+                                label={<>
+                                    RUT: 
+                                    {errors.rut && (
+                                        <span className="text-red-300 font-black"> - {errors.rut} </span>
+                                    )}
+                                    
+                                </>}
+                                classNameInput={errors.rut && ("ring-red-400 ring-2")}
+                                placeholder="99.999.999-9"
+                                type="rut" 
+                                value={rut} 
+                                onChange={(e) => {
+                                    setRut(e.target.value);
+                                    setErrors((prev) => ({ ...prev, rut: undefined}));
+                                    }}
+                                
+                            />
+
+                            {/* RAZÓN SOCIAL */}
+                            <Textfield 
+                                label={<>
+                                    Razón social: 
+                                    {errors.razon && (
+                                        <span className="text-red-300 font-black"> - {errors.razon} </span>
+                                    )}
+                                </>}
+                                classNameInput={errors.razon && ("ring-red-400 ring-2")}
+                                    placeholder="Facto LTDA."
+                                value={razon}
+                                onChange={(e) => {
+                                    setRazon(e.target.value);
+                                    setErrors((prev) => ({ ...prev, razon: undefined}));
+                                }}
+                            />
+
+                            {/* GIRO COMERCIAL */}
+                            <Textfield 
+                                label={<>
+                                    Giro: 
+                                    {errors.giro && (
+                                        <span className="text-red-300 font-black"> - {errors.giro} </span>
+                                    )}
+                                </>}
+                                classNameInput={errors.giro && ("ring-red-400 ring-2")}
+                                placeholder="Prestación de soluciones informáticas"
+                                value={giro}
+                                onChange={(e) => {
+                                    setGiro(e.target.value);
+                                    setErrors((prev) => ({ ...prev, giro: undefined}));
+                                }}
+                            />
+
+                            {/* COMUNA */}
+                            <Textfield 
+                                label={<>
+                                    Comuna: 
+                                    {errors.comuna && (
+                                        <span className="text-red-300 font-black"> - {errors.comuna} </span>
+                                    )}
+                                </>}
+                                classNameInput={errors.comuna && ("ring-red-400 ring-2")}
+                                placeholder="Punta Arenas"
+                                value={comuna}
+                                onChange={(e) => {
+                                    setComuna(e.target.value);
+                                    setErrors((prev) => ({ ...prev, comuna: undefined}));
+                                }}
+                            />
+
+                            {/* DIRECCIÓN */}
+                            <Textfield 
+                                label={<>
+                                    Dirección: 
+                                    {errors.direccion && (
+                                        <span className="text-red-300 font-black"> - {errors.direccion} </span>
+                                    )}
+                                </>}
+                                classNameInput={errors.direccion && ("ring-red-400 ring-2")}
+                                placeholder="Av. España 9999"
+                                value={direccion}
+                                onChange={(e) => {
+                                    setDireccion(e.target.value);
+                                    setErrors((prev) => ({ ...prev, direccion: undefined}));
+                                }}
+                            />
+
+                            {/* TELÉFONO */}
+                            <Textfield 
+                                label="Teléfono (Opcional):" 
+                                type="phone" 
+                                placeholder="912345678"
+                                value={telefono}
+                                onChange={(e) => {
+                                    setTelefono(e.target.value)
+                                }}
+                            />
+
+                            {/* CORREO */}
+                            <Textfield 
+                                label="Correo (Opcional):" 
+                                type="email"
+                                placeholder="Ejemplo@ejemplo.ej"
+                                value={correo}
+                                onChange={(e) => {
+                                    setCorreo(e.target.value)
+                                }} 
+                            />
                         </div>
                         <div className="grid grid-rows-1 grid-cols-2 gap-x-32 mt-4">
-                            <CheckboxDropdown label="¿Es cliente?" 
-                                            items={[
-                                                <Textfield label="Días de crédito:" type="number" classNameInput="w-16 h-6 self-center"/>, 
-                                            ]}/>
-                            <CheckboxDropdown label="¿Es Proveedor?" 
-                                            items={[
-                                                <Textfield label="Días de crédito:" type="number" classNameInput="w-16 h-6 self-center"/>, 
-                                            ]}/> 
+                            {/* CLIENTE */}
+                            <CheckboxDropdown 
+                                label="¿Es cliente?" 
+                                items={[
+                                    <Textfield label="Días de crédito:" type="number" classNameInput="w-16 h-6 self-center"/>, 
+                                ]}
+                                value={esCliente}
+                                onChange={(newValue) => {
+                                    setEsCliente(newValue)
+                                }}
+                            />
+                            {/* PROVEEDOR */}
+                            <CheckboxDropdown 
+                                label="¿Es Proveedor?" 
+                                items={[
+                                    <Textfield label="Días de crédito:" type="number" classNameInput="w-16 h-6 self-center"/>, 
+                                ]}
+                                value={esProveedor}
+                                onChange={(newValue) => {
+                                    setEsProveedor(newValue)
+                                }}
+                            /> 
                         </div>
-                        <YButton text="Guardar"/>
+                        <YButton 
+                            text="Guardar"
+                            onClick={handleNewEmpresa}
+                        />
                     </Modal>
                 )}
             </div>
