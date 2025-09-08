@@ -1,5 +1,5 @@
 import {SidebarWithContentSeparator} from "../../components/sidebar";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
 import { useNavigate } from "react-router-dom";
@@ -7,6 +7,12 @@ import { VolverButton, TextButton, YButton } from "../../components/Button";
 import { DropdownMenu, DropdownMenuList, SearchBar, Textfield, CheckboxDropdown } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { Modal } from "../../components/modal";
+
+import { doc, setDoc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import { db } from "../../../firebaseConfig"; // ajusta la ruta a tu config
+
+import { formatRUT } from "../../utils/formatRUT";
+
 
 const RProcesar = () => {
     const navigate = useNavigate();
@@ -25,10 +31,27 @@ const RProcesar = () => {
     const [creditoCliente, setCreditoCliente]       = useState(0);
     const [creditoProveedor, setCreditoProveedor]   = useState(0);
 
+    useEffect(() => {
+        // Referencia a la colección "empresas"
+        const empresasRef = collection(db, "empresas");
+    
+        // Suscribirse a los cambios en tiempo real
+        const unsubscribe = onSnapshot(empresasRef, (snapshot) => {
+            const empresasData = snapshot.docs.map(doc => doc.data());
+            setRows(empresasData);
+        }, (error) => {
+            console.error("Error obteniendo empresas:", error);
+        });
+    
+        // Cleanup cuando el componente se desmonte
+        return () => unsubscribe();
+    }, []);
+
     // Estado de errores
+    const [errorRut, setErrorRut] = useState("");
     const [errors, setErrors] = useState({});
     const ECampo = "!";
-    const handleNewEmpresa = () => {
+    const handleNewEmpresa = async () => {
         let newErrors = {};
         
         // rut obligatorio
@@ -41,8 +64,43 @@ const RProcesar = () => {
         setErrors(newErrors);
 
         if (Object.keys(newErrors).length === 0) {
-            setShowModal(false);
-        }
+            {/* ENVIAR VALORES AL BACKEND */}
+            const empresa = {
+                rut,
+                razon,
+                giro,
+                comuna,
+                direccion,
+                telefono,
+                correo,
+                cliente : esCliente,
+                proveedor : esProveedor,
+                credito_cliente : creditoCliente,
+                credito_proveedor : creditoProveedor
+              };
+            
+            // Guardar en Firestore usando rut como ID
+            try {
+                const empresaRef = doc(db, "empresas", rut);
+                const docSnap = await getDoc(empresaRef);
+    
+                if (docSnap.exists()) {
+                    // Documento ya existe
+                    console.warn("Este RUT ya existe");
+                    setErrorRut("Este rut ya existe");
+                    return;
+                }
+    
+                // Documento no existe, creamos uno nuevo
+                await setDoc(empresaRef, empresa);
+    
+                setShowModal(false);
+                handleResetParams();
+
+              } catch (err) {
+                console.error("Error guardando empresa:", err);
+              }
+         }
     };
     
     const [rows, setRows] = useState([]); // <- Aquí guardamos las filas de la "tabla"
@@ -53,7 +111,21 @@ const RProcesar = () => {
         setShowModal(true);
     }
 
-    const handleNewEmpresaa = () => {
+    const handleResetParams = () => {
+        setRut("");
+        setRazon("");
+        setGiro("");
+        setComuna("");
+        setDireccion("");
+        setTelefono("");
+        setCorreo("");
+        setEsCliente(false);
+        setEsProveedor(false);
+        setCreditoCliente(0);
+        setCreditoProveedor(0);
+    }
+
+    const handleEmpresaPrint = () => {
         console.log("rut: " + rut);
         console.log("razon: " + razon);
         console.log("giro: " + giro);
@@ -62,7 +134,9 @@ const RProcesar = () => {
         console.log("teléfono: " + telefono);
         console.log("correo: " + correo);
         console.log("es cliente: " + esCliente);
+        console.log("dias crédito: " + creditoCliente);
         console.log("es proveedor: " + esProveedor);
+        console.log("dias crédito: " + creditoProveedor);
     }
 
     return (
@@ -95,22 +169,32 @@ const RProcesar = () => {
                     content={
                         <div>
                             {/* Encabezados */}
-                            <div className="flex font-bold mb-2">
-                                <div className="w-1/3 text-center">RUT</div>
-                                <div className="w-1/3 text-center">Razón social</div>
-                                <div className="w-1/3 text-center">Giro</div>
-                                <div className="w-1/3 text-center">Comuna</div>
-                                <div className="w-1/3 text-center">Dirección</div>
-                                <div className="w-1/3 text-center">Teléfono</div>
-                                <div className="w-1/3 text-center">Correo</div>
-                                
+                            <div className="flex font-bold mb-2 px-0">
+                                <div className="w-1/5 text-center">RUT</div>
+                                <div className="w-1/5 text-center">Razón social</div>
+                                <div className="w-1/5 text-center">Giro</div>
+                                <div className="w-1/5 text-center">Cliente</div>
+                                <div className="w-1/5 text-center">Proveedor</div>
+                                <div className="mr-20"></div>
                             </div>
                             <hr className="mb-4" />
                             <SearchBar></SearchBar>
                             {/* Filas dinámicas */}
                             {rows.map((row, index) => (
-                                <div key={index} className="flex justify-between mb-2">
-                                    <div className="w-1/3 text-center">{row.giro}</div>
+                                <div key={index} className="flex mb-2 px-0 pt-2">
+                                    <div className="w-1/5 text-center">{formatRUT(row.rut)}</div>
+                                    <div className="w-1/5 text-center">{row.razon}</div>
+                                    <div className="w-1/5 text-center">{row.giro}</div>
+                                    <div className="w-1/5 text-center">
+                                        {row.cliente ? <span className="text-green-500 font-bold">✔</span> : <span className="text-red-500 font-bold">✖</span>}
+                                    </div>
+                                    <div className="w-1/5 text-center">
+                                        {row.proveedor ? <span className="text-green-500 font-bold">✔</span> : <span className="text-red-500 font-bold">✖</span>}
+                                    </div>
+                                    <TextButton 
+                                        className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3" 
+                                        text="Editar" 
+                                    />
                                 </div>
                             ))}
 
@@ -245,7 +329,16 @@ const RProcesar = () => {
                             <CheckboxDropdown 
                                 label="¿Es cliente?" 
                                 items={[
-                                    <Textfield label="Días de crédito:" type="number" classNameInput="w-16 h-6 self-center"/>, 
+                                    <Textfield 
+                                        label="Días de crédito:" 
+                                        type="number" 
+                                        classNameInput="w-16 h-6 self-center"
+                                        value={creditoCliente}
+                                        onChange={(e) => {
+                                            const value = Math.min(Number(e.target.value), 999);
+                                            setCreditoCliente(value);
+                                        }}
+                                        />
                                 ]}
                                 value={esCliente}
                                 onChange={(newValue) => {
@@ -256,7 +349,16 @@ const RProcesar = () => {
                             <CheckboxDropdown 
                                 label="¿Es Proveedor?" 
                                 items={[
-                                    <Textfield label="Días de crédito:" type="number" classNameInput="w-16 h-6 self-center"/>, 
+                                    <Textfield 
+                                        label="Días de crédito:" 
+                                        type="number" 
+                                        value={creditoProveedor} 
+                                        classNameInput="w-16 h-6 self-center"
+                                        onChange={(e) => {
+                                            const value = Math.min(Number(e.target.value), 999);
+                                            setCreditoProveedor(value);
+                                        }} 
+                                    />
                                 ]}
                                 value={esProveedor}
                                 onChange={(newValue) => {
@@ -268,6 +370,18 @@ const RProcesar = () => {
                             text="Guardar"
                             onClick={handleNewEmpresa}
                         />
+                    </Modal>
+                )}
+
+                {errorRut && (
+                    <Modal onClickOutside={() => setErrorRut("")}>
+                        <div className="flex flex-col items-center gap-4 p-4">
+                            <p className="text-red-500 font-bold">{errorRut}</p>
+                            <YButton
+                                text="Cerrar"
+                                onClick={() => setErrorRut("")}
+                            />
+                        </div>
                     </Modal>
                 )}
             </div>
