@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
 import { useNavigate } from "react-router-dom";
-import { VolverButton, TextButton, YButton } from "../../components/Button";
+import { VolverButton, TextButton, YButton, XButton } from "../../components/Button";
 import { DropdownMenu, DropdownMenuList, SearchBar, Textfield, CheckboxDropdown } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { Modal } from "../../components/modal";
@@ -102,13 +102,69 @@ const RProcesar = () => {
               }
          }
     };
+
+    const handleEditEmpresa = async () => {
+        let newErrors = {};
+        
+        // rut obligatorio
+        if (!rut) newErrors.rut = ECampo;
+        if (!razon) newErrors.razon = ECampo;
+        if (!giro) newErrors.giro = ECampo;
+        if (!comuna) newErrors.comuna = ECampo;
+        if (!direccion) newErrors.direccion = ECampo;
+        
+        setErrors(newErrors);
+
+        if (Object.keys(newErrors).length === 0) {
+            {/* ENVIAR VALORES AL BACKEND */}
+            const empresa = {
+                rut,
+                razon,
+                giro,
+                comuna,
+                direccion,
+                telefono,
+                correo,
+                cliente : esCliente,
+                proveedor : esProveedor,
+                credito_cliente : creditoCliente,
+                credito_proveedor : creditoProveedor
+              };
+            
+            // Guardar en Firestore usando rut como ID
+            try {
+                const empresaRef = doc(db, "empresas", rut);
+                const docSnap = await getDoc(empresaRef);
+
+                setLoadingModal(true);
+                await setDoc(empresaRef, empresa);
+                setLoadingModal(false);
+    
+                setEditModal(false);
+                handleResetParams();
+
+              } catch (err) {
+                console.error("Error guardando empresa:", err);
+              }
+         }
+    };
     
     const [rows, setRows] = useState([]); // <- Aquí guardamos las filas de la "tabla"
 
     const [showModal, setShowModal] = useState(false);
+    const [editModal, setEditModal] = useState(false);
+    const [loadingModal, setLoadingModal] = useState(false);
 
     const handleModal = () => {
         setShowModal(true);
+    }
+
+    const handleEditModal = () => {
+        setEditModal(true);
+    }
+
+    const handleLoadingModal = () => {
+        setLoadingModal(true)
     }
 
     const handleResetParams = () => {
@@ -182,9 +238,9 @@ const RProcesar = () => {
                             {/* Filas dinámicas */}
                             {rows.map((row, index) => (
                                 <div key={index} className="flex mb-2 px-0 pt-2">
-                                    <div className="w-1/5 text-center">{formatRUT(row.rut)}</div>
-                                    <div className="w-1/5 text-center">{row.razon}</div>
-                                    <div className="w-1/5 text-center">{row.giro}</div>
+                                    <div className="w-1/5 text-center font-semibold">{formatRUT(row.rut)}</div>
+                                    <div className="w-1/5 text-center font-semibold">{row.razon}</div>
+                                    <div className="w-1/5 text-center font-semibold">{row.giro}</div>
                                     <div className="w-1/5 text-center">
                                         {row.cliente ? <span className="text-green-500 font-bold">✔</span> : <span className="text-red-500 font-bold">✖</span>}
                                     </div>
@@ -194,6 +250,20 @@ const RProcesar = () => {
                                     <TextButton 
                                         className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3" 
                                         text="Editar" 
+                                        onClick={() => {
+                                            setRut(row.rut);
+                                            setRazon(row.razon);
+                                            setGiro(row.giro);
+                                            setComuna(row.comuna);
+                                            setDireccion(row.direccion);
+                                            setTelefono(row.telefono);
+                                            setCorreo(row.correo);
+                                            setEsCliente(row.cliente);
+                                            setEsProveedor(row.proveedor);
+                                            setCreditoCliente(row.credito_cliente);
+                                            setCreditoProveedor(row.credito_proveedor);
+                                            handleEditModal();
+                                        }}
                                     />
                                 </div>
                             ))}
@@ -373,6 +443,183 @@ const RProcesar = () => {
                     </Modal>
                 )}
 
+                {editModal && (
+                    <Modal onClickOutside={() => {
+                        setEditModal(false);
+                        handleResetParams();
+                    }}
+                            className=" mb-auto mt-40 w-max"
+                            >
+                        <H1Tittle text="Editar información existente" marginTop="mt-1"/>
+                        <div className="grid grid-rows-3 grid-cols-3 gap-x-12 gap-y-4">
+                            {/* RUT */}
+                            <Textfield 
+                                label={<>
+                                    RUT: 
+                                    {errors.rut && (
+                                        <span className="text-red-300 font-black"> - {errors.rut} </span>
+                                    )}
+                                    
+                                </>}
+                                classNameInput={errors.rut && ("ring-red-400 ring-2")}
+                                placeholder="99.999.999-9"
+                                type="rut" 
+                                value={rut} 
+                                onChange={(e) => {
+                                    setRut(e.target.value);
+                                    setErrors((prev) => ({ ...prev, rut: undefined}));
+                                    }}
+                                
+                            />
+
+                            {/* RAZÓN SOCIAL */}
+                            <Textfield 
+                                label={<>
+                                    Razón social: 
+                                    {errors.razon && (
+                                        <span className="text-red-300 font-black"> - {errors.razon} </span>
+                                    )}
+                                </>}
+                                classNameInput={errors.razon && ("ring-red-400 ring-2")}
+                                    placeholder="Facto LTDA."
+                                value={razon}
+                                onChange={(e) => {
+                                    setRazon(e.target.value);
+                                    setErrors((prev) => ({ ...prev, razon: undefined}));
+                                }}
+                            />
+
+                            {/* GIRO COMERCIAL */}
+                            <Textfield 
+                                label={<>
+                                    Giro: 
+                                    {errors.giro && (
+                                        <span className="text-red-300 font-black"> - {errors.giro} </span>
+                                    )}
+                                </>}
+                                classNameInput={errors.giro && ("ring-red-400 ring-2")}
+                                placeholder="Prestación de soluciones informáticas"
+                                value={giro}
+                                onChange={(e) => {
+                                    setGiro(e.target.value);
+                                    setErrors((prev) => ({ ...prev, giro: undefined}));
+                                }}
+                            />
+
+                            {/* COMUNA */}
+                            <Textfield 
+                                label={<>
+                                    Comuna: 
+                                    {errors.comuna && (
+                                        <span className="text-red-300 font-black"> - {errors.comuna} </span>
+                                    )}
+                                </>}
+                                classNameInput={errors.comuna && ("ring-red-400 ring-2")}
+                                placeholder="Punta Arenas"
+                                value={comuna}
+                                onChange={(e) => {
+                                    setComuna(e.target.value);
+                                    setErrors((prev) => ({ ...prev, comuna: undefined}));
+                                }}
+                            />
+
+                            {/* DIRECCIÓN */}
+                            <Textfield 
+                                label={<>
+                                    Dirección: 
+                                    {errors.direccion && (
+                                        <span className="text-red-300 font-black"> - {errors.direccion} </span>
+                                    )}
+                                </>}
+                                classNameInput={errors.direccion && ("ring-red-400 ring-2")}
+                                placeholder="Av. España 9999"
+                                value={direccion}
+                                onChange={(e) => {
+                                    setDireccion(e.target.value);
+                                    setErrors((prev) => ({ ...prev, direccion: undefined}));
+                                }}
+                            />
+
+                            {/* TELÉFONO */}
+                            <Textfield 
+                                label="Teléfono (Opcional):" 
+                                type="phone" 
+                                placeholder="912345678"
+                                value={telefono}
+                                onChange={(e) => {
+                                    setTelefono(e.target.value)
+                                }}
+                            />
+
+                            {/* CORREO */}
+                            <Textfield 
+                                label="Correo (Opcional):" 
+                                type="email"
+                                placeholder="Ejemplo@ejemplo.ej"
+                                value={correo}
+                                onChange={(e) => {
+                                    setCorreo(e.target.value)
+                                }} 
+                            />
+                        </div>
+                        <div className="grid grid-rows-1 grid-cols-2 gap-x-32 mt-4">
+                            {/* CLIENTE */}
+                            <CheckboxDropdown 
+                                label="¿Es cliente?" 
+                                items={[
+                                    <Textfield 
+                                        label="Días de crédito:" 
+                                        type="number" 
+                                        classNameInput="w-16 h-6 self-center"
+                                        value={creditoCliente}
+                                        onChange={(e) => {
+                                            const value = Math.min(Number(e.target.value), 999);
+                                            setCreditoCliente(value);
+                                        }}
+                                        />
+                                ]}
+                                value={esCliente}
+                                onChange={(newValue) => {
+                                    setEsCliente(newValue)
+                                }}
+                            />
+                            {/* PROVEEDOR */}
+                            <CheckboxDropdown 
+                                label="¿Es Proveedor?" 
+                                items={[
+                                    <Textfield 
+                                        label="Días de crédito:" 
+                                        type="number" 
+                                        value={creditoProveedor} 
+                                        classNameInput="w-16 h-6 self-center"
+                                        onChange={(e) => {
+                                            const value = Math.min(Number(e.target.value), 999);
+                                            setCreditoProveedor(value);
+                                        }} 
+                                    />
+                                ]}
+                                value={esProveedor}
+                                onChange={(newValue) => {
+                                    setEsProveedor(newValue)
+                                }}
+                            /> 
+                        </div>
+                        <div className="flex justify-between">
+                            <YButton 
+                                text="Actualizar datos"
+                                onClick={handleEditEmpresa}
+                            />  
+                            <XButton
+                                text="Cancelar"
+                                onClick={() => {
+                                    handleResetParams();
+                                    setEditModal(false);
+                                }}
+                            />
+                        </div>
+                    </Modal>
+                )}
+
                 {errorRut && (
                     <Modal onClickOutside={() => setErrorRut("")}>
                         <div className="flex flex-col items-center gap-4 p-4">
@@ -382,6 +629,12 @@ const RProcesar = () => {
                                 onClick={() => setErrorRut("")}
                             />
                         </div>
+                    </Modal>
+                )}
+
+                {loadingModal && (
+                    <Modal>
+                        <p className="font-black">Cargando</p>
                     </Modal>
                 )}
             </div>
