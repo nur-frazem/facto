@@ -1,14 +1,14 @@
 import {SidebarWithContentSeparator} from "../../components/sidebar";
 import React, { useState, useEffect } from 'react';
 import Footer from "../../components/Footer";
-import { H1Tittle } from "../../components/Fonts";
+import { H1Tittle, PSubtitle } from "../../components/Fonts";
 import { useNavigate } from "react-router-dom";
 import { VolverButton, TextButton, YButton, XButton } from "../../components/Button";
 import { DropdownMenu, DropdownMenuList, SearchBar, Textfield, CheckboxDropdown } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { Modal } from "../../components/modal";
 
-import { doc, setDoc, getDoc, collection, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig"; // ajusta la ruta a tu config
 
 import { formatRUT } from "../../utils/formatRUT";
@@ -148,12 +148,37 @@ const RProcesar = () => {
               }
          }
     };
+
+    const handleEliminarEmpresa = async (rut) => {
+        if (!rut) {
+          console.error("Debes proporcionar un RUT válido");
+          return;
+        }
+      
+        try {
+            const empresaRef = doc(db, "empresas", rut);
+            
+            setLoadingModal(true);
+            await deleteDoc(empresaRef);
+            setLoadingModal(false);
+            setEliminarModal(false);
+            setEditModal(false);
+            handleResetParams();
+      
+            console.log(`Empresa con RUT ${rut} eliminada correctamente`);
+            // Opcional: refrescar la tabla o lista de empresas
+            // handleEmpresaPrint();
+        } catch (err) {
+          console.error("Error eliminando empresa:", err);
+        }
+      };
     
     const [rows, setRows] = useState([]); // <- Aquí guardamos las filas de la "tabla"
 
     const [showModal, setShowModal] = useState(false);
     const [editModal, setEditModal] = useState(false);
     const [loadingModal, setLoadingModal] = useState(false);
+    const [eliminarModal, setEliminarModal] = useState(false);
 
     const handleModal = () => {
         setShowModal(true);
@@ -161,6 +186,10 @@ const RProcesar = () => {
 
     const handleEditModal = () => {
         setEditModal(true);
+    }
+
+    const handleEliminarModal = () => {
+        setEliminarModal(true);
     }
 
     const handleLoadingModal = () => {
@@ -610,12 +639,37 @@ const RProcesar = () => {
                                 onClick={handleEditEmpresa}
                             />  
                             <XButton
+                                text="Eliminar cliente/proveedor"
+                                onClick={handleEliminarModal}
+                            />
+
+                            <XButton
                                 text="Cancelar"
                                 onClick={() => {
                                     handleResetParams();
                                     setEditModal(false);
                                 }}
                             />
+                        </div>
+                    </Modal>
+                )}
+
+                {eliminarModal && (
+                    <Modal>
+                        <div>
+                            <H1Tittle text="ADVERTENCIA!" />
+                            <PSubtitle 
+                                text="¿Esta seguro que desea eliminar esta empresa?"
+                            />
+                            <p>Todos los documentos serán eliminados!</p>
+                            <div className="flex justify-between mt-8">
+                                <YButton text="ELIMINAR"
+                                    onClick={() => handleEliminarEmpresa(rut)}
+                                    />
+                                <XButton text="CANCELAR"
+                                    onClick={() => setEliminarModal(false)}
+                                />
+                            </div>   
                         </div>
                     </Modal>
                 )}
