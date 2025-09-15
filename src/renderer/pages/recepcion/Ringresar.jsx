@@ -7,15 +7,39 @@ import { useNavigate } from "react-router-dom";
 import { Textfield, DropdownMenu, DatepickerField } from "../../components/Textfield";
 import { Modal } from "../../components/modal";
 
+import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from "firebase/firestore";
+import { db } from "../../../firebaseConfig";
+
+import { formatRUT, cleanRUT } from "../../utils/formatRUT";
+
 const RIngresar = () => {
   const navigate = useNavigate();
+
+  useEffect(() => {
+      // Referencia a la colección "empresas"
+      const empresasRef = collection(db, "empresas");
+  
+      // Suscribirse a los cambios en tiempo real
+      const unsubscribe = onSnapshot(empresasRef, (snapshot) => {
+          const empresasData = snapshot.docs.map(doc => doc.data());
+          setRows(empresasData);
+      }, (error) => {
+          console.error("Error obteniendo empresas:", error);
+      });
+  
+      // Cleanup cuando el componente se desmonte
+      return () => unsubscribe();
+  }, []);
+
+  const [rows, setRows] = useState([]);
+
   const [fechaE, setFechaE] = useState(null);
   const [fechaV, setFechaV] = useState(null);
 
   //Valores monto documento textfield
   const [neto, setNeto] = useState("");
   const [iva, setIva] = useState("");
-  const [otros, setOtros] = useState("");
+  const [otros, setOtros] = useState(0);
   const [flete, setFlete] = useState(0);
   const [retencion, setRetencion] = useState(0);
 
@@ -30,13 +54,17 @@ const RIngresar = () => {
   //Valores de los campos
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [selectedGiro, setSelectedGiro] = useState(null);
+  const [giroRut ,setGiroRut] = useState("");
   const [numeroDoc, setNumeroDoc] = useState("");
   const [numeroDocNc, setNumeroDocNc] = useState("");
+  const [formaPago, setFormaPago] = useState("");
 
   //modal
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loadingModal, setLoadingModal] = useState(false);
 
   // Estado de errores
+  const [errorDoc ,setErrorDoc] = useState("");
   const [errors, setErrors] = useState({});
   const ECampo = "!";
   const handleIngresar = () => {
@@ -54,7 +82,7 @@ const RIngresar = () => {
     // Fecha de vencimiento solo si corresponde y visible
     if (
       selectedGiro &&
-      (selectedDoc === "Factura Crédito" || selectedDoc === "Nota de crédito") &&
+      (selectedDoc === "Factura Crédito") &&
       !fechaV
     ) {
       newErrors.fechaV = ECampo;
@@ -62,6 +90,8 @@ const RIngresar = () => {
   
     // Número de documento solo si visible
     if (selectedGiro && selectedDoc && numeroDoc === "") newErrors.numeroDoc = ECampo;
+
+    if (selectedGiro && selectedDoc && formaPago === "") newErrors.formaPago = ECampo;
   
     // NC solo si visible
     if (selectedGiro && selectedDoc === "Nota de crédito" && numeroDocNc === "") {
@@ -75,8 +105,6 @@ const RIngresar = () => {
     if (selectedGiro && selectedDoc && retencion === "") newErrors.retencion = ECampo;
   
     setErrors(newErrors);
-    
-    
 
 
     if (Object.keys(newErrors).length === 0) {
@@ -84,6 +112,132 @@ const RIngresar = () => {
     }
   };
   
+  const handleEnviarDoc = async () => {
+    const factura = {
+      numeroDoc,
+      formaPago,
+      fechaE,
+      fechaV,
+      neto,
+      flete,
+      retencion,
+      otros,
+      iva,
+      total
+    }
+
+    const boleta = {
+      numeroDoc,
+      fechaE,
+      neto,
+      iva,
+      total
+    }
+
+    const notaCredito = {
+      numeroDoc,
+      numeroDocNc,
+      fechaE,
+      neto,
+      flete,
+      retencion,
+      otros,
+      iva,
+      total
+    }
+    setLoadingModal(true);
+    if(selectedDoc == "Factura electrónica" || selectedDoc == "Factura exenta"){
+      try {
+        const documentoRef = doc(db, "empresas", String(giroRut), "facturas", String(numeroDoc));
+        const docSnap = await getDoc(documentoRef);
+  
+        if (docSnap.exists()) {
+            // Documento ya existe
+            setLoadingModal(false);
+            console.warn("Este documento ya esta ingresado");
+            setErrorDoc("Este documento ya esta ingresado");
+            return;
+        }
+  
+        // Documento no existe, creamos uno nuevo
+        await setDoc(documentoRef, factura);
+  
+        setIsModalOpen(false);
+        handleResetParams();
+        window.location.reload();
+  
+      } catch (err) {
+        console.error("Error guardando documento:", err);
+      }
+    }
+
+    else if(selectedDoc=="Boleta"){
+      try {
+        const documentoRef = doc(db, "empresas", String(giroRut), "boletas", String(numeroDoc));
+        const docSnap = await getDoc(documentoRef);
+  
+        if (docSnap.exists()) {
+            // Documento ya existe
+            setLoadingModal(false);
+            console.warn("Este documento ya esta ingresado");
+            setErrorDoc("Este documento ya esta ingresado");
+            return;
+        }
+  
+        // Documento no existe, creamos uno nuevo
+        await setDoc(documentoRef, boleta);
+  
+        setIsModalOpen(false);
+        handleResetParams();
+        window.location.reload();
+  
+      } catch (err) {
+        console.error("Error guardando empresa:", err);
+      }
+    }
+
+    else if(selectedDoc=="Nota de crédito"){
+      try {
+        const documentoRef = doc(db, "empresas", String(giroRut), "notasCredito", String(numeroDoc));
+        const docSnap = await getDoc(documentoRef);
+  
+        if (docSnap.exists()) {
+            // Documento ya existe
+            setLoadingModal(false);
+            console.warn("Este documento ya esta ingresado");
+            setErrorDoc("Este documento ya esta ingresado");
+            return;
+        }
+  
+        // Documento no existe, creamos uno nuevo
+        await setDoc(documentoRef, notaCredito);
+  
+        setIsModalOpen(false);
+        handleResetParams();
+        window.location.reload();
+  
+      } catch (err) {
+        console.error("Error guardando empresa:", err);
+      }
+    }
+    setLoadingModal(false);
+  }
+
+  const handleResetParams = () => {
+    setSelectedGiro("");
+    setGiroRut("");
+    setSelectedDoc("");
+    setNumeroDoc("");
+    setFormaPago("");
+    setFechaE("");
+    setFechaV("");
+    setNumeroDocNc("");
+    setNeto(0);
+    setFlete(0);
+    setRetencion(0);
+    setOtros(0);
+    setIva(0);
+}
 
   return (
     <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
@@ -104,20 +258,23 @@ const RIngresar = () => {
       <div className="flex flex-col flex-wrap justify-start gap-6 mt-10 ml-5 mr-5">
         <div className="grid grid-cols-3 grid-rows-5 gap-y-3 gap-x-10">
           
-          {/* Selección de giro */}
+          {/* Selección de empresa */}
           <DropdownMenu
             tittle={
                 <>
-                  Seleccione giro
+                  Seleccione empresa
                   {errors.selectedGiro && (
                     <span className="text-red-300 font-black"> - {errors.selectedGiro}</span>
                   )}
                 </>
               }
-            items={["Empresa 1", "Empresa 2", "Empresa 3"]}
-            onSelect={(item) => {
-                setSelectedGiro(item);
-                setErrors((prev) => ({ ...prev, selectedGiro: undefined }));
+            items={rows.map((row) => `${formatRUT(row.rut)} ${row.razon}`)}
+            value={selectedGiro}
+            onSelect={
+              (item) => {setSelectedGiro(item);
+              setErrors((prev) => ({ ...prev, selectedGiro: undefined }));
+              const rutSolo = item.split(" ")[0];
+              setGiroRut(cleanRUT(rutSolo));
             }}
             classNameMenu={errors.selectedGiro && ("ring-red-400 ring-2")}
           />
@@ -133,7 +290,8 @@ const RIngresar = () => {
                   )}
                 </>
               }
-              items={["Factura Crédito", "Factura Contado", "Boleta", "Guía Electrónica", "Nota de crédito"]}
+              items={["Factura electrónica", "Factura exenta", "Boleta", "Guía Electrónica", "Nota de crédito"]}
+              value={selectedDoc}
               onSelect={(item) => {
                 setSelectedDoc(item);
                 setErrors((prev) => ({ ...prev, selectedDoc: undefined }));
@@ -170,6 +328,29 @@ const RIngresar = () => {
             <div></div>
           )}
 
+          {/* Tipo de pago */}
+          {selectedGiro != null && selectedDoc != null ? (
+            <DropdownMenu
+              tittle={
+                <>
+                  Seleccione Forma De Pago
+                  {errors.formaPago && (
+                    <span className="text-red-300 font-black"> - {errors.formaPago}</span>
+                  )}
+                </>
+              }
+              items={["Contado", "Crédito"]}
+              value={formaPago}
+              onSelect={(item) => {
+                setFormaPago(item);
+                setErrors((prev) => ({ ...prev, formaPago: undefined }));
+              }}
+              classNameMenu={errors.formaPago && ("ring-red-400 ring-2")}
+            />
+          ) : (
+            <div></div>
+          )}
+
           {/* Fecha de emisión */}
           {selectedGiro != null && selectedDoc != null ? (
             <DatepickerField
@@ -196,7 +377,7 @@ const RIngresar = () => {
           
 
           {/* Fecha de vencimiento */}
-          {(selectedDoc === "Factura Crédito" || selectedDoc === "Nota de crédito") &&
+          {((selectedDoc === "Factura electrónica" || selectedDoc === "Factura exenta") && fechaE !== null && formaPago === "Crédito") &&
           selectedGiro != null ? (
             <DatepickerField
               label={<>
@@ -215,8 +396,10 @@ const RIngresar = () => {
               classNameDatePicker={errors.fechaV && ("ring-red-400 ring-2")}
             />
           ) : (
-            <div />
+            <div /> //MODIFICAR PARA QUE SE REINICIE FECHAV AQUÍ <--
           )}
+
+          
 
           {/* NC */}
           {selectedDoc === "Nota de crédito" && selectedGiro != null ? (
@@ -242,8 +425,6 @@ const RIngresar = () => {
           ) : (
             <div />
           )}
-
-          <div></div>
           <div></div>
           <div></div>
 
@@ -418,10 +599,30 @@ const RIngresar = () => {
                 />
                 <YButton 
                   text="Ingresar"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    handleEnviarDoc();
+                  }}
                 />
             </div>
         </Modal>
+    )}
+
+    {errorDoc && (
+      <Modal onClickOutside={() => setErrorDoc("")}>
+          <div className="flex flex-col items-center gap-4 p-4">
+              <p className="text-red-500 font-bold">{errorDoc}</p>
+              <YButton
+                  text="Cerrar"
+                  onClick={() => setErrorDoc("")}
+              />
+          </div>
+      </Modal>
+    )}
+
+    {loadingModal && (
+      <Modal>
+          <p className="font-black">Cargando</p>
+      </Modal>
     )}
           
 

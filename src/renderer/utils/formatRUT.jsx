@@ -12,3 +12,8 @@ export function formatRUT(rut) {
 
     return `${formattedCuerpo}-${dv}`;
 }
+
+export function cleanRUT(rut) {
+    if (!rut) return "";
+    return rut.replace(/\./g, "").replace(/-/g, "");
+}
