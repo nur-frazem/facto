@@ -1,45 +1,82 @@
 import {SidebarWithContentSeparator} from "../../components/sidebar";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
 import { useNavigate } from "react-router-dom";
-import { VolverButton, YButton } from "../../components/Button";
+import { VolverButton, YButton, TextButton } from "../../components/Button";
 import { DropdownMenu, DropdownMenuList } from "../../components/Textfield";
 import { Card } from "../../components/Container";
+import { SearchBar } from "../../components/Textfield";
+
+import { doc, setDoc, getDoc, getDocs, collection, onSnapshot, deleteDoc } from "firebase/firestore";
+import { db } from "../../../firebaseConfig";
+
+import { formatRUT, cleanRUT } from "../../utils/formatRUT";
 
 const RProcesar = () => {
     const navigate = useNavigate();
 
+    useEffect(() => {
+          // Referencia a la colección "empresas"
+          const empresasRef = collection(db, "empresas");
+      
+          // Suscribirse a los cambios en tiempo real
+          const unsubscribe = onSnapshot(empresasRef, (snapshot) => {
+              const empresasData = snapshot.docs.map(doc => doc.data());
+              setRows(empresasData);
+          }, (error) => {
+              console.error("Error obteniendo empresas:", error);
+          });
+      
+          // Cleanup cuando el componente se desmonte
+          return () => unsubscribe();
+      }, []);
+
+    const [rows, setRows] = useState([]);
+
     const [giro, setGiro] = useState(null);
+    const [giroRut, setGiroRut] = useState(null);
     const [tipoDoc, setTipoDoc] = useState(null);
     const [docs, setDocs] = useState([]);
-    const [rows, setRows] = useState([]); // <- Aquí guardamos las filas de la "tabla"
+    const [rowss, setRowss] = useState([]); // <- Aquí guardamos las filas de la "tabla"
 
-    const [availableDocs, setAvailableDocs] = useState(["45252", "65436", "23453", "1232451", "4523525", "654336", "234563", "12324451", "45213525", "658436", "2346953", "123244541", "452375525"]); //Esta lista dinamica debe recibirse desde el backend
+    const [facturas, setFacturas] = useState([]);
+    const [facturasEx, setFacturasEx] = useState([]);
+    const [notasCredito, setNotasCredito] = useState([]);
 
-
-    const handleIngresar = () => {
-        const docsArray = Array.isArray(docs) ? docs : [docs];
+    useEffect(() => {
+        const handleRecibirDocs = async () => {
+          if (!giroRut) return; // no hay empresa seleccionada todavía
       
-        if (!giro || !tipoDoc || docsArray.length === 0) return;
+          try {
+            const facturasRef = collection(db, "empresas", String(giroRut), "facturas");
+            const notasCreditoRef = collection(db, "empresas", String(giroRut), "notasCredito");
       
-        const nuevasFilas = docsArray.map((doc) => ({
-          giro,
-          tipoDoc,
-          doc,
-        }));
+            const facturasSnap = await getDocs(facturasRef);
+            const notasCreditoSnap = await getDocs(notasCreditoRef);
       
-        setRows((prev) => [...prev, ...nuevasFilas]);
+            const fact = facturasSnap.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
       
-        // eliminar docs ya usados de la lista disponible
-        setAvailableDocs((prev) => prev.filter((d) => !docsArray.includes(d)));
+            const NC = notasCreditoSnap.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }));
       
-        // resetear selección
-        setDocs([]);
-        setTipoDoc(null);
-        setGiro(null);
-      };
-
+            setFacturas(fact);
+            setNotasCredito(NC);
+      
+            console.log("Facturas:", fact);
+            console.log("Notas de Crédito:", NC);
+          } catch (error) {
+            console.error("Error al traer documentos:", error);
+          }
+        };
+      
+        handleRecibirDocs();
+      }, [giroRut]); 
     return (
         <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
             {/* Sidebar */}
@@ -56,78 +93,50 @@ const RProcesar = () => {
             </div>
 
             {/* Contenido principal */}
-            <div className="flex flex-col flex-wrap justify-start mt-10 ml-5 mr-5">
-                <div className="grid grid-cols-3 grid-rows-2 gap-x-10">
+            <div className="flex flex-col flex-wrap justify-start mt-2 ml-5 mr-5">
+                <div className="grid grid-cols-3 grid-rows-1 gap-x-10 mb-2">
 
                     {/* Selección de giro */}
                     <DropdownMenu
-                        tittle="Seleccione Giro"
-                        items={["Empresa 1", "Empresa 2", "Empresa 3"]}
+                        tittle={
+                            <>
+                                Seleccione empresa
+                            </>
+                            }
+                        items={rows.map((row) => `${formatRUT(row.rut)} ${row.razon}`)}
                         value={giro}
-                        onSelect={(item) => setGiro(item)}
-                    />
-
-                    {/* Tipo de documento */}
-                    {giro !== null ? (
-                        <DropdownMenu
-                            tittle="Tipo de documento"
-                            items={[
-                                "Factura Crédito",
-                                "Factura Contado",
-                                "Boleta",
-                                "Guía Electrónica",
-                                "Nota de crédito"
-                            ]}
-                            value={tipoDoc}
-                            onSelect={(item) => setTipoDoc(item)}
-                        />
-                    ) : (
-                        <div></div>
-                    )}
-                    
-                    {/* Numero de documento */}
-                    {giro !== null && tipoDoc !== null ? (
-                        <DropdownMenuList
-                            tittle="Agregar documento(s)"
-                            items={availableDocs}
-                            value={docs}
-                            onSelect={(selectedItems) => setDocs(selectedItems)}
-                        />
-                    ) : (
-                        <div></div>
-                    )}
-
-                    <div />
-                    <div />
-                    <YButton 
-                        className="float-right mt-1" 
-                        text="Ingresar" 
-                        onClick={handleIngresar}
+                        onSelect={
+                            (item) => {setGiro(item);
+                            const rutSolo = item.split(" ")[0];
+                            setGiroRut(cleanRUT(rutSolo));
+                        }}
                     />
                 </div>
-
-                <hr className="border-black mt-2 mb-4"/>
 
                 {/* Tabla dinámica */}
                 <Card   
                     hasButton={false} 
-                    contentClassName="w-96 h-96 overflow-y-auto scrollbar-custom flex flex-col w-full"
+                    contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
                     content={
                         <div>
                             {/* Encabezados */}
                             <div className="flex justify-between font-bold mb-2">
-                                <div className="w-1/3 text-center">Giro</div>
-                                <div className="w-1/3 text-center">Tipo de documento</div>
                                 <div className="w-1/3 text-center">Número de documento</div>
+                                <div className="w-1/3 text-center">Fecha de vencimiento</div>
+                                <div className="w-1/3 text-center">Monto</div>
+                                <div className="mr-10"></div>
                             </div>
                             <hr className="mb-4" />
-                            
                             {/* Filas dinámicas */}
-                            {rows.map((row, index) => (
+                            {facturas.map((row, index) => (
                                 <div key={index} className="flex justify-between mb-2">
-                                    <div className="w-1/3 text-center">{row.giro}</div>
-                                    <div className="w-1/3 text-center">{row.tipoDoc}</div>
-                                    <div className="w-1/3 text-center">{row.doc}</div>
+                                    <div className="w-1/3 text-center">{row.numeroDoc}</div>
+                                    <div className="w-1/3 text-center">{row.fechaV ? new Date(row.fechaV.seconds * 1000).toLocaleDateString() : ""}</div>
+                                    <div className="w-1/3 text-center">{row.total}</div>
+                                    <TextButton 
+                                        className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3"
+                                        text="+"    
+                                    />
                                 </div>
                             ))}
 
@@ -140,6 +149,65 @@ const RProcesar = () => {
                         </div>
                     }
                 />
+                <hr className="my-4" />
+                <div className="flex gap-4 justify-between">
+                    <Card   
+                        hasButton={false} 
+                        contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
+                        className="w-1/2"
+                        content={
+                            <div>
+                                {/* Encabezados */}
+                                <div className="text-center font-bold mb-2 px-0">
+                                    Documentos agregados
+                                </div>
+                                <hr className="mb-4" />
+                                
+                                {/* Filas dinámicas */}
+                                {rows.map((row, index) => (
+                                    <div key={index} className="flex justify-between mb-2">
+                                        <div className="w-1/3 text-center">{row.rut}</div>
+                                        <div className="w-1/3 text-center">{row.tipoDoc}</div>
+                                        <div className="w-1/3 text-center">{row.doc}</div>
+
+                                    </div>
+                                ))}
+
+                                {/* Si no hay filas */}
+                                {rows.length === 0 && (
+                                    <div className="text-center text-gray-400 mt-4">
+                                        No hay documentos ingresados
+                                    </div>
+                                )}
+                            </div>
+                        }
+                    />
+                    <Card
+                        hasButton={false} 
+                        contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
+                        className="w-1/2"
+                        content={
+                            <div>
+                                <div className="text-center font-bold mb-2 px-0">
+                                    Monto a cancelar
+                                </div>
+                                <hr className="mb-4" />
+                                <div className="grid grid-cols-2 grid-rows-5 gap-y-4 gap-x-4">
+                                    <div>Facturas electrónicas: </div>
+                                    <div>$3.453.121</div>
+                                    <div>Facturas Exentas:</div>
+                                    <div>$0</div>
+                                    <div>Notas de credito:</div>
+                                    <div>$121</div>
+                                    <div></div>
+                                    <div></div>
+                                    <div>Monto total:</div>
+                                    <div>$3.453.000</div>
+                                </div>
+                            </div>
+                        }
+                    />
+                </div>
             </div>
 
             {/* Footer fijo */}
@@ -148,6 +216,6 @@ const RProcesar = () => {
             </div>
         </div>
     );
-}
+};
 
 export default RProcesar;

@@ -20,12 +20,12 @@ export function CGrid({children, rowSizes = "auto 1fr"}){
 }
 
 
-export function Card({ logo = "", title, description = "", onClick, hasButton = true, content = null, contentClassName }) {
+export function Card({ logo = "", title, description = "", onClick, hasButton = true, content = null, contentClassName, className }) {
     const hasDescription = description.trim() !== "";
 
     return (
         <div
-            className={`bg-[#062235] shadow-2xl shadow-black rounded-2xl p-4 w-96 flex ${
+            className={`bg-[#062235] shadow-2xl shadow-black rounded-2xl p-4 w-96 flex ${className} ${
                 hasDescription ? "flex-col gap-y-2 relative" : "items-center justify-between"
             } h-fit ${content !== null && "w-auto"}`}
         >
