@@ -3,21 +3,22 @@ import React, { useState, useEffect } from 'react';
 import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
 import { useNavigate } from "react-router-dom";
-import { VolverButton, YButton, TextButton } from "../../components/Button";
+import { VolverButton, YButton, TextButton, XButton } from "../../components/Button";
 import { DropdownMenu, DropdownMenuList } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { SearchBar } from "../../components/Textfield";
 
-import { doc, setDoc, getDoc, getDocs, collection, onSnapshot, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, getDocs, where, query, collection, onSnapshot, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 
 import { formatRUT, cleanRUT } from "../../utils/formatRUT";
+import { formatCLP } from "../../utils/formatCurrency";
 
 const RProcesar = () => {
     const navigate = useNavigate();
 
+    // Referencia a la colección "empresas"
     useEffect(() => {
-          // Referencia a la colección "empresas"
           const empresasRef = collection(db, "empresas");
       
           // Suscribirse a los cambios en tiempo real
@@ -31,34 +32,52 @@ const RProcesar = () => {
           // Cleanup cuando el componente se desmonte
           return () => unsubscribe();
       }, []);
-
     const [rows, setRows] = useState([]);
 
+    //INFORMACION EMPRESAS
     const [giro, setGiro] = useState(null);
     const [giroRut, setGiroRut] = useState(null);
-    const [tipoDoc, setTipoDoc] = useState(null);
-    const [docs, setDocs] = useState([]);
-    const [rowss, setRowss] = useState([]); // <- Aquí guardamos las filas de la "tabla"
 
+    //DOCUMENTOS
     const [facturas, setFacturas] = useState([]);
     const [facturasEx, setFacturasEx] = useState([]);
     const [notasCredito, setNotasCredito] = useState([]);
 
+    const [documentosAgregados, setDocumentosAgregados] = useState([]);
+
+    //VALORES LOCALES
+    const totalDocumentos = documentosAgregados.reduce(
+        (acc, doc) => acc + (doc.total || 0),
+        0
+      );
+
+    //OBTENCION DE DOCUMENTOS PARA EMPRESA SELECCIONADA
     useEffect(() => {
         const handleRecibirDocs = async () => {
           if (!giroRut) return; // no hay empresa seleccionada todavía
       
           try {
             const facturasRef = collection(db, "empresas", String(giroRut), "facturas");
+            const facturasQuery = query(facturasRef, where("formaPago", "==", "Crédito")); // Facturas crédito
             const notasCreditoRef = collection(db, "empresas", String(giroRut), "notasCredito");
       
-            const facturasSnap = await getDocs(facturasRef);
+            const facturasSnap = await getDocs(facturasQuery);
             const notasCreditoSnap = await getDocs(notasCreditoRef);
       
-            const fact = facturasSnap.docs.map((doc) => ({
+            // Mapeo de facturas
+            let fact = facturasSnap.docs.map((doc) => ({
               id: doc.id,
+              giroRut: giroRut, // agregar giroRut
               ...doc.data(),
             }));
+      
+            // Filtrar facturas que ya están en documentosAgregados
+            fact = fact.filter(
+              (f) =>
+                !documentosAgregados.some(
+                  (d) => d.numeroDoc === f.numeroDoc && d.giroRut === f.giroRut
+                )
+            );
       
             const NC = notasCreditoSnap.docs.map((doc) => ({
               id: doc.id,
@@ -68,7 +87,7 @@ const RProcesar = () => {
             setFacturas(fact);
             setNotasCredito(NC);
       
-            console.log("Facturas:", fact);
+            console.log("Facturas filtradas:", fact);
             console.log("Notas de Crédito:", NC);
           } catch (error) {
             console.error("Error al traer documentos:", error);
@@ -76,7 +95,9 @@ const RProcesar = () => {
         };
       
         handleRecibirDocs();
-      }, [giroRut]); 
+      }, [giroRut, documentosAgregados]);
+
+
     return (
         <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
             {/* Sidebar */}
@@ -132,10 +153,25 @@ const RProcesar = () => {
                                 <div key={index} className="flex justify-between mb-2">
                                     <div className="w-1/3 text-center">{row.numeroDoc}</div>
                                     <div className="w-1/3 text-center">{row.fechaV ? new Date(row.fechaV.seconds * 1000).toLocaleDateString() : ""}</div>
-                                    <div className="w-1/3 text-center">{row.total}</div>
+                                    <div className="w-1/3 text-center">{formatCLP(row.total)}</div>
                                     <TextButton 
                                         className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3"
-                                        text="+"    
+                                        text="+"
+                                        onClick={() => {
+                                                // Agregar a documentosAgregados
+                                                setDocumentosAgregados((prev) => [
+                                                ...prev,
+                                                {
+                                                    numeroDoc: row.numeroDoc,
+                                                    giroRut: giroRut,
+                                                    total: row.total,
+                                                }
+                                                ]);
+
+                                                // Eliminar la fila actual de facturas
+                                                setFacturas((prev) => prev.filter((f) => f.numeroDoc !== row.numeroDoc));
+                                            }
+                                         }
                                     />
                                 </div>
                             ))}
@@ -149,12 +185,12 @@ const RProcesar = () => {
                         </div>
                     }
                 />
-                <hr className="my-4" />
+                <hr className="my-4 border-transparent" />
                 <div className="flex gap-4 justify-between">
                     <Card   
                         hasButton={false} 
                         contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
-                        className="w-1/2"
+                        className="w-[60%]"
                         content={
                             <div>
                                 {/* Encabezados */}
@@ -164,12 +200,44 @@ const RProcesar = () => {
                                 <hr className="mb-4" />
                                 
                                 {/* Filas dinámicas */}
-                                {rows.map((row, index) => (
+                                {documentosAgregados.map((row, index) => (
                                     <div key={index} className="flex justify-between mb-2">
-                                        <div className="w-1/3 text-center">{row.rut}</div>
-                                        <div className="w-1/3 text-center">{row.tipoDoc}</div>
-                                        <div className="w-1/3 text-center">{row.doc}</div>
-
+                                        <div className="w-1/3 text-center">{formatRUT(row.giroRut)}</div>
+                                        <div className="w-1/3 text-center">{row.numeroDoc}</div>
+                                        <div className="w-1/3 text-center">{formatCLP(row.total)}</div>
+                                        <TextButton 
+                                        className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3"
+                                        text="-"
+                                        onClick={async () => {
+                                            // Eliminar solo el documento correcto de documentosAgregados
+                                            setDocumentosAgregados((prev) =>
+                                              prev.filter((f) => !(f.numeroDoc === row.numeroDoc && f.giroRut === row.giroRut))
+                                            );
+                                          
+                                            // Solo actualizar facturas si coincide con la empresa seleccionada
+                                            if (row.giroRut === giroRut) {
+                                              try {
+                                                const docRef = doc(db, "empresas", String(row.giroRut), "facturas", row.numeroDoc);
+                                                const docSnap = await getDoc(docRef);
+                                          
+                                                if (docSnap.exists()) {
+                                                  const facturaData = {
+                                                    id: docSnap.id,
+                                                    giroRut: row.giroRut,
+                                                    ...docSnap.data()
+                                                  };
+                                          
+                                                  setFacturas((prev) => [...prev, facturaData]);
+                                                } else {
+                                                  console.warn("No se encontró el documento en Firestore:", row.numeroDoc);
+                                                }
+                                              } catch (error) {
+                                                console.error("Error al recuperar documento de Firestore:", error);
+                                              }
+                                            }
+                                          }}
+                                          
+                                    />
                                     </div>
                                 ))}
 
@@ -182,31 +250,35 @@ const RProcesar = () => {
                             </div>
                         }
                     />
-                    <Card
-                        hasButton={false} 
-                        contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
-                        className="w-1/2"
-                        content={
-                            <div>
-                                <div className="text-center font-bold mb-2 px-0">
-                                    Monto a cancelar
+                    <div className="flex flex-col">
+                        <Card
+                            hasButton={false} 
+                            contentClassName="w-96 h-44 overflow-y-auto scrollbar-custom flex flex-col w-full"
+                            className="w-[100%]"
+                            content={
+                                <div>
+                                    <div className="text-center font-bold mb-2 px-0">
+                                        Monto a cancelar
+                                    </div>
+                                    <hr className="mb-4" />
+                                    <div className="grid grid-cols-2 grid-rows-3 gap-y-4 gap-x-4">
+                                        <div>Facturas electrónicas: </div>
+                                        <div>{formatCLP(totalDocumentos)}</div>
+                                        <div></div>
+                                        <div></div>
+                                        <div>Monto total:</div>
+                                        <div>{formatCLP(totalDocumentos)}</div>
+                                    </div>
                                 </div>
-                                <hr className="mb-4" />
-                                <div className="grid grid-cols-2 grid-rows-5 gap-y-4 gap-x-4">
-                                    <div>Facturas electrónicas: </div>
-                                    <div>$3.453.121</div>
-                                    <div>Facturas Exentas:</div>
-                                    <div>$0</div>
-                                    <div>Notas de credito:</div>
-                                    <div>$121</div>
-                                    <div></div>
-                                    <div></div>
-                                    <div>Monto total:</div>
-                                    <div>$3.453.000</div>
-                                </div>
-                            </div>
-                        }
-                    />
+                            }
+                        />
+                        <div className="flex justify-between mt-8">
+                            <XButton className="h-8 text-xl" text="Borrar"/>
+                            <YButton className="h-8 text-xl" text="Procesar"/>
+                        </div>
+                        
+                    </div>
+                    
                 </div>
             </div>
 

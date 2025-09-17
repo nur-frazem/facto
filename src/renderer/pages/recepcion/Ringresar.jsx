@@ -113,6 +113,13 @@ const RIngresar = () => {
   };
   
   const handleEnviarDoc = async () => {
+    const fechaVDate = fechaV; // ya es un Date
+    const fechaActual = new Date();
+
+    let estado = fechaVDate < fechaActual ? "vencido" : "pendiente";
+
+    console.log("fechaVDate:", fechaVDate, "fechaActual:", fechaActual, "estado:", estado);
+
     const factura = {
       numeroDoc,
       formaPago,
@@ -123,7 +130,8 @@ const RIngresar = () => {
       retencion,
       otros,
       iva,
-      total
+      total,
+      estado
     }
 
     const boleta = {
@@ -131,7 +139,8 @@ const RIngresar = () => {
       fechaE,
       neto,
       iva,
-      total
+      total,
+      estado
     }
 
     const notaCredito = {
@@ -143,7 +152,8 @@ const RIngresar = () => {
       retencion,
       otros,
       iva,
-      total
+      total,
+      estado
     }
     setLoadingModal(true);
     if(selectedDoc == "Factura electrónica" || selectedDoc == "Factura exenta"){
