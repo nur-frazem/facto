@@ -7,8 +7,9 @@ import { VolverButton, YButton, TextButton, XButton } from "../../components/But
 import { DropdownMenu, DropdownMenuList } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { SearchBar } from "../../components/Textfield";
+import { Modal } from "../../components/modal";
 
-import { doc, setDoc, getDoc, getDocs, where, query, collection, onSnapshot, deleteDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc, getDoc, getDocs, where, query, collection, onSnapshot, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 
 import { formatRUT, cleanRUT } from "../../utils/formatRUT";
@@ -51,14 +52,19 @@ const RProcesar = () => {
         0
       );
 
+    //MODAL
+    const[loadingModal, setLoadingModal] = useState(false);
+    const[procesarModal, setProcesarModal] = useState(false);
+
     //OBTENCION DE DOCUMENTOS PARA EMPRESA SELECCIONADA
     useEffect(() => {
         const handleRecibirDocs = async () => {
           if (!giroRut) return; // no hay empresa seleccionada todavía
       
           try {
+            setLoadingModal(true);
             const facturasRef = collection(db, "empresas", String(giroRut), "facturas");
-            const facturasQuery = query(facturasRef, where("formaPago", "==", "Crédito")); // Facturas crédito
+            const facturasQuery = query(facturasRef, where("formaPago", "==", "Crédito"), where("estado", "in", ["pendiente", "vencido"])); // Facturas crédito no pagadas
             const notasCreditoRef = collection(db, "empresas", String(giroRut), "notasCredito");
       
             const facturasSnap = await getDocs(facturasQuery);
@@ -86,17 +92,47 @@ const RProcesar = () => {
       
             setFacturas(fact);
             setNotasCredito(NC);
-      
-            console.log("Facturas filtradas:", fact);
-            console.log("Notas de Crédito:", NC);
+            setLoadingModal(false);
+            //console.log("Facturas filtradas:", fact);
+            //console.log("Notas de Crédito:", NC);
+            console.log("documentos agregados: ",documentosAgregados);
           } catch (error) {
             console.error("Error al traer documentos:", error);
           }
         };
       
         handleRecibirDocs();
-      }, [giroRut, documentosAgregados]);
+      }, [giroRut]); //,documentosAgregados
 
+      const handleProcesarDocs = async () => {
+        try {
+            setLoadingModal(true);
+            // Usamos Promise.all para procesar todo en paralelo
+          await Promise.all(
+            documentosAgregados.map(async (docAgregado) => {
+              const facturaRef = doc(
+                db,
+                "empresas",
+                String(docAgregado.giroRut), // rut empresa
+                "facturas",
+                String(docAgregado.numeroDoc) // número de documento
+              );
+      
+              await updateDoc(facturaRef, {
+                estado: "pagado",
+              });
+            })
+          );
+      
+          console.log("Todas las facturas fueron actualizadas correctamente");
+          setProcesarModal(false); // cerrar modal
+          setDocumentosAgregados([]); // vaciar lista local
+          setLoadingModal(false);
+          window.location.reload();
+        } catch (error) {
+          console.error("Error al procesar documentos", error);
+        }
+      };
 
     return (
         <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
@@ -142,9 +178,10 @@ const RProcesar = () => {
                         <div>
                             {/* Encabezados */}
                             <div className="flex justify-between font-bold mb-2">
-                                <div className="w-1/3 text-center">Número de documento</div>
-                                <div className="w-1/3 text-center">Fecha de vencimiento</div>
-                                <div className="w-1/3 text-center">Monto</div>
+                                <div className="w-1/4 text-center">Número de documento</div>
+                                <div className="w-1/4 text-center">Fecha de vencimiento</div>
+                                <div className="w-1/4 text-center">Estado</div>
+                                <div className="w-1/4 text-center">Monto</div>
                                 <div className="mr-10"></div>
                             </div>
                             <hr className="mb-4" />
@@ -153,6 +190,7 @@ const RProcesar = () => {
                                 <div key={index} className="flex justify-between mb-2">
                                     <div className="w-1/3 text-center">{row.numeroDoc}</div>
                                     <div className="w-1/3 text-center">{row.fechaV ? new Date(row.fechaV.seconds * 1000).toLocaleDateString() : ""}</div>
+                                    <div className="w-1/3 text-center">{row.estado}</div>
                                     <div className="w-1/3 text-center">{formatCLP(row.total)}</div>
                                     <TextButton 
                                         className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3"
@@ -189,8 +227,8 @@ const RProcesar = () => {
                 <div className="flex gap-4 justify-between">
                     <Card   
                         hasButton={false} 
-                        contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
-                        className="w-[60%]"
+                        contentClassName="h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
+                        className="min-w-[60%]"
                         content={
                             <div>
                                 {/* Encabezados */}
@@ -250,7 +288,7 @@ const RProcesar = () => {
                             </div>
                         }
                     />
-                    <div className="flex flex-col">
+                    <div className="flex flex-col w-[39%]">
                         <Card
                             hasButton={false} 
                             contentClassName="w-96 h-44 overflow-y-auto scrollbar-custom flex flex-col w-full"
@@ -274,12 +312,67 @@ const RProcesar = () => {
                         />
                         <div className="flex justify-between mt-8">
                             <XButton className="h-8 text-xl" text="Borrar"/>
-                            <YButton className="h-8 text-xl" text="Procesar"/>
+                            <YButton 
+                                className="h-8 text-xl" 
+                                text="Procesar"
+                                onClick={() => setProcesarModal(true)}
+                            />
                         </div>
                         
                     </div>
-                    
                 </div>
+                {procesarModal && (
+                    <Modal className="-translate-y-48 w-[70%] min-w-[70%]" onClickOutside={() => setProcesarModal(false)}>
+                        <p className="text-2xl font-black mb-4 justify-self-center">FACTURAS A PROCESAR</p>
+                        
+                        <Card 
+                            hasButton={false}
+                            contentClassName="w-full h-52 overflow-y-auto scrollbar-custom"
+                            className="w-full mb-12"
+                            content={
+                                <div>
+                                    <div className="flex justify-between font-bold mb-2">
+                                        <div className="w-1/3 text-center">RUT</div>
+                                        <div className="w-1/3 text-center">Número de documento</div>
+                                        <div className="w-1/3 text-center">Monto</div>
+                                    </div>
+                                    <hr className="mb-4" />
+                                    {documentosAgregados.map((row, index) => (
+                                    <div key={index} className="flex justify-between mb-2">
+                                        <div className="w-1/3 text-center">{formatRUT(row.giroRut)}</div>
+                                        <div className="w-1/3 text-center">{row.numeroDoc}</div>
+                                        <div className="w-1/3 text-center">{formatCLP(row.total)}</div>
+                                    </div>))}
+                                </div>
+                            }
+                        />
+                        {documentosAgregados.length != 0 && (
+                            <div className="flex flex-col">
+                                <p className="text-xl font-black mr-5 self-end">Total Egreso: {formatCLP(totalDocumentos)}</p>
+                                <div className="flex justify-between mt-2">
+                                    <XButton 
+                                        className="ml-5" 
+                                        text="Cancelar"
+                                        onClick={() => setProcesarModal(false)} 
+                                    />
+                                    <YButton 
+                                        className="mr-5" 
+                                        text="Aceptar"
+                                        onClick={() => handleProcesarDocs()}
+                                    />
+                                </div>
+                            </div>
+                            )}
+                        
+
+                    </Modal>
+                )}
+
+                {loadingModal && (
+                      <Modal>
+                          <p className="font-black">Cargando</p>
+                      </Modal>
+                )}
             </div>
 
             {/* Footer fijo */}
