@@ -7,6 +7,7 @@ import IIndex from './pages/informes/IIndex';
 import CIndex from './pages/configuracion/CIndex';
 import RIngresar from './pages/recepcion/Ringresar';
 import RProcesar from './pages/recepcion/RProcesar';
+import RRevisionDocumentos from './pages/recepcion/RRevisionDocumentos';
 import CClientesProveedores from './pages/configuracion/CClientesProveedores';
 import Fondo from "./assets/background/FondoModernoAzul.png";
 
@@ -38,6 +39,7 @@ function App() {
             <Route path="/configuracion-clientesProveedores" element={<CClientesProveedores/>} />
             <Route path="/recepcion-index/ingresar" element={<RIngresar/>} />
             <Route path="/recepcion-index/procesar" element={<RProcesar/>} />
+            <Route path="/recepcion-index/revision-documentos" element={<RRevisionDocumentos/>} />
           </Routes>
         </HashRouter>
       </div>

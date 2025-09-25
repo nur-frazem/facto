@@ -28,7 +28,7 @@ const RIndex = () => {
             <div className="flex flex-col flex-wrap justify-start content-center gap-6 mt-10">
                 <Card title="Ingreso de documentos" onClick={() => navigate("/recepcion-index/ingresar")} />
                 <Card title="Procesar documentos" onClick={() => navigate("/recepcion-index/procesar")} />
-                <Card title="Revisión de documentos" />
+                <Card title="Revisión de documentos" onClick={() => navigate("/recepcion-index/revision-documentos")} />
             </div>
 
             {/* Footer fijo */}

@@ -15,8 +15,8 @@ import { formatRUT, cleanRUT } from "../../utils/formatRUT";
 const RIngresar = () => {
   const navigate = useNavigate();
 
-  useEffect(() => {
-      // Referencia a la colección "empresas"
+  // Referencia a la colección "empresas"
+  useEffect(() => { 
       const empresasRef = collection(db, "empresas");
   
       // Suscribirse a los cambios en tiempo real
@@ -30,8 +30,50 @@ const RIngresar = () => {
       // Cleanup cuando el componente se desmonte
       return () => unsubscribe();
   }, []);
-
   const [rows, setRows] = useState([]);
+
+  // Referencia a la coleccion "Values"
+  useEffect(() => {
+    const tipoDocRef = doc(db, "values", "tipo-doc");
+  
+    const fetchTipoDoc = async () => {
+      try {
+        const tipoDocSnap = await getDoc(tipoDocRef);
+        if (tipoDocSnap.exists()) {
+          // tipoDocSnap.data() devuelve un objeto {0: "Todos", 1: "Factura electrónica", ...}
+          const data = tipoDocSnap.data();
+          // Convertimos a array de strings
+          const arrayData = Object.values(data);
+          setRowTipoDoc(arrayData);
+        } else {
+          console.warn("Documento 'tipo-doc' no existe");
+        }
+      } catch (error) {
+        console.error("Error obteniendo tipo de documentos:", error);
+      }
+    };
+    fetchTipoDoc();
+
+    const formaPagoRef = doc(db, "values", "formas-pago");
+    const fetchFormaPago = async () => {
+      try {
+        const formaPagoSnap = await getDoc(formaPagoRef);
+        if (formaPagoSnap.exists()) {
+          const data = formaPagoSnap.data();
+          // Convertimos a array de strings
+          const arrayFormaPagoData = Object.values(data);
+          setRowFormaPago(arrayFormaPagoData);
+        } else {
+          console.warn("Documento 'formas-pago' no existe");
+        }
+      } catch (error) {
+        console.error("Error obteniendo formas de pago:", error);
+      }
+    };
+    fetchFormaPago();
+  }, []);
+  const [rowTipoDoc, setRowTipoDoc] = useState([]);
+  const [rowFormaPago, setRowFormaPago] = useState([]);
 
   const [fechaE, setFechaE] = useState(null);
   const [fechaV, setFechaV] = useState(null);
@@ -117,6 +159,9 @@ const RIngresar = () => {
     const fechaActual = new Date();
 
     let estado = fechaVDate < fechaActual ? "vencido" : "pendiente";
+    if(formaPago != "Crédito"){
+      estado = "pagado";
+    }
 
     console.log("fechaVDate:", fechaVDate, "fechaActual:", fechaActual, "estado:", estado);
 
@@ -300,7 +345,7 @@ const RIngresar = () => {
                   )}
                 </>
               }
-              items={["Factura electrónica", "Factura exenta", "Boleta", "Guía Electrónica", "Nota de crédito"]}
+              items={rowTipoDoc.slice(1).map((item) => item)}
               value={selectedDoc}
               onSelect={(item) => {
                 setSelectedDoc(item);
@@ -349,7 +394,7 @@ const RIngresar = () => {
                   )}
                 </>
               }
-              items={["Contado", "Crédito"]}
+              items={rowFormaPago.slice(1).map((item) => item)}
               value={formaPago}
               onSelect={(item) => {
                 setFormaPago(item);
