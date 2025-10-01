@@ -367,6 +367,25 @@ export function DropdownMenu({
     );
   }
 
+  export function DatepickerRange({ label, startDate, endDate, onChange, className, classNameField }) {
+    return (
+      <div className={`flex flex-col space-y-1 ${className} ${classNameField}`}>
+        {label && <label className="text-sm font-medium text-white">{label}</label>}
+        <DatePicker
+          selectsRange
+          startDate={startDate}
+          endDate={endDate}
+          onChange={onChange} // recibe array [start, end]
+          dateFormat="dd/MM/yyyy"
+          className="px-4 py-2 rounded-lg bg-white/10 text-white border border-white/20 w-full"
+          calendarClassName="bg-blue-700 text-white rounded-lg border border-blue-400 p-2 shadow-lg"
+          dayClassName={date => "hover:bg-blue-500 rounded-md transition-colors"}
+          isClearable
+        />
+      </div>
+    );
+  }
+
   export function CheckboxDropdown({ label, items, value, onChange }) {
     const [checked, setChecked] = useState(value);
   

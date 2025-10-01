@@ -55,3 +55,14 @@ export function TextButton({onClick, text="", className="", classNameText=""}){
         </button>
     );
 }
+
+export function ImgButton({onClick, className="", src, alt, classNameImg=""}){
+    return(
+        <button
+            onClick={onClick}
+            className={`h-fit w-fit p-1 rounded-2xl hover:bg-white/30 active:bg-white/50 transition-colors ${className}`}
+        >
+            <img src={src} alt={alt} className={classNameImg} />
+        </button>
+    )
+}
