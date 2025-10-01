@@ -14,50 +14,7 @@ import { Modal } from '../components/modal';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
 
-import { useEffect, useState } from "react";
-import { collection, getDocs, updateDoc, doc, query, where } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
-
 const Home = () => {
-
-  const[loadingModal, setLoadingModal] = useState(false);
-
-  useEffect(() => {
-    const actualizarFacturasVencidas = async () => {
-      try {
-        setLoadingModal(true);
-        // referencia a todas las empresas
-        const empresasSnap = await getDocs(collection(db, "empresas"));
-
-        for (const empresa of empresasSnap.docs) {
-          const facturasRef = collection(db, "empresas", empresa.id, "facturas");
-          const facturasSnap = await getDocs(query(facturasRef, where("estado", "==", "pendiente")));
-
-          const hoy = new Date();
-
-          for (const factura of facturasSnap.docs) {
-            const data = factura.data();
-
-            // Solo actualizar si está pendiente y ya pasó la fecha
-            if (data.estado === "pendiente" && data.fechaV.toDate() < hoy) {
-              const facturaRef = doc(db, "empresas", empresa.id, "facturas", factura.id);
-              await updateDoc(facturaRef, {
-                estado: "vencido",
-              });
-              console.log(`Factura ${factura.id} actualizada a vencido`);
-            }
-          }
-        }
-
-        setLoadingModal(false);
-
-      } catch (error) {
-        console.error("Error al actualizar facturas:", error);
-      }
-    };
-
-    actualizarFacturasVencidas();
-  }, []);
 
   const navigate = useNavigate();
 
@@ -112,12 +69,6 @@ const Home = () => {
                 onClick={handleLogout}/>
       </div>
       <Footer />
-
-      {loadingModal && (
-          <Modal>
-              <p className="font-black">Cargando</p>
-          </Modal>
-        )}
     </div>
     );
 };

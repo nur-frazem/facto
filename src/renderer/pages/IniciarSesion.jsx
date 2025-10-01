@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import { H1Tittle } from "../components/Fonts";
 import { YButton, XButton } from "../components/Button";
 import { CGrid } from "../components/Container";
@@ -8,7 +8,9 @@ import { Modal } from '../components/modal';
 import Footer from '../components/Footer';
 
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
+
+import { collection, getDocs, updateDoc, doc, query, where } from "firebase/firestore";
 
 const IniciarSesion = () => {
     const navigate = useNavigate();
@@ -16,14 +18,39 @@ const IniciarSesion = () => {
     const [password, setPassword] = useState("");
     const [showErrorModal, setShowErrorModal] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
+    const[loadingModal, setLoadingModal] = useState(false);
 
     const handleLogin = async () => {
         try {
+            setLoadingModal(true);
             await signInWithEmailAndPassword(auth, email, password);
+            const empresasSnap = await getDocs(collection(db, "empresas"));
+    
+            for (const empresa of empresasSnap.docs) {
+                const facturasRef = collection(db, "empresas", empresa.id, "facturas");
+                const facturasSnap = await getDocs(query(facturasRef, where("estado", "==", "pendiente")));
+    
+                const hoy = new Date();
+    
+                for (const factura of facturasSnap.docs) {
+                const data = factura.data();
+    
+                // Solo actualizar si está pendiente y ya pasó la fecha
+                if (data.estado === "pendiente" && data.fechaV.toDate() < hoy) {
+                    const facturaRef = doc(db, "empresas", empresa.id, "facturas", factura.id);
+                    await updateDoc(facturaRef, {
+                    estado: "vencido",
+                    });
+                    console.log(`Factura ${factura.id} actualizada a vencido`);
+                }
+                }
+            }
+            setLoadingModal(false);
             navigate("/home");
         } catch (error) {
             console.error("Error en login:", error.message);
             setErrorMessage("Correo o contraseña inválidos");
+            setLoadingModal(false);
             setShowErrorModal(true);
         }
     };
@@ -73,7 +100,15 @@ const IniciarSesion = () => {
                     </div>
                 </Modal>
             )}
+
+            {loadingModal && (
+                      <Modal>
+                          <p className="font-black">Cargando</p>
+                      </Modal>
+            )}
+
             <Footer></Footer>
+            
         </CGrid>
     );
     
