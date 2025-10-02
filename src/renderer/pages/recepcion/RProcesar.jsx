@@ -140,15 +140,47 @@ const RProcesar = () => {
       
           // 4. Crear documento en pago_recepcion
           const pagoRef = doc(db, "pago_recepcion", String(numeroEgreso));
-            await setDoc(pagoRef, {
+          await setDoc(pagoRef, {
             numeroEgreso,
             fecha: new Date(),
-            totalEgreso: totalDocumentos, // 👈 agregar aquí
-            facturas: Object.entries(facturasPorEmpresa).map(([rut, facturas]) => ({
-                rut,
-                facturas,
-            })),
-            });
+            totalEgreso: totalDocumentos,
+            facturas: await Promise.all(
+              Object.entries(facturasPorEmpresa).map(async ([rut, facturas]) => {
+                const facturasConNotas = await Promise.all(
+                  facturas.map(async (facturaNum) => {
+                    const facturaRef = doc(db, "empresas", rut, "facturas", facturaNum);
+                    const facturaSnap = await getDoc(facturaRef);
+                    if (!facturaSnap.exists()) return null;
+                    const facturaData = facturaSnap.data();
+
+                    let notasCreditoDetalle = [];
+                    if (facturaData.notasCredito && facturaData.notasCredito.length > 0) {
+                      notasCreditoDetalle = await Promise.all(
+                        facturaData.notasCredito.map(async (ncNum) => {
+                          const ncRef = doc(db, "empresas", rut, "notasCredito", ncNum);
+                          const ncSnap = await getDoc(ncRef);
+                          return ncSnap.exists() ? ncSnap.data() : null;
+                        })
+                      );
+                    }
+
+                    return {
+                      numeroDoc: facturaData.numeroDoc,
+                      total: facturaData.total,
+                      totalDescontado: facturaData.totalDescontado ?? facturaData.total,
+                      abonoNc: facturaData.abonoNc ?? 0,
+                      notasCredito: notasCreditoDetalle.filter(Boolean),
+                    };
+                  })
+                );
+
+                return {
+                  rut,
+                  facturas: facturasConNotas.filter(Boolean),
+                };
+              })
+            ),
+          });
       
           // 5. Generar PDF
           generarPDF(
@@ -240,7 +272,7 @@ const RProcesar = () => {
                                     <div className="w-1/3 text-center">{row.numeroDoc}</div>
                                     <div className="w-1/3 text-center">{row.fechaV ? new Date(row.fechaV.seconds * 1000).toLocaleDateString() : ""}</div>
                                     <div className="w-1/3 text-center">{row.estado}</div>
-                                    <div className="w-1/3 text-center">{formatCLP(row.total)}</div>
+                                    <div className="w-1/3 text-center">{formatCLP(row.totalDescontado ?? row.total)}</div>
                                     <TextButton 
                                         className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3"
                                         text="+"
@@ -251,7 +283,7 @@ const RProcesar = () => {
                                                 {
                                                     numeroDoc: row.numeroDoc,
                                                     giroRut: giroRut,
-                                                    total: row.total,
+                                                    total: (row.totalDescontado ?? row.total),
                                                 }
                                                 ]);
 

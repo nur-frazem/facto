@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { Textfield, DropdownMenu, DatepickerField } from "../../components/Textfield";
 import { Modal } from "../../components/modal";
 
-import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 
 import { formatRUT, cleanRUT } from "../../utils/formatRUT";
@@ -101,6 +101,12 @@ const RIngresar = () => {
   const [numeroDocNc, setNumeroDocNc] = useState("");
   const [formaPago, setFormaPago] = useState("");
 
+  useEffect(() => {
+    setFormaPago("");
+    setFechaE("");
+    setFechaV("");
+  }, [selectedDoc, selectedGiro]);
+
   //modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loadingModal, setLoadingModal] = useState(false);
@@ -124,7 +130,7 @@ const RIngresar = () => {
     // Fecha de vencimiento solo si corresponde y visible
     if (
       selectedGiro &&
-      (selectedDoc === "Factura Crédito") &&
+      (formaPago === "Crédito") &&
       !fechaV
     ) {
       newErrors.fechaV = ECampo;
@@ -133,7 +139,11 @@ const RIngresar = () => {
     // Número de documento solo si visible
     if (selectedGiro && selectedDoc && numeroDoc === "") newErrors.numeroDoc = ECampo;
 
-    if (selectedGiro && selectedDoc && formaPago === "") newErrors.formaPago = ECampo;
+    if (selectedGiro && selectedDoc !== ""){
+      if (selectedDoc === "Factura electrónica" || selectedDoc === "Factura exenta") {
+        if(formaPago === "") newErrors.formaPago = ECampo;
+      }
+    } 
   
     // NC solo si visible
     if (selectedGiro && selectedDoc === "Nota de crédito" && numeroDocNc === "") {
@@ -161,6 +171,9 @@ const RIngresar = () => {
     let estado = fechaVDate < fechaActual ? "vencido" : "pendiente";
     if(formaPago != "Crédito"){
       estado = "pagado";
+      if(selectedDoc == "Nota de crédito"){
+        estado = "pendiente"
+      }
     }
 
     console.log("fechaVDate:", fechaVDate, "fechaActual:", fechaActual, "estado:", estado);
@@ -228,6 +241,7 @@ const RIngresar = () => {
 
     else if(selectedDoc=="Boleta"){
       try {
+        estado = "pagado";
         const documentoRef = doc(db, "empresas", String(giroRut), "boletas", String(numeroDoc));
         const docSnap = await getDoc(documentoRef);
   
@@ -253,6 +267,7 @@ const RIngresar = () => {
 
     else if(selectedDoc=="Nota de crédito"){
       try {
+        estado = "pendiente";
         const documentoRef = doc(db, "empresas", String(giroRut), "notasCredito", String(numeroDoc));
         const docSnap = await getDoc(documentoRef);
   
@@ -264,8 +279,39 @@ const RIngresar = () => {
             return;
         }
   
+        //Buscamos la factura asociada
+        const facturaRef = doc(db, "empresas", String(giroRut), "facturas", String(numeroDocNc));
+        const facturaSnap = await getDoc(facturaRef);
+
+        if (!facturaSnap.exists()) {
+          // Si no se encuentra la factura asociada
+          setLoadingModal(false);
+          console.warn("No se encuentra la factura asociada");
+          setErrorDoc("No se encuentra la factura asociada");
+          return;
+        }
+
+        const facturaData = facturaSnap.data();
+
+        // Validar estado
+        if (facturaData.estado === "pagado") {
+          setLoadingModal(false);
+          console.warn("El documento asociado ya se encuentra pagado");
+          setErrorDoc("El documento asociado ya se encuentra pagado");
+          return;
+        }
+
         // Documento no existe, creamos uno nuevo
         await setDoc(documentoRef, notaCredito);
+
+        // Actualizamos la factura asociada
+        const abonoActual = facturaData.abonoNc || 0;
+
+        await updateDoc(facturaRef, {
+          abonoNc: abonoActual + total,
+          notasCredito: arrayUnion(numeroDoc), // añade el numeroDoc de la NC
+          totalDescontado: (facturaData.totalDescontado ?? facturaData.total) - total //Se descuenta el total de esta NC en el total descontado de la factura
+        });
   
         setIsModalOpen(false);
         handleResetParams();
@@ -384,7 +430,7 @@ const RIngresar = () => {
           )}
 
           {/* Tipo de pago */}
-          {selectedGiro != null && selectedDoc != null ? (
+          {selectedGiro != null && selectedDoc != null && (selectedDoc == "Factura electrónica" || selectedDoc == "Factura exenta") ? (
             <DropdownMenu
               tittle={
                 <>

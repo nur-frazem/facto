@@ -75,6 +75,33 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso) 
       pdf.text(fechaE, 80, y);
       pdf.text(formatCLP(factura.total), 150, y);
       y += 8;
+
+      if (factura.notasCredito && factura.notasCredito.length > 0) {
+        const notas = [];
+    
+        for (const ncNum of factura.notasCredito) {
+          const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", ncNum);
+          const ncSnap = await getDoc(ncRef);
+          if (ncSnap.exists()) {
+            const ncData = ncSnap.data();
+            notas.push(ncData);
+          }
+        }
+    
+        if (notas.length > 0) {
+          const idsNc = notas.map(nc => nc.numeroDoc).join(", ");
+          const valorNc = notas.reduce((acc, nc) => acc + (nc.total || 0), 0);
+    
+          pdf.setFontSize(10);
+          pdf.text(
+            `Notas de crédito: [${idsNc}] Valor: ${formatCLP(valorNc)}`,
+            40,
+            y
+          );
+          y += 6; // Espacio debajo de las NC
+          pdf.setFontSize(12); // restaurar tamaño normal
+        }
+      }
     }
 
     // Separador

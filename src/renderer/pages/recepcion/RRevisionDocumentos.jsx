@@ -200,13 +200,17 @@ const RRevisionDocumentos = () => {
   
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        // "facturas" es un array de empresas [{ rut, facturas: [] }]
+        // "facturas" es un array de empresas [{ rut, facturas: [ {numeroDoc, total, ...} ] }]
         if (Array.isArray(data.facturas)) {
           const match = data.facturas.find(
             (empresa) =>
               empresa.rut === rut &&
-              empresa.facturas.includes(String(numeroDoc))
+              Array.isArray(empresa.facturas) &&
+              empresa.facturas.some(
+                (factura) => String(factura.numeroDoc) === String(numeroDoc)
+              )
           );
+  
           if (match) {
             egresoEncontrado = { id: docSnap.id, ...data };
           }
@@ -219,15 +223,21 @@ const RRevisionDocumentos = () => {
         return;
       }
   
-      // Llamamos a generarPDF con los valores correctos
+      const facturasPorEmpresa = egresoEncontrado.facturas.map((empresa) => ({
+        rut: empresa.rut,
+        facturas: empresa.facturas.map(f => f.numeroDoc) // solo los números de factura
+      }));
+      
       await generarPDF(
         egresoEncontrado.numeroEgreso,
-        egresoEncontrado.facturas,
+        facturasPorEmpresa,
         egresoEncontrado.totalEgreso
       );
+  
       setLoadingModal(false);
     } catch (error) {
       console.error("Error generando PDF:", error);
+      setLoadingModal(false);
     }
   };
 
