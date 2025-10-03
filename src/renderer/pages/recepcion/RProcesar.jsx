@@ -120,18 +120,28 @@ const RProcesar = () => {
             facturasPorEmpresa[docAgregado.giroRut].push(docAgregado.numeroDoc);
           });
       
-          // 2. Actualizar estado de facturas a "pagado"
+          // 2. Actualizar estado de facturas a "pagado" y sus notas de crédito asociadas también
           await Promise.all(
             documentosAgregados.map(async (docAgregado) => {
-              const facturaRef = doc(
-                db,
-                "empresas",
-                String(docAgregado.giroRut),
-                "facturas",
-                String(docAgregado.numeroDoc)
-              );
+              const { giroRut, numeroDoc } = docAgregado;
       
+              const facturaRef = doc(db, "empresas", String(giroRut), "facturas", String(numeroDoc));
               await updateDoc(facturaRef, { estado: "pagado" });
+      
+              // Leer la factura para ver si tiene notas de crédito asociadas
+              const facturaSnap = await getDoc(facturaRef);
+              if (facturaSnap.exists()) {
+                const facturaData = facturaSnap.data();
+                if (facturaData.notasCredito && facturaData.notasCredito.length > 0) {
+                  // Marcar todas las NC asociadas como "pagado"
+                  await Promise.all(
+                    facturaData.notasCredito.map(async (ncNum) => {
+                      const ncRef = doc(db, "empresas", String(giroRut), "notasCredito", String(ncNum));
+                      await updateDoc(ncRef, { estado: "pagado" });
+                    })
+                  );
+                }
+              }
             })
           );
       
@@ -152,7 +162,7 @@ const RProcesar = () => {
                     const facturaSnap = await getDoc(facturaRef);
                     if (!facturaSnap.exists()) return null;
                     const facturaData = facturaSnap.data();
-
+      
                     let notasCreditoDetalle = [];
                     if (facturaData.notasCredito && facturaData.notasCredito.length > 0) {
                       notasCreditoDetalle = await Promise.all(
@@ -163,7 +173,7 @@ const RProcesar = () => {
                         })
                       );
                     }
-
+      
                     return {
                       numeroDoc: facturaData.numeroDoc,
                       total: facturaData.total,
@@ -173,7 +183,7 @@ const RProcesar = () => {
                     };
                   })
                 );
-
+      
                 return {
                   rut,
                   facturas: facturasConNotas.filter(Boolean),
@@ -198,6 +208,7 @@ const RProcesar = () => {
           setLoadingModal(false);
         } catch (error) {
           console.error("Error al procesar documentos", error);
+          setLoadingModal(false);
         }
       };
 
