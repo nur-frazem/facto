@@ -21,11 +21,16 @@ const RIngresar = () => {
 
   useEffect(() => {
     const auth = getAuth();
-    const user = auth.currentUser;
-
-    if (user) {
-      setUserId(user.email);
-    }
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        setUserId(user.email);
+      } else {
+        setUserId("");
+      }
+    });
+  
+    // Limpieza al desmontar
+    return () => unsubscribe();
   }, []);
 
   // Referencia a la colección "empresas"

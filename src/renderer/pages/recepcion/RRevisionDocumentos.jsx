@@ -304,7 +304,13 @@ const RRevisionDocumentos = () => {
         }
         setIEstado(docData.estado);
         setIFechaE(docData.fechaE.toDate().toLocaleDateString('es-CL'));
-        setIFechaV(docData.fechaV.toDate().toLocaleDateString('es-CL'));
+        if (docData.fechaV) {
+          setIFechaIngreso(
+            docData.fechaV.toDate().toLocaleDateString('es-CL')
+          );
+        } else {
+          setIfechaV("");
+        }
         setIFlete(docData.flete);
         setIFormaPago(docData.formaPago);
         setIIva(docData.iva);
@@ -324,7 +330,7 @@ const RRevisionDocumentos = () => {
         }
 
         setIUsuarioPago(docData.pagoUsuario);
-        if (docData.fechaIngreso) {
+        if (docData.fechaPago) {
           setIFechaPago(
             docData.fechaPago.toDate().toLocaleDateString('es-CL')
           );
@@ -357,7 +363,7 @@ const RRevisionDocumentos = () => {
         }
 
         setIUsuarioPago(docData.pagoUsuario);
-        if (docData.fechaIngreso) {
+        if (docData.fechaPago) {
           setIFechaPago(
             docData.fechaPago.toDate().toLocaleDateString('es-CL')
           );
@@ -651,8 +657,8 @@ const RRevisionDocumentos = () => {
             <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-8 gap-y-2 bg-black/40 rounded-xl p-4">
               <p>{`Ingreso el usuario: ${iUsuarioIngreso}`}</p>
               <p>{`Fecha de ingreso del documento: ${iFechaIngreso}`}</p>
-              <p>{`Documento procesado por usuario: ${iUsuarioPago}`}</p>
-              <p>{`Fecha de procesamiento: ${iFechaPago}`}</p>
+              {iUsuarioPago && (<p>{`Documento procesado por usuario: ${iUsuarioPago}`}</p>)}
+              {iFechaPago && (<p>{`Fecha de procesamiento: ${iFechaPago}`}</p>)}
             </div>
           )}
           </Modal>
