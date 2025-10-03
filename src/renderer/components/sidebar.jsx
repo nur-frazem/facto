@@ -179,7 +179,9 @@ export function SidebarWithContentSeparator() {
                     </ListItemPrefix>
                     Procesar documentos
                   </ListItem>
-                  <ListItem className= " hover:bg-black/20  transition-all duration-100">
+                  <ListItem className= " hover:bg-black/20  transition-all duration-100"
+                            onClick={() => navigate("/recepcion-index/revision-documentos")}
+                  >
                     <ListItemPrefix>
                       <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
                     </ListItemPrefix>

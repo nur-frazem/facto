@@ -11,6 +11,7 @@ import { doc, getDoc, getDocs, collection, onSnapshot } from "firebase/firestore
 import { db } from "../../../firebaseConfig";
 import { Card } from "../../components/Container";
 import { cleanRUT, formatRUT } from "../../utils/formatRUT";
+import { formatCLP } from "../../utils/formatCurrency";
 import { generarPDF } from "../../utils/generarPDF";
 
 //Imagenes
@@ -24,9 +25,29 @@ const RRevisionDocumentos = () => {
   const [empresasConDocs, setEmpresasConDocs] = useState([]);
   const unsubscribeRef = useRef(null);
 
+  //Informacion documento
+  const [iNumeroDoc, setINumeroDoc] = useState("");
+  const [iFechaE, setIFechaE] = useState("");
+  const [iFechaV, setIFechaV] = useState("");
+  const [iEstado, setIEstado] = useState("");
+  const [iFormaPago, setIFormaPago] = useState("");
+  const [iTipoDoc, setITipoDoc] = useState("");
+  const [iNeto, setINeto] = useState("");
+  const [iIva, setIIva] = useState("");
+  const [iFlete, setIFlete] = useState("");
+  const [iRetencion, setIRetencion] = useState("");
+  const [iTotal, setITotal] = useState("");
+  const [iOtros, setIOtros] = useState("");
+  const [iNotasCredito, setINotasCredito] = useState([]);
+  const [iAbonoNc, setIAbonoNc] = useState("");
+  const [iTotalDescontado, setITotalDescontado] = useState("");
+  const [iNumeroDocNc, setINumeroDocNc] = useState("");
+
   //Modal
   const [pdfModal, setPdfModal] = useState(false);
-  const[loadingModal, setLoadingModal] = useState(false);
+  const [loadingModal, setLoadingModal] = useState(false);
+  const [errorModal, setErrorModal] = useState("");
+  const [revisionModal, setRevisionModal] = useState(false);
   
 
   // Estados de filtros
@@ -241,6 +262,106 @@ const RRevisionDocumentos = () => {
     }
   };
 
+  const handleRevisionDoc = async (rut, numeroDoc, tipoDoc) => {
+    try {
+      setLoadingModal(true);
+      handleResetParams();
+      const docRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+      const docSnap = await getDoc(docRef);
+
+      if(!docSnap.exists()){
+        console.warn("Error obteniendo documento en la base de datos");
+        setErrorModal("Error obteniendo documento en la base de datos");
+        setLoadingModal(false);
+        return;
+      }
+
+      const docData = docSnap.data();
+
+      if(tipoDoc == "facturas"){
+        if(docData.notasCredito){
+          setIAbonoNc(docData.abonoNc);
+          setINotasCredito(docData.notasCredito);
+          setITotalDescontado(docData.totalDescontado);
+        }
+        setIEstado(docData.estado);
+        setIFechaE(docData.fechaE.toDate().toLocaleDateString('es-CL'));
+        setIFechaV(docData.fechaV.toDate().toLocaleDateString('es-CL'));
+        setIFlete(docData.flete);
+        setIFormaPago(docData.formaPago);
+        setIIva(docData.iva);
+        setINeto(docData.neto);
+        setINumeroDoc(docData.numeroDoc);
+        setIOtros(docData.otros);
+        setIRetencion(docData.retencion);
+        setITotal(docData.total);
+        setITipoDoc("Factura electrónica");
+
+        setRevisionModal(true);
+      }
+
+      if(tipoDoc == "notasCredito"){
+        setIEstado(docData.estado);
+        setIFechaE(docData.fechaE.toDate().toLocaleDateString('es-CL'));
+        setIFlete(docData.flete);
+        setIIva(docData.iva);
+        setINeto(docData.neto);
+        setINumeroDoc(docData.numeroDoc);
+        setINumeroDocNc(docData.numeroDocNc);
+        setIOtros(docData.otros);
+        setIRetencion(docData.retencion);
+        setITotal(docData.total);
+        setITipoDoc("Nota de crédito");
+
+        setRevisionModal(true);
+      }
+
+      if(tipoDoc == "boletas"){
+        setIEstado(docData.estado);
+        setIFechaE(docData.fechaE.toDate().toLocaleDateString('es-CL'));
+        setIIva(docData.iva);
+        setINeto(docData.neto);
+        setINumeroDoc(docData.numeroDoc);
+        setITotal(docData.total);
+        setITipoDoc("Boleta");
+
+        setRevisionModal(true);
+      }
+
+      if(!setRevisionModal){
+        console.warn("Error tipo de documento desconocido");
+        setErrorModal("Error tipo de documento desconocido");
+        setLoadingModal(false);
+        return;
+      }
+
+      setLoadingModal(false);
+    } catch (error) {
+      console.error("Error obteniendo información de documento:", error);
+      setLoadingModal(false);
+    }
+    
+  };
+
+  const handleResetParams = () => {
+    setINumeroDoc("");
+    setIFechaE("");
+    setIFechaV("");
+    setIEstado("");
+    setIFormaPago("");
+    setITipoDoc("");
+    setINeto("");
+    setIIva("");
+    setIFlete("");
+    setIRetencion("");
+    setITotal("");
+    setIOtros("");
+    setINotasCredito("");
+    setIAbonoNc("");
+    setITotalDescontado("");
+    setINumeroDocNc("");
+  };
+
   return (
     <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
       {/* Sidebar */}
@@ -378,17 +499,21 @@ const RRevisionDocumentos = () => {
                             src={searchIcon} 
                             classNameImg="w-5" 
                             className="flex-none" 
+                            onClick={() => handleRevisionDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
+                            title="Detalles"
                           />
                           <ImgButton 
                             src={reportIcon} 
                             classNameImg="w-5" 
                             className="flex-none"
                             onClick={() => handleGenerarPDF(empresa.rut, doc.numeroDoc)} 
+                            title="Egreso"
                           />
                           <ImgButton 
                             src={configIcon} 
                             classNameImg="w-5" 
                             className="flex-none"
+                            title="Modificar"
                           />
                         </div>
                         
@@ -412,6 +537,61 @@ const RRevisionDocumentos = () => {
             <Modal>
                 <p className="font-black">Cargando</p>
             </Modal>
+      )}
+
+      {errorModal && (
+        <Modal onClickOutside={() => setErrorModal("")}>
+            <div className="flex flex-col items-center gap-4 p-4">
+                <p className="text-red-500 font-bold">{errorModal}</p>
+                <YButton
+                    text="Cerrar"
+                    onClick={() => setErrorModal("")}
+                />
+            </div>
+        </Modal>
+      )}
+
+      {revisionModal && (
+        <Modal 
+          onClickOutside={() => setRevisionModal(false)}
+          className="!absolute !top-24"
+        >
+          <p className="font-black text-3xl text-center">{`${iTipoDoc} N°${iNumeroDoc}`}</p>
+
+
+          <div className="grid grid-cols-2 grid-rows-16 mt-10 gap-x-4 gap-y-2 bg-black/40 rounded-xl p-4">
+            <p>{`Fecha de emisión: ${iFechaE}`}</p>
+            {iFechaV ? (<p>{`Fecha de vencimiento: ${iFechaV}`}</p>) : (<div></div>)}
+            <p>{`Estado: ${iEstado}`}</p>
+            {iFormaPago ? (<p>{`Forma de pago: ${iFormaPago}`}</p>) : (<div></div>)}
+          </div>
+
+
+          <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-4 gap-y-2 bg-black/40 rounded-xl p-4">
+            <p>{`Monto neto: ${formatCLP(iNeto)}`}</p>
+            <p>{`IVA: ${formatCLP(iIva)}`}</p>
+            {iOtros ? (<p>{`Otros impuestos: ${formatCLP(iOtros)}`}</p>) : (<div></div>)}
+            {iRetencion ? (<p>{`Retención: ${formatCLP(iRetencion)}`}</p>) : (<div></div>)}
+            {iFlete ? (<p>{`Flete: ${formatCLP(iFlete)}`}</p>) : (<div></div>)}
+            <div></div>
+            {iTotal ? (<p className="font-black">{`Monto documento: ${formatCLP(iTotal)}`}</p>) : (<div></div>)}
+          </div>
+
+          {iNotasCredito != [""] && (
+            <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-4 gap-y-2 bg-black/40 rounded-xl p-4">
+              {iNotasCredito != [""] ? (<p>{`Notas de crédito asociadas: ${iNotasCredito}`}</p>) : (<div></div>)}
+              {iAbonoNc != [""] ? (<p>{`Valor total notas de crédito: ${formatCLP(iAbonoNc)}`}</p>) : (<div></div>)}
+              {iTotalDescontado != [""] ? (<p className="font-black">{`Monto de pago: ${formatCLP(iTotalDescontado)}`}</p>) : (<div></div>)}
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-8 gap-y-2 bg-black/40 rounded-xl p-4">
+            <p>Ingreso el usuario:</p>
+            <p>Fecha de ingreso del documento:</p>
+            <p>Documento procesado por usuario:</p>
+            <p>Fecha de procesamiento:</p>
+          </div>
+          </Modal>
       )}
 
       {/* Footer fijo */}
