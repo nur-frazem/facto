@@ -66,16 +66,19 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso) 
       const facturaSnap = await getDoc(facturaRef);
       if (!facturaSnap.exists()) continue;
       const factura = facturaSnap.data();
-
+    
       const fechaE = factura.fechaE
         ? new Date(factura.fechaE.seconds * 1000).toLocaleDateString("es-CL")
         : "";
-
+    
+      // Línea principal de la factura
+      pdf.setFontSize(11);
       pdf.text(factura.numeroDoc, 30, y);
       pdf.text(fechaE, 80, y);
       pdf.text(formatCLP(factura.total), 150, y);
-      y += 8;
-
+      y += 6; // 🔸 Antes era 8, reducimos para dejar más pegadas las NC
+    
+      // Notas de crédito asociadas
       if (factura.notasCredito && factura.notasCredito.length > 0) {
         const notas = [];
     
@@ -95,12 +98,15 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso) 
           pdf.setFontSize(10);
           pdf.text(
             `Notas de crédito: [${idsNc}] Valor: ${formatCLP(valorNc)}`,
-            40,
+            32,
             y
           );
-          y += 6; // Espacio debajo de las NC
-          pdf.setFontSize(12); // restaurar tamaño normal
+          y += 8; // 🔸 Aumentamos el espacio después de imprimir NC
+          pdf.setFontSize(11);
         }
+      } else {
+        // Si no hay NC, dejamos un pequeño espacio igual para consistencia
+        y += 4;
       }
     }
 

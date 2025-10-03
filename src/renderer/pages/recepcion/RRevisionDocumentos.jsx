@@ -211,7 +211,7 @@ const RRevisionDocumentos = () => {
     fetchValues();
   }, []);
 
-  const handleGenerarPDF = async (rut, numeroDoc) => {
+  const handleGenerarPDF = async (rut, numeroDoc, docTipo) => {
     try {
       setLoadingModal(true);
       const pagoRef = collection(db, "pago_recepcion");
@@ -221,16 +221,30 @@ const RRevisionDocumentos = () => {
   
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        // "facturas" es un array de empresas [{ rut, facturas: [ {numeroDoc, total, ...} ] }]
+  
         if (Array.isArray(data.facturas)) {
-          const match = data.facturas.find(
-            (empresa) =>
-              empresa.rut === rut &&
-              Array.isArray(empresa.facturas) &&
-              empresa.facturas.some(
+          const match = data.facturas.find((empresa) => {
+            if (empresa.rut !== rut || !Array.isArray(empresa.facturas)) return false;
+  
+            if (docTipo === "facturas") {
+              // Buscar en facturas directamente
+              return empresa.facturas.some(
                 (factura) => String(factura.numeroDoc) === String(numeroDoc)
-              )
-          );
+              );
+            }
+  
+            if (docTipo === "notasCredito") {
+              // Buscar en las notas de crédito dentro de cada factura
+              return empresa.facturas.some((factura) => {
+                if (!Array.isArray(factura.notasCredito)) return false;
+                return factura.notasCredito.some(
+                  (nc) => String(nc.numeroDoc) === String(numeroDoc)
+                );
+              });
+            }
+  
+            return false;
+          });
   
           if (match) {
             egresoEncontrado = { id: docSnap.id, ...data };
@@ -246,9 +260,9 @@ const RRevisionDocumentos = () => {
   
       const facturasPorEmpresa = egresoEncontrado.facturas.map((empresa) => ({
         rut: empresa.rut,
-        facturas: empresa.facturas.map(f => f.numeroDoc) // solo los números de factura
+        facturas: empresa.facturas.map((f) => f.numeroDoc),
       }));
-      
+  
       await generarPDF(
         egresoEncontrado.numeroEgreso,
         facturasPorEmpresa,
@@ -506,7 +520,7 @@ const RRevisionDocumentos = () => {
                             src={reportIcon} 
                             classNameImg="w-5" 
                             className="flex-none"
-                            onClick={() => handleGenerarPDF(empresa.rut, doc.numeroDoc)} 
+                            onClick={() => handleGenerarPDF(empresa.rut, doc.numeroDoc, doc.tipo)} 
                             title="Egreso"
                           />
                           <ImgButton 
@@ -584,7 +598,7 @@ const RRevisionDocumentos = () => {
               {iTotalDescontado != [""] ? (<p className="font-black">{`Monto de pago: ${formatCLP(iTotalDescontado)}`}</p>) : (<div></div>)}
             </div>
           )}
-          
+
           <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-8 gap-y-2 bg-black/40 rounded-xl p-4">
             <p>Ingreso el usuario:</p>
             <p>Fecha de ingreso del documento:</p>
