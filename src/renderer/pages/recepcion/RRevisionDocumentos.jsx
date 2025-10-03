@@ -42,6 +42,10 @@ const RRevisionDocumentos = () => {
   const [iAbonoNc, setIAbonoNc] = useState("");
   const [iTotalDescontado, setITotalDescontado] = useState("");
   const [iNumeroDocNc, setINumeroDocNc] = useState("");
+  const [iUsuarioIngreso, setIUsuarioIngreso] = useState("");
+  const [iFechaIngreso, setIFechaIngreso] = useState("");
+  const [iUsuarioPago, setIUsuarioPago] = useState("");
+  const [iFechaPago, setIFechaPago] = useState("");
 
   //Modal
   const [pdfModal, setPdfModal] = useState(false);
@@ -310,6 +314,23 @@ const RRevisionDocumentos = () => {
         setIRetencion(docData.retencion);
         setITotal(docData.total);
         setITipoDoc("Factura electrónica");
+        setIUsuarioIngreso(docData.ingresoUsuario);
+        if (docData.fechaIngreso) {
+          setIFechaIngreso(
+            docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
+          );
+        } else {
+          setIFechaIngreso("");
+        }
+
+        setIUsuarioPago(docData.pagoUsuario);
+        if (docData.fechaIngreso) {
+          setIFechaPago(
+            docData.fechaPago.toDate().toLocaleDateString('es-CL')
+          );
+        } else {
+          setIFechaPago("");
+        }
 
         setRevisionModal(true);
       }
@@ -326,6 +347,23 @@ const RRevisionDocumentos = () => {
         setIRetencion(docData.retencion);
         setITotal(docData.total);
         setITipoDoc("Nota de crédito");
+        setIUsuarioIngreso(docData.ingresoUsuario);
+        if (docData.fechaIngreso) {
+          setIFechaIngreso(
+            docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
+          );
+        } else {
+          setIFechaIngreso("");
+        }
+
+        setIUsuarioPago(docData.pagoUsuario);
+        if (docData.fechaIngreso) {
+          setIFechaPago(
+            docData.fechaPago.toDate().toLocaleDateString('es-CL')
+          );
+        } else {
+          setIFechaPago("");
+        }
 
         setRevisionModal(true);
       }
@@ -338,6 +376,14 @@ const RRevisionDocumentos = () => {
         setINumeroDoc(docData.numeroDoc);
         setITotal(docData.total);
         setITipoDoc("Boleta");
+        setIUsuarioIngreso(docData.ingresoUsuario);
+        if (docData.fechaIngreso) {
+          setIFechaIngreso(
+            docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
+          );
+        } else {
+          setIFechaIngreso("");
+        }
 
         setRevisionModal(true);
       }
@@ -578,6 +624,8 @@ const RRevisionDocumentos = () => {
             {iFechaV ? (<p>{`Fecha de vencimiento: ${iFechaV}`}</p>) : (<div></div>)}
             <p>{`Estado: ${iEstado}`}</p>
             {iFormaPago ? (<p>{`Forma de pago: ${iFormaPago}`}</p>) : (<div></div>)}
+            {iNumeroDocNc ? (<p>{`Folio documento asociado: ${iNumeroDocNc}`}</p>) : (<div></div>)}
+            
           </div>
 
 
@@ -599,12 +647,14 @@ const RRevisionDocumentos = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-8 gap-y-2 bg-black/40 rounded-xl p-4">
-            <p>Ingreso el usuario:</p>
-            <p>Fecha de ingreso del documento:</p>
-            <p>Documento procesado por usuario:</p>
-            <p>Fecha de procesamiento:</p>
-          </div>
+          {iUsuarioIngreso && (
+            <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-8 gap-y-2 bg-black/40 rounded-xl p-4">
+              <p>{`Ingreso el usuario: ${iUsuarioIngreso}`}</p>
+              <p>{`Fecha de ingreso del documento: ${iFechaIngreso}`}</p>
+              <p>{`Documento procesado por usuario: ${iUsuarioPago}`}</p>
+              <p>{`Fecha de procesamiento: ${iFechaPago}`}</p>
+            </div>
+          )}
           </Modal>
       )}
 

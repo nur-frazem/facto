@@ -12,8 +12,21 @@ import { db } from "../../../firebaseConfig";
 
 import { formatRUT, cleanRUT } from "../../utils/formatRUT";
 
+import { getAuth } from "firebase/auth";
+
 const RIngresar = () => {
   const navigate = useNavigate();
+
+  const [userId, setUserId] = useState("");
+
+  useEffect(() => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    if (user) {
+      setUserId(user.email);
+    }
+  }, []);
 
   // Referencia a la colección "empresas"
   useEffect(() => { 
@@ -189,7 +202,9 @@ const RIngresar = () => {
       otros,
       iva,
       total,
-      estado
+      estado,
+      ingresoUsuario : userId,
+      fechaIngreso : fechaActual
     }
 
     const boleta = {
@@ -198,7 +213,9 @@ const RIngresar = () => {
       neto,
       iva,
       total,
-      estado
+      estado,
+      ingresoUsuario : userId,
+      fechaIngreso : fechaActual
     }
 
     const notaCredito = {
@@ -211,7 +228,9 @@ const RIngresar = () => {
       otros,
       iva,
       total,
-      estado
+      estado,
+      ingresoUsuario : userId,
+      fechaIngreso : fechaActual
     }
     setLoadingModal(true);
     if(selectedDoc == "Factura electrónica" || selectedDoc == "Factura exenta"){

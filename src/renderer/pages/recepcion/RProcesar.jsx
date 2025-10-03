@@ -18,8 +18,21 @@ import { formatCLP } from "../../utils/formatCurrency";
 import jsPDF from "jspdf";
 import { generarPDF } from "../../utils/generarPDF";
 
+import { getAuth } from "firebase/auth";
+
 const RProcesar = () => {
     const navigate = useNavigate();
+
+    const [userId, setUserId] = useState("");
+  
+    useEffect(() => {
+      const auth = getAuth();
+      const user = auth.currentUser;
+  
+      if (user) {
+        setUserId(user.email);
+      }
+    }, []);
 
     // Referencia a la colección "empresas"
     useEffect(() => {
@@ -110,6 +123,7 @@ const RProcesar = () => {
       const handleProcesarDocs = async () => {
         try {
           setLoadingModal(true);
+          const fechaActual = new Date();
       
           // 1. Agrupar facturas por rut empresa
           const facturasPorEmpresa = {};
@@ -126,7 +140,7 @@ const RProcesar = () => {
               const { giroRut, numeroDoc } = docAgregado;
       
               const facturaRef = doc(db, "empresas", String(giroRut), "facturas", String(numeroDoc));
-              await updateDoc(facturaRef, { estado: "pagado" });
+              await updateDoc(facturaRef, { estado: "pagado", pagoUsuario: userId, fechaPago : fechaActual});
       
               // Leer la factura para ver si tiene notas de crédito asociadas
               const facturaSnap = await getDoc(facturaRef);
@@ -137,7 +151,7 @@ const RProcesar = () => {
                   await Promise.all(
                     facturaData.notasCredito.map(async (ncNum) => {
                       const ncRef = doc(db, "empresas", String(giroRut), "notasCredito", String(ncNum));
-                      await updateDoc(ncRef, { estado: "pagado" });
+                      await updateDoc(ncRef, { estado: "pagado", pagoUsuario: userId, fechaPago : fechaActual });
                     })
                   );
                 }
