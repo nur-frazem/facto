@@ -305,7 +305,7 @@ const RRevisionDocumentos = () => {
         setIEstado(docData.estado);
         setIFechaE(docData.fechaE.toDate().toLocaleDateString('es-CL'));
         if (docData.fechaV) {
-          setIFechaIngreso(
+          setIFechaV(
             docData.fechaV.toDate().toLocaleDateString('es-CL')
           );
         } else {
@@ -622,47 +622,166 @@ const RRevisionDocumentos = () => {
           onClickOutside={() => setRevisionModal(false)}
           className="!absolute !top-24"
         >
-          <p className="font-black text-3xl text-center">{`${iTipoDoc} N°${iNumeroDoc}`}</p>
+          <p className="font-black text-3xl text-center">
+            {`${iTipoDoc} N°${iNumeroDoc}`}
+          </p>
 
+          {/* Sección 1 */}
+          <div>
+              <p className="mt-10 font-bold text-xl">Información del documento</p>
+              <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+              <div className="flex justify-between gap-x-4">
+                <span>Fecha de emisión:</span>
+                <span>{iFechaE}</span>
+              </div>
 
-          <div className="grid grid-cols-2 grid-rows-16 mt-10 gap-x-4 gap-y-2 bg-black/40 rounded-xl p-4">
-            <p>{`Fecha de emisión: ${iFechaE}`}</p>
-            {iFechaV ? (<p>{`Fecha de vencimiento: ${iFechaV}`}</p>) : (<div></div>)}
-            <p>{`Estado: ${iEstado}`}</p>
-            {iFormaPago ? (<p>{`Forma de pago: ${iFormaPago}`}</p>) : (<div></div>)}
-            {iNumeroDocNc ? (<p>{`Folio documento asociado: ${iNumeroDocNc}`}</p>) : (<div></div>)}
-            
+              {iFechaV ? (
+                <div className="flex justify-between gap-x-4">
+                  <span>Fecha de vencimiento:</span>
+                  <span>{iFechaV}</span>
+                </div>
+              ) : <div></div>}
+
+              <div className="flex justify-between gap-x-4">
+                <span>Estado:</span>
+                <span>{iEstado}</span>
+              </div>
+
+              {iFormaPago ? (
+                <div className="flex justify-between gap-x-4">
+                  <span>Forma de pago:</span>
+                  <span>{iFormaPago}</span>
+                </div>
+              ) : <div></div>}
+
+              {iNumeroDocNc ? (
+                <div className="flex justify-between gap-x-4">
+                  <span>Folio documento asociado:</span>
+                  <span>{iNumeroDocNc}</span>
+                </div>
+              ) : <div></div>}
+            </div>
           </div>
+          
 
+          {/* Sección 2 */}
+          <div>
+              <p className="mt-4 font-bold text-xl">Montos del documento</p>
+              <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+              <div className="flex justify-between gap-x-4">
+                <span>Monto neto:</span>
+                <span>{formatCLP(iNeto)}</span>
+              </div>
 
-          <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-4 gap-y-2 bg-black/40 rounded-xl p-4">
-            <p>{`Monto neto: ${formatCLP(iNeto)}`}</p>
-            <p>{`IVA: ${formatCLP(iIva)}`}</p>
-            {iOtros ? (<p>{`Otros impuestos: ${formatCLP(iOtros)}`}</p>) : (<div></div>)}
-            {iRetencion ? (<p>{`Retención: ${formatCLP(iRetencion)}`}</p>) : (<div></div>)}
-            {iFlete ? (<p>{`Flete: ${formatCLP(iFlete)}`}</p>) : (<div></div>)}
-            <div></div>
-            {iTotal ? (<p className="font-black">{`Monto documento: ${formatCLP(iTotal)}`}</p>) : (<div></div>)}
+              <div className="flex justify-between gap-x-4">
+                <span>IVA:</span>
+                <span>{formatCLP(iIva)}</span>
+              </div>
+
+              {iOtros ? (
+                <div className="flex justify-between gap-x-4">
+                  <span>Otros impuestos:</span>
+                  <span>{formatCLP(iOtros)}</span>
+                </div>
+              ) : <div></div>}
+
+              {iRetencion ? (
+                <div className="flex justify-between gap-x-4">
+                  <span>Retención:</span>
+                  <span>{formatCLP(iRetencion)}</span>
+                </div>
+              ) : <div></div>}
+
+              {iFlete ? (
+                <div className="flex justify-between gap-x-4">
+                  <span>Flete:</span>
+                  <span>{formatCLP(iFlete)}</span>
+                </div>
+              ) : <div></div>}
+
+              <div></div>
+
+              {iTotal ? (
+                <div className="flex justify-between font-black gap-x-4">
+                  <span>Monto documento:</span>
+                  <span>{formatCLP(iTotal)}</span>
+                </div>
+              ) : <div></div>}
+            </div>
           </div>
+         
 
+          {/* Sección Notas de crédito */}
           {iNotasCredito != [""] && (
-            <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-4 gap-y-2 bg-black/40 rounded-xl p-4">
-              {iNotasCredito != [""] ? (<p>{`Notas de crédito asociadas: ${iNotasCredito}`}</p>) : (<div></div>)}
-              {iAbonoNc != [""] ? (<p>{`Valor total notas de crédito: ${formatCLP(iAbonoNc)}`}</p>) : (<div></div>)}
-              {iTotalDescontado != [""] ? (<p className="font-black">{`Monto de pago: ${formatCLP(iTotalDescontado)}`}</p>) : (<div></div>)}
+            <div>
+              <p className="mt-4 font-bold text-xl">Nota(s) de crédito</p>
+              <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+              {iNotasCredito && iNotasCredito.length > 0 && iNotasCredito[0] !== "" ? (
+                <div className="flex justify-between gap-x-4">
+                  <span>Notas de crédito asociadas:</span>
+                  <div>
+                    {iNotasCredito.map((nota, index) => (
+                      <span key={index} className="mr-1">
+                        {nota}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : <div></div>}
+
+                {iAbonoNc != [""] ? (
+                  <div className="flex justify-between gap-x-4">
+                    <span>Valor total notas de crédito:</span>
+                    <span>{formatCLP(iAbonoNc)}</span>
+                  </div>
+                ) : <div></div>}
+
+                {iTotalDescontado != [""] ? (
+                  <div className="flex justify-between font-black gap-x-4">
+                    <span>Monto de pago:</span>
+                    <span>{formatCLP(iTotalDescontado)}</span>
+                  </div>
+                ) : <div></div>}
+              </div>
             </div>
+            
           )}
 
+          {/* Sección Usuario / Fechas */}
           {iUsuarioIngreso && (
-            <div className="grid grid-cols-2 grid-rows-16 mt-4 gap-x-8 gap-y-2 bg-black/40 rounded-xl p-4">
-              <p>{`Ingreso el usuario: ${iUsuarioIngreso}`}</p>
-              <p>{`Fecha de ingreso del documento: ${iFechaIngreso}`}</p>
-              {iUsuarioPago && (<p>{`Documento procesado por usuario: ${iUsuarioPago}`}</p>)}
-              {iFechaPago && (<p>{`Fecha de procesamiento: ${iFechaPago}`}</p>)}
+            <div>
+              <p className="mt-4 font-bold text-xl">Movimientos del documento</p>
+              <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+                <div className="flex justify-between gap-x-4">
+                  <span>Ingresado por:</span>
+                  <span>{iUsuarioIngreso}</span>
+                </div>
+
+                <div className="flex justify-between gap-x-4">
+                  <span>Fecha de ingreso:</span>
+                  <span>{iFechaIngreso}</span>
+                </div>
+
+                {iUsuarioPago && (
+                  <div className="flex justify-between gap-x-4">
+                    <span>Procesado por:</span>
+                    <span>{iUsuarioPago}</span>
+                  </div>
+                )}
+
+                {iFechaPago && (
+                  <div className="flex justify-between gap-x-4">
+                    <span>Fecha de procesamiento:</span>
+                    <span>{iFechaPago}</span>
+                  </div>
+                )}
+              </div>
             </div>
+            
           )}
-          </Modal>
+        </Modal>
       )}
+
 
       {/* Footer fijo */}
       <div className="absolute bottom-0 left-0 w-full z-10">

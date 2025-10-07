@@ -95,6 +95,7 @@ const RIngresar = () => {
 
   const [fechaE, setFechaE] = useState(null);
   const [fechaV, setFechaV] = useState(null);
+  const [creditoProveedor, setCreditoProveedor] = useState(0);
 
   //Valores monto documento textfield
   const [neto, setNeto] = useState("");
@@ -133,6 +134,15 @@ const RIngresar = () => {
   const [errorDoc ,setErrorDoc] = useState("");
   const [errors, setErrors] = useState({});
   const ECampo = "!";
+
+  useEffect(() => {
+    if (fechaE && formaPago === "Crédito" && creditoProveedor > 0) {
+      const nuevaFechaV = new Date(fechaE);
+      nuevaFechaV.setDate(nuevaFechaV.getDate() + Number(creditoProveedor));
+      setFechaV(nuevaFechaV);
+    }
+  }, [fechaE, formaPago, creditoProveedor]);
+
   const handleIngresar = () => {
     let newErrors = {};
   
@@ -395,11 +405,22 @@ const RIngresar = () => {
               }
             items={rows.map((row) => `${formatRUT(row.rut)} ${row.razon}`)}
             value={selectedGiro}
-            onSelect={
-              (item) => {setSelectedGiro(item);
+            onSelect={async (item) => {
+              setSelectedGiro(item);
               setErrors((prev) => ({ ...prev, selectedGiro: undefined }));
               const rutSolo = item.split(" ")[0];
-              setGiroRut(cleanRUT(rutSolo));
+              const rutLimpio = cleanRUT(rutSolo);
+              setGiroRut(rutLimpio);
+            
+              // Obtener datos de la empresa para sacar credito_proveedor
+              const empresaRef = doc(db, "empresas", rutLimpio);
+              const empresaSnap = await getDoc(empresaRef);
+              if (empresaSnap.exists()) {
+                const data = empresaSnap.data();
+                setCreditoProveedor(data.credito_proveedor || 0);
+              } else {
+                setCreditoProveedor(0);
+              }
             }}
             classNameMenu={errors.selectedGiro && ("ring-red-400 ring-2")}
           />
@@ -521,7 +542,7 @@ const RIngresar = () => {
               classNameDatePicker={errors.fechaV && ("ring-red-400 ring-2")}
             />
           ) : (
-            <div /> //MODIFICAR PARA QUE SE REINICIE FECHAV AQUÍ <--
+            <div />
           )}
 
           
