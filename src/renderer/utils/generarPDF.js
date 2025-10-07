@@ -122,5 +122,6 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso) 
   });
 
   // Abrir en pestaña nueva
-  window.open(pdf.output("bloburl"), "_blank");
+  const blobUrl = pdf.output("bloburl");
+  window.open(`${blobUrl}#zoom=100`, "_blank");
 };

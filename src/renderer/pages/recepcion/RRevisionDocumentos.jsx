@@ -4,8 +4,8 @@ import { useNavigate } from "react-router-dom";
 import Footer from "../../components/Footer";
 import { Modal } from "../../components/modal";
 import { H1Tittle } from "../../components/Fonts";
-import { VolverButton, TextButton, ImgButton } from "../../components/Button";
-import { DropdownMenu, DatepickerRange, Textfield } from "../../components/Textfield";
+import { VolverButton, TextButton, ImgButton, YButton } from "../../components/Button";
+import { DropdownMenu, DatepickerRange, DatepickerField, Textfield } from "../../components/Textfield";
 
 import { doc, getDoc, getDocs, collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
@@ -24,6 +24,30 @@ const RRevisionDocumentos = () => {
 
   const [empresasConDocs, setEmpresasConDocs] = useState([]);
   const unsubscribeRef = useRef(null);
+
+  const [seObtuvoTipo, setSeObtuvoTipo] = useState(true);
+
+  //Edición de documento
+  const [iNumeroDocNuevo, setINumeroDocNuevo] = useState("");
+  const [iFechaENuevo, setIFechaENuevo] = useState("");
+  const [iFechaVNuevo, setIFechaVNuevo] = useState("");
+  const [iEstadoNuevo, setIEstadoNuevo] = useState("");
+  const [iFormaPagoNuevo, setIFormaPagoNuevo] = useState("");
+  const [iTipoDocNuevo, setITipoDocNuevo] = useState("");
+  const [iNetoNuevo, setINetoNuevo] = useState("");
+  const [iIvaNuevo, setIIvaNuevo] = useState("");
+  const [iFleteNuevo, setIFleteNuevo] = useState("");
+  const [iRetencionNuevo, setIRetencionNuevo] = useState("");
+  const [iTotalNuevo, setITotalNuevo] = useState("");
+  const [iOtrosNuevo, setIOtrosNuevo] = useState("");
+  const [iNotasCreditoNuevo, setINotasCreditoNuevo] = useState([]);
+  const [iAbonoNcNuevo, setIAbonoNcNuevo] = useState("");
+  const [iTotalDescontadoNuevo, setITotalDescontadoNuevo] = useState("");
+  const [iNumeroDocNcNuevo, setINumeroDocNcNuevo] = useState("");
+  const [iUsuarioIngresoNuevo, setIUsuarioIngresoNuevo] = useState("");
+  const [iFechaIngresoNuevo, setIFechaIngresoNuevo] = useState("");
+  const [iUsuarioPagoNuevo, setIUsuarioPagoNuevo] = useState("");
+  const [iFechaPagoNuevo, setIFechaPagoNuevo] = useState("");
 
   //Informacion documento
   const [iNumeroDoc, setINumeroDoc] = useState("");
@@ -52,6 +76,7 @@ const RRevisionDocumentos = () => {
   const [loadingModal, setLoadingModal] = useState(false);
   const [errorModal, setErrorModal] = useState("");
   const [revisionModal, setRevisionModal] = useState(false);
+  const [editarModal, setEditarModal] = useState(false);
   
 
   // Estados de filtros
@@ -280,6 +305,126 @@ const RRevisionDocumentos = () => {
     }
   };
 
+  const handleSetParams = (docData, tipoDoc) => {
+
+    setSeObtuvoTipo(false);
+    handleResetParams();
+
+    if(tipoDoc == "facturas"){
+      if(docData.notasCredito){
+        setIAbonoNc(docData.abonoNc);
+        setINotasCredito(docData.notasCredito);
+        setITotalDescontado(docData.totalDescontado);
+      }
+      setIEstado(docData.estado);
+      if (docData.fechaE) {
+        setIFechaE(docData.fechaE.toDate());
+      } else {
+        setIFechaE(null);
+      }
+      
+      if (docData.fechaV) {
+        setIFechaV(docData.fechaV.toDate());
+      } else {
+        setIFechaV(null);
+      }
+
+      setIFlete(docData.flete);
+      setIFormaPago(docData.formaPago);
+      setIIva(docData.iva);
+      setINeto(docData.neto);
+      setINumeroDoc(docData.numeroDoc);
+      setIOtros(docData.otros);
+      setIRetencion(docData.retencion);
+      setITotal(docData.total);
+      setITipoDoc("Factura electrónica");
+      setIUsuarioIngreso(docData.ingresoUsuario);
+      if (docData.fechaIngreso) {
+        setIFechaIngreso(
+          docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
+        );
+      } else {
+        setIFechaIngreso("");
+      }
+
+      setIUsuarioPago(docData.pagoUsuario);
+      if (docData.fechaPago) {
+        setIFechaPago(
+          docData.fechaPago.toDate().toLocaleDateString('es-CL')
+        );
+      } else {
+        setIFechaPago("");
+      }
+
+      setSeObtuvoTipo(true);
+    }
+
+    if(tipoDoc == "notasCredito"){
+      setIEstado(docData.estado);
+      if (docData.fechaE) {
+        setIFechaE(docData.fechaE.toDate());
+      } else {
+        setIFechaE(null);
+      }
+      setIFlete(docData.flete);
+      setIIva(docData.iva);
+      setINeto(docData.neto);
+      setINumeroDoc(docData.numeroDoc);
+      setINumeroDocNc(docData.numeroDocNc);
+      setIOtros(docData.otros);
+      setIRetencion(docData.retencion);
+      setITotal(docData.total);
+      setITipoDoc("Nota de crédito");
+      setIUsuarioIngreso(docData.ingresoUsuario);
+      if (docData.fechaIngreso) {
+        setIFechaIngreso(
+          docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
+        );
+      } else {
+        setIFechaIngreso("");
+      }
+
+      setIUsuarioPago(docData.pagoUsuario);
+      if (docData.fechaPago) {
+        setIFechaPago(
+          docData.fechaPago.toDate().toLocaleDateString('es-CL')
+        );
+      } else {
+        setIFechaPago("");
+      }
+
+      setSeObtuvoTipo(true);
+    }
+
+    if(tipoDoc == "boletas"){
+      setIEstado(docData.estado);
+      if (docData.fechaE) {
+        setIFechaE(docData.fechaE.toDate());
+      } else {
+        setIFechaE(null);
+      }
+      setIIva(docData.iva);
+      setINeto(docData.neto);
+      setINumeroDoc(docData.numeroDoc);
+      setITotal(docData.total);
+      setITipoDoc("Boleta");
+      setIUsuarioIngreso(docData.ingresoUsuario);
+      if (docData.fechaIngreso) {
+        setIFechaIngreso(
+          docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
+        );
+      } else {
+        setIFechaIngreso("");
+      }
+
+      setSeObtuvoTipo(true);
+    }
+
+    if (!(seObtuvoTipo)){
+      setErrorModal("Error - No se pudo obtener el tipo de documento");
+    }
+  };
+
   const handleRevisionDoc = async (rut, numeroDoc, tipoDoc) => {
     try {
       setLoadingModal(true);
@@ -295,110 +440,10 @@ const RRevisionDocumentos = () => {
       }
 
       const docData = docSnap.data();
+      handleSetParams(docData, tipoDoc);
 
-      if(tipoDoc == "facturas"){
-        if(docData.notasCredito){
-          setIAbonoNc(docData.abonoNc);
-          setINotasCredito(docData.notasCredito);
-          setITotalDescontado(docData.totalDescontado);
-        }
-        setIEstado(docData.estado);
-        setIFechaE(docData.fechaE.toDate().toLocaleDateString('es-CL'));
-        if (docData.fechaV) {
-          setIFechaV(
-            docData.fechaV.toDate().toLocaleDateString('es-CL')
-          );
-        } else {
-          setIfechaV("");
-        }
-        setIFlete(docData.flete);
-        setIFormaPago(docData.formaPago);
-        setIIva(docData.iva);
-        setINeto(docData.neto);
-        setINumeroDoc(docData.numeroDoc);
-        setIOtros(docData.otros);
-        setIRetencion(docData.retencion);
-        setITotal(docData.total);
-        setITipoDoc("Factura electrónica");
-        setIUsuarioIngreso(docData.ingresoUsuario);
-        if (docData.fechaIngreso) {
-          setIFechaIngreso(
-            docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
-          );
-        } else {
-          setIFechaIngreso("");
-        }
-
-        setIUsuarioPago(docData.pagoUsuario);
-        if (docData.fechaPago) {
-          setIFechaPago(
-            docData.fechaPago.toDate().toLocaleDateString('es-CL')
-          );
-        } else {
-          setIFechaPago("");
-        }
-
+      if(seObtuvoTipo){
         setRevisionModal(true);
-      }
-
-      if(tipoDoc == "notasCredito"){
-        setIEstado(docData.estado);
-        setIFechaE(docData.fechaE.toDate().toLocaleDateString('es-CL'));
-        setIFlete(docData.flete);
-        setIIva(docData.iva);
-        setINeto(docData.neto);
-        setINumeroDoc(docData.numeroDoc);
-        setINumeroDocNc(docData.numeroDocNc);
-        setIOtros(docData.otros);
-        setIRetencion(docData.retencion);
-        setITotal(docData.total);
-        setITipoDoc("Nota de crédito");
-        setIUsuarioIngreso(docData.ingresoUsuario);
-        if (docData.fechaIngreso) {
-          setIFechaIngreso(
-            docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
-          );
-        } else {
-          setIFechaIngreso("");
-        }
-
-        setIUsuarioPago(docData.pagoUsuario);
-        if (docData.fechaPago) {
-          setIFechaPago(
-            docData.fechaPago.toDate().toLocaleDateString('es-CL')
-          );
-        } else {
-          setIFechaPago("");
-        }
-
-        setRevisionModal(true);
-      }
-
-      if(tipoDoc == "boletas"){
-        setIEstado(docData.estado);
-        setIFechaE(docData.fechaE.toDate().toLocaleDateString('es-CL'));
-        setIIva(docData.iva);
-        setINeto(docData.neto);
-        setINumeroDoc(docData.numeroDoc);
-        setITotal(docData.total);
-        setITipoDoc("Boleta");
-        setIUsuarioIngreso(docData.ingresoUsuario);
-        if (docData.fechaIngreso) {
-          setIFechaIngreso(
-            docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
-          );
-        } else {
-          setIFechaIngreso("");
-        }
-
-        setRevisionModal(true);
-      }
-
-      if(!setRevisionModal){
-        console.warn("Error tipo de documento desconocido");
-        setErrorModal("Error tipo de documento desconocido");
-        setLoadingModal(false);
-        return;
       }
 
       setLoadingModal(false);
@@ -407,6 +452,45 @@ const RRevisionDocumentos = () => {
       setLoadingModal(false);
     }
     
+  };
+
+  const handleEditarDoc = async (rut, numeroDoc, tipoDoc) => {
+    setLoadingModal(true);
+    handleResetParams();
+
+    try {
+      setLoadingModal(true);
+      handleResetParams();
+      const docRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+      const docSnap = await getDoc(docRef);
+
+      if(!docSnap.exists()){
+        console.warn("Error obteniendo documento en la base de datos");
+        setErrorModal("Error obteniendo documento en la base de datos");
+        setLoadingModal(false);
+        return;
+      }
+
+      const docData = docSnap.data();
+
+      if((tipoDoc == "facturas" && docData.estado !== "pagado") || (tipoDoc == "notasCredito" && docData.estado !== "pagado") || (tipoDoc == "boletas")){
+        console.log("es modificable");
+        handleSetParams(docData, tipoDoc);
+        if(seObtuvoTipo){
+          setEditarModal(true);
+          setLoadingModal(false);
+        }
+      }
+      else{
+        setErrorModal("El documento no se puede modificar ya que se ha hecho pago en sistema.");
+        setLoadingModal(false);
+      }
+    } catch (error) {
+      console.error("Error obteniendo información de documento:", error);
+      setLoadingModal(false);
+    }
+    
+    setLoadingModal(false);
   };
 
   const handleResetParams = () => {
@@ -579,7 +663,8 @@ const RRevisionDocumentos = () => {
                             src={configIcon} 
                             classNameImg="w-5" 
                             className="flex-none"
-                            title="Modificar"
+                            title="Editar"
+                            onClick={() => handleEditarDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
                           />
                         </div>
                         
@@ -608,7 +693,7 @@ const RRevisionDocumentos = () => {
       {errorModal && (
         <Modal onClickOutside={() => setErrorModal("")}>
             <div className="flex flex-col items-center gap-4 p-4">
-                <p className="text-red-500 font-bold">{errorModal}</p>
+                <p className="text-red-300 font-bold">{errorModal}</p>
                 <YButton
                     text="Cerrar"
                     onClick={() => setErrorModal("")}
@@ -628,17 +713,17 @@ const RRevisionDocumentos = () => {
 
           {/* Sección 1 */}
           <div>
-              <p className="mt-10 font-bold text-xl">Información del documento</p>
-              <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+            <p className="mt-10 font-bold text-xl">Información del documento</p>
+            <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
               <div className="flex justify-between gap-x-4">
                 <span>Fecha de emisión:</span>
-                <span>{iFechaE}</span>
+                <span>{iFechaE.toLocaleDateString('es-CL')}</span>
               </div>
 
               {iFechaV ? (
                 <div className="flex justify-between gap-x-4">
                   <span>Fecha de vencimiento:</span>
-                  <span>{iFechaV}</span>
+                  <span>{iFechaV.toLocaleDateString('es-CL')}</span>
                 </div>
               ) : <div></div>}
 
@@ -782,6 +867,125 @@ const RRevisionDocumentos = () => {
         </Modal>
       )}
 
+      {editarModal && (
+        <Modal onClickOutside={() => setEditarModal(false)}
+        className="!absolute !top-24">
+          <p className="font-black text-3xl text-center">
+            {`Editar ${iTipoDoc} N°${iNumeroDoc}`}
+          </p>
+          <div className="grid grid-cols-2 mt-4 gap-x-4">
+            <div className="flex flex-col">
+              <p className="text-center font-semibold">Editar parámetros de documento</p>
+              <div className="p-4 rounded-xl bg-black/40 grid grid-cols-1 gap-y-4 max-h-96 overflow-y-scroll scrollbar-custom">
+                <div>
+                  <Textfield 
+                    label="Número de documento: "
+                    value={iNumeroDoc}
+                    onChange={(e) => setINumeroDoc(e.target.value)}
+                    type="number"
+                  />
+                </div>
+
+                <div>
+                  <DatepickerField 
+                    label="Fecha de emisión: "
+                    selectedDate={iFechaE}
+                    onChange={(datev) => setIFechaE(datev)}
+                  />
+                </div>
+
+                {iFechaV && (
+                  <div>
+                    <DatepickerField 
+                      label="Fecha de vencimiento: "
+                      selectedDate={iFechaV}
+                      onChange={(datev) => setIFechaV(datev)}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <Textfield 
+                    label="Monto neto: "
+                    value={iNeto}
+                    onChange={(e) => setINeto(e.target.value)}
+                    currency
+                  />
+                </div>
+
+                <div>
+                  <Textfield 
+                    label="Flete: "
+                    value={iFlete}
+                    onChange={(e) => setIFlete(e.target.value)}
+                    currency
+                  />
+                </div>
+
+                <div>
+                  <Textfield 
+                    label="Retención: "
+                    value={iRetencion}
+                    onChange={(e) => setIRetencion(e.target.value)}
+                    currency
+                  />
+                </div>
+
+                <div>
+                  <Textfield 
+                    label="IVA: "
+                    value={iIva}
+                    onChange={(e) => setIIva(e.target.value)}
+                    currency
+                  />
+                </div>
+
+                <div>
+                  <Textfield 
+                    label="Otros impuestos: "
+                    value={iOtros}
+                    onChange={(e) => setIOtros(e.target.value)}
+                    currency
+                  />
+                </div>
+
+                <div>
+                  <Textfield 
+                    label="Total: "
+                    value={iTotal}
+                    onChange={(e) => setITotal(e.target.value)}
+                    currency
+                    readOnly
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            <div className="flex flex-col items-center">
+              <p className="text-center font-semibold">Configuración documento</p>
+              <div className="flex flex-col items-center gap-y-2 rounded-xl bg-black/40 p-2 h-full">
+                <TextButton 
+                  text="Desvincular nota de crédito"
+                  className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center"
+                />
+                <TextButton 
+                  text="Eliminar documento"
+                  className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center"
+                />
+                <TextButton 
+                  text="Confirmar edición"
+                  className="bg-white text-black font-black hover:bg-white/50 active:bg-white/20  w-[95%] justify-center mt-auto mb-2"
+                />
+              </div>
+              
+            </div>
+            
+          </div>
+          
+          
+        </Modal>
+      )}
 
       {/* Footer fijo */}
       <div className="absolute bottom-0 left-0 w-full z-10">
