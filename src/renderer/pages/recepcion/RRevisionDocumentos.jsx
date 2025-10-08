@@ -27,28 +27,6 @@ const RRevisionDocumentos = () => {
 
   const [seObtuvoTipo, setSeObtuvoTipo] = useState(true);
 
-  //Edición de documento
-  const [iNumeroDocNuevo, setINumeroDocNuevo] = useState("");
-  const [iFechaENuevo, setIFechaENuevo] = useState("");
-  const [iFechaVNuevo, setIFechaVNuevo] = useState("");
-  const [iEstadoNuevo, setIEstadoNuevo] = useState("");
-  const [iFormaPagoNuevo, setIFormaPagoNuevo] = useState("");
-  const [iTipoDocNuevo, setITipoDocNuevo] = useState("");
-  const [iNetoNuevo, setINetoNuevo] = useState("");
-  const [iIvaNuevo, setIIvaNuevo] = useState("");
-  const [iFleteNuevo, setIFleteNuevo] = useState("");
-  const [iRetencionNuevo, setIRetencionNuevo] = useState("");
-  const [iTotalNuevo, setITotalNuevo] = useState("");
-  const [iOtrosNuevo, setIOtrosNuevo] = useState("");
-  const [iNotasCreditoNuevo, setINotasCreditoNuevo] = useState([]);
-  const [iAbonoNcNuevo, setIAbonoNcNuevo] = useState("");
-  const [iTotalDescontadoNuevo, setITotalDescontadoNuevo] = useState("");
-  const [iNumeroDocNcNuevo, setINumeroDocNcNuevo] = useState("");
-  const [iUsuarioIngresoNuevo, setIUsuarioIngresoNuevo] = useState("");
-  const [iFechaIngresoNuevo, setIFechaIngresoNuevo] = useState("");
-  const [iUsuarioPagoNuevo, setIUsuarioPagoNuevo] = useState("");
-  const [iFechaPagoNuevo, setIFechaPagoNuevo] = useState("");
-
   //Informacion documento
   const [iNumeroDoc, setINumeroDoc] = useState("");
   const [iFechaE, setIFechaE] = useState("");
@@ -71,6 +49,28 @@ const RRevisionDocumentos = () => {
   const [iUsuarioPago, setIUsuarioPago] = useState("");
   const [iFechaPago, setIFechaPago] = useState("");
 
+  //Edición de documento
+  const [iNumeroDocNuevo, setINumeroDocNuevo] = useState("");
+  const [iFechaENuevo, setIFechaENuevo] = useState("");
+  const [iFechaVNuevo, setIFechaVNuevo] = useState("");
+  const [iEstadoNuevo, setIEstadoNuevo] = useState("");
+  const [iFormaPagoNuevo, setIFormaPagoNuevo] = useState("");
+  const [iTipoDocNuevo, setITipoDocNuevo] = useState("");
+  const [iNetoNuevo, setINetoNuevo] = useState("");
+  const [iIvaNuevo, setIIvaNuevo] = useState("");
+  const [iFleteNuevo, setIFleteNuevo] = useState("");
+  const [iRetencionNuevo, setIRetencionNuevo] = useState("");
+  const [iTotalNuevo, setITotalNuevo] = useState("");
+  const [iOtrosNuevo, setIOtrosNuevo] = useState("");
+  const [iNotasCreditoNuevo, setINotasCreditoNuevo] = useState([]);
+  const [iAbonoNcNuevo, setIAbonoNcNuevo] = useState("");
+  const [iTotalDescontadoNuevo, setITotalDescontadoNuevo] = useState("");
+  const [iNumeroDocNcNuevo, setINumeroDocNcNuevo] = useState("");
+  const [iUsuarioIngresoNuevo, setIUsuarioIngresoNuevo] = useState("");
+  const [iFechaIngresoNuevo, setIFechaIngresoNuevo] = useState("");
+  const [iUsuarioPagoNuevo, setIUsuarioPagoNuevo] = useState("");
+  const [iFechaPagoNuevo, setIFechaPagoNuevo] = useState("");
+
   //Modal
   const [pdfModal, setPdfModal] = useState(false);
   const [loadingModal, setLoadingModal] = useState(false);
@@ -92,6 +92,70 @@ const RRevisionDocumentos = () => {
   const [rowTipoDoc, setRowTipoDoc] = useState([]);
   const [rowFormaPago, setRowFormaPago] = useState([]);
   const [rowEstadoDoc, setRowEstadoDoc] = useState([]);
+
+  useEffect(() => {
+    const netoNumber = Number(iNetoNuevo) || 0;
+    const fleteNumber = Number(iFleteNuevo) || 0;
+    setIIvaNuevo(((netoNumber + fleteNumber) * 0.19).toFixed(0)); // redondeado sin decimales
+    setNuevoChanged(!nuevoChanged);
+  }, [iNetoNuevo, iFleteNuevo]);
+
+  //const total = (Number(neto) || 0) + (Number(iva) || 0) + (Number(otros) || 0) + (Number(flete) || 0) - (Number(retencion) || 0);
+
+  useEffect(() => {
+    const netoNumber = Number(iNetoNuevo) || 0;
+    const ivaNumber = Number(iIvaNuevo) || 0;
+    const otrosNumber = Number(iOtrosNuevo) || 0;
+    const fleteNumber = Number(iFleteNuevo) || 0;
+    const retencionNumber = Number(iRetencionNuevo) || 0;
+
+    setITotalNuevo(netoNumber + ivaNumber + otrosNumber + fleteNumber - retencionNumber);
+    setNuevoChanged(!nuevoChanged);
+  }, [iIvaNuevo, iOtrosNuevo, iRetencionNuevo]);
+
+  const [cambioValoresEdit, setCambioValoresEdit] = useState();
+
+  useEffect(() => {
+    handleCopiarParams();
+    setCambioValoresEdit(false);
+  }, [cambioValoresEdit])
+  
+  const [nuevoChanged, setNuevoChanged] = useState(false);
+  const [confirmarEdicion, setConfirmarEdicion] = useState(false);
+
+  useEffect(() => {
+    const fechaENueva = toDate(iFechaENuevo);
+    const fechaE = toDate(iFechaE);
+    const fechaVNueva = toDate(iFechaVNuevo);
+    const fechaV = toDate(iFechaV);
+    if(iNumeroDocNuevo !== iNumeroDoc || 
+      fechaENueva?.getTime() != fechaE?.getTime() || 
+      fechaVNueva?.getTime() !== fechaV?.getTime() || 
+      iNetoNuevo !== iNeto || 
+      iFleteNuevo !== iFlete || 
+      iRetencionNuevo !== iRetencion || 
+      iIvaNuevo !== iIva || 
+      iOtrosNuevo !== iOtros || 
+      iTotalNuevo !== iTotal)
+    {
+      setConfirmarEdicion(true);
+    }
+    else{
+      setConfirmarEdicion(false);
+    }
+  }, [nuevoChanged])
+
+  const handleCopiarParams = () => {
+    setINumeroDocNuevo(iNumeroDoc);
+    setIFechaENuevo(iFechaE);
+    setIFechaVNuevo(iFechaV);
+    setINetoNuevo(iNeto);
+    setIFleteNuevo(iFlete);
+    setIRetencionNuevo(iRetencion);
+    setIIvaNuevo(iIva);
+    setIOtrosNuevo(iOtros);
+    setITotalNuevo(iTotal);
+  }
 
   const handleBuscar = () => {
     if (unsubscribeRef.current) {
@@ -477,9 +541,10 @@ const RRevisionDocumentos = () => {
         console.log("es modificable");
         handleSetParams(docData, tipoDoc);
         if(seObtuvoTipo){
+          setCambioValoresEdit(true);
           setEditarModal(true);
           setLoadingModal(false);
-        }
+        } 
       }
       else{
         setErrorModal("El documento no se puede modificar ya que se ha hecho pago en sistema.");
@@ -876,12 +941,16 @@ const RRevisionDocumentos = () => {
           <div className="grid grid-cols-2 mt-4 gap-x-4">
             <div className="flex flex-col">
               <p className="text-center font-semibold">Editar parámetros de documento</p>
-              <div className="p-4 rounded-xl bg-black/40 grid grid-cols-1 gap-y-4 max-h-96 overflow-y-scroll scrollbar-custom">
+              <div className="border-[12px] p-2 border-transparent rounded-xl bg-black/40 grid grid-cols-1 gap-y-4 max-h-96 overflow-y-scroll overflow-hidden scrollbar-custom">
                 <div>
                   <Textfield 
                     label="Número de documento: "
-                    value={iNumeroDoc}
-                    onChange={(e) => setINumeroDoc(e.target.value)}
+                    value={iNumeroDocNuevo}
+                    onChange={
+                      (e) => {
+                        setINumeroDocNuevo(e.target.value);
+                        setNuevoChanged(!nuevoChanged);
+                    }}
                     type="number"
                   />
                 </div>
@@ -889,8 +958,11 @@ const RRevisionDocumentos = () => {
                 <div>
                   <DatepickerField 
                     label="Fecha de emisión: "
-                    selectedDate={iFechaE}
-                    onChange={(datev) => setIFechaE(datev)}
+                    selectedDate={iFechaENuevo}
+                    onChange={(datev) => {
+                      setIFechaENuevo(datev);
+                      setNuevoChanged(!nuevoChanged);
+                    }}
                   />
                 </div>
 
@@ -898,8 +970,11 @@ const RRevisionDocumentos = () => {
                   <div>
                     <DatepickerField 
                       label="Fecha de vencimiento: "
-                      selectedDate={iFechaV}
-                      onChange={(datev) => setIFechaV(datev)}
+                      selectedDate={iFechaVNuevo}
+                      onChange={(datev) => {
+                        setIFechaVNuevo(datev);
+                        setNuevoChanged(!nuevoChanged);
+                      }}
                     />
                   </div>
                 )}
@@ -907,8 +982,11 @@ const RRevisionDocumentos = () => {
                 <div>
                   <Textfield 
                     label="Monto neto: "
-                    value={iNeto}
-                    onChange={(e) => setINeto(e.target.value)}
+                    value={iNetoNuevo}
+                    onChange={(e) => {
+                      setINetoNuevo(e.target.value);
+                      setNuevoChanged(!nuevoChanged);
+                    }}
                     currency
                   />
                 </div>
@@ -916,8 +994,11 @@ const RRevisionDocumentos = () => {
                 <div>
                   <Textfield 
                     label="Flete: "
-                    value={iFlete}
-                    onChange={(e) => setIFlete(e.target.value)}
+                    value={iFleteNuevo}
+                    onChange={(e) => {
+                      setIFleteNuevo(e.target.value);
+                      setNuevoChanged(!nuevoChanged);
+                    }}
                     currency
                   />
                 </div>
@@ -925,8 +1006,11 @@ const RRevisionDocumentos = () => {
                 <div>
                   <Textfield 
                     label="Retención: "
-                    value={iRetencion}
-                    onChange={(e) => setIRetencion(e.target.value)}
+                    value={iRetencionNuevo}
+                    onChange={(e) => {
+                      setIRetencionNuevo(e.target.value);
+                      setNuevoChanged(!nuevoChanged);
+                    }}
                     currency
                   />
                 </div>
@@ -934,8 +1018,11 @@ const RRevisionDocumentos = () => {
                 <div>
                   <Textfield 
                     label="IVA: "
-                    value={iIva}
-                    onChange={(e) => setIIva(e.target.value)}
+                    value={iIvaNuevo}
+                    onChange={(e) => {
+                      setIIvaNuevo(e.target.value);
+                      setNuevoChanged(!nuevoChanged);
+                    }}
                     currency
                   />
                 </div>
@@ -943,8 +1030,11 @@ const RRevisionDocumentos = () => {
                 <div>
                   <Textfield 
                     label="Otros impuestos: "
-                    value={iOtros}
-                    onChange={(e) => setIOtros(e.target.value)}
+                    value={iOtrosNuevo}
+                    onChange={(e) => {
+                      setIOtrosNuevo(e.target.value);
+                      setNuevoChanged(!nuevoChanged);
+                    }}
                     currency
                   />
                 </div>
@@ -952,8 +1042,11 @@ const RRevisionDocumentos = () => {
                 <div>
                   <Textfield 
                     label="Total: "
-                    value={iTotal}
-                    onChange={(e) => setITotal(e.target.value)}
+                    value={iTotalNuevo}
+                    onChange={(e) => {
+                      setITotalNuevo(e.target.value);
+                      setNuevoChanged(!nuevoChanged);
+                    }}
                     currency
                     readOnly
                   />
@@ -975,6 +1068,7 @@ const RRevisionDocumentos = () => {
                 />
                 <TextButton 
                   text="Confirmar edición"
+                  disabled={!confirmarEdicion}
                   className="bg-white text-black font-black hover:bg-white/50 active:bg-white/20  w-[95%] justify-center mt-auto mb-2"
                 />
               </div>
@@ -996,3 +1090,12 @@ const RRevisionDocumentos = () => {
 };
 
 export default RRevisionDocumentos;
+
+function toDate(value) {
+  if (value instanceof Date) return value;
+  if (typeof value === "string" || typeof value === "number") {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
