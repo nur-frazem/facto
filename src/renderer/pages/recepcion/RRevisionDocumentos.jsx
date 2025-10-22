@@ -7,7 +7,7 @@ import { H1Tittle } from "../../components/Fonts";
 import { VolverButton, TextButton, ImgButton, YButton } from "../../components/Button";
 import { DropdownMenu, DatepickerRange, DatepickerField, Textfield } from "../../components/Textfield";
 
-import { doc, getDoc, getDocs, collection, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, getDocs, collection, onSnapshot, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { Card } from "../../components/Container";
 import { cleanRUT, formatRUT } from "../../utils/formatRUT";
@@ -77,6 +77,17 @@ const RRevisionDocumentos = () => {
   const [errorModal, setErrorModal] = useState("");
   const [revisionModal, setRevisionModal] = useState(false);
   const [editarModal, setEditarModal] = useState(false);
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState(false);
+  const [deleteInfo, setDeleteInfo] = useState({ rut: "", tipoDoc: "", numeroDoc: "" });
+  // Modal de factura con notas de crédito
+  const [hasNotasCreditoModal, setHasNotasCreditoModal] = useState(false);
+  // Modal para vincular notas a otra factura
+  const [vincularModal, setVincularModal] = useState(false);
+  const [vincularTipoDoc, setVincularTipoDoc] = useState("Factura electrónica"); // label user-friendly
+  const [vincularNumeroDoc, setVincularNumeroDoc] = useState("");
+
+  const [vincularSinEliminar, setVincularSinEliminar] = useState(false);
+
   
 
   // Estados de filtros
@@ -158,6 +169,7 @@ const RRevisionDocumentos = () => {
   }
 
   const handleBuscar = () => {
+
     if (unsubscribeRef.current) {
       unsubscribeRef.current();
     }
@@ -269,13 +281,14 @@ const RRevisionDocumentos = () => {
           };
         });
       });
-
+      setLoadingModal(false);
       Promise.all(promises).then((empresas) => {
         const filtradas = empresas.filter((e) => e && e.documentos.length > 0);
         setEmpresasConDocs(filtradas);
       });
+      
     });
-
+    setLoadingModal(false);
     unsubscribeRef.current = unsubscribe;
   };
 
@@ -542,12 +555,13 @@ const RRevisionDocumentos = () => {
         handleSetParams(docData, tipoDoc);
         if(seObtuvoTipo){
           setCambioValoresEdit(true);
+          setDeleteInfo({ rut, tipoDoc, numeroDoc });
           setEditarModal(true);
           setLoadingModal(false);
         } 
       }
       else{
-        setErrorModal("El documento no se puede modificar ya que se ha hecho pago en sistema.");
+        setErrorModal("El documento no se puede modificar ya que tiene egreso.");
         setLoadingModal(false);
       }
     } catch (error) {
@@ -576,6 +590,344 @@ const RRevisionDocumentos = () => {
     setITotalDescontado("");
     setINumeroDocNc("");
   };
+
+  const handleConfirmDelete = async () => {
+    const { rut, tipoDoc, numeroDoc } = deleteInfo;
+    try {
+      setConfirmDeleteModal(false); // cerramos el modal primario
+      setLoadingModal(true);
+  
+      const docRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+      const docSnap = await getDoc(docRef);
+  
+      if (!docSnap.exists()) {
+        setLoadingModal(false);
+        setErrorModal("El documento no existe en Firestore");
+        return;
+      }
+  
+      const docData = docSnap.data();
+  
+      // Si es factura y tiene notasCredito (array no vacío) -> abrir modal especial
+      if (tipoDoc === "facturas" && Array.isArray(docData.notasCredito) && docData.notasCredito.length > 0) {
+        setINotasCredito(docData.notasCredito);
+        setLoadingModal(false);
+        setHasNotasCreditoModal(true);
+        return;
+      }
+  
+      // ⚡ Caso especial: si es una nota de crédito, eliminarla del array notasCredito de la factura asociada
+      if (tipoDoc === "notasCredito" && docData.numeroDocNc) {
+        const facturaRef = doc(db, "empresas", String(rut), "facturas", String(docData.numeroDocNc));
+        const facturaSnap = await getDoc(facturaRef);
+  
+        if (facturaSnap.exists()) {
+          const facturaData = facturaSnap.data();
+          if (Array.isArray(facturaData.notasCredito)) {
+            // Filtramos el número de la nota de crédito que estamos eliminando
+            const nuevasNotas = facturaData.notasCredito.filter(
+              (nc) => nc.numeroDoc !== numeroDoc && nc !== numeroDoc
+            );
+            await updateDoc(facturaRef, { notasCredito: nuevasNotas });
+          }
+        }
+      } //FALTA ELIMINAR/RESTAR EN ABONONC Y TOTALDESCONTADO
+  
+      // Eliminar documento normalmente
+      await deleteDoc(docRef);
+  
+      setLoadingModal(false);
+      setEditarModal(false);
+      setErrorModal("Documento eliminado correctamente");
+      handleBuscar();
+    } catch (error) {
+      console.error("Error en handleConfirmDelete:", error);
+      setLoadingModal(false);
+      setErrorModal("Error eliminando documento");
+    }
+  };
+  
+
+  const handleEliminarConNotasCredito = async () => {
+    const { rut, tipoDoc, numeroDoc } = deleteInfo;
+  
+    try {
+      setHasNotasCreditoModal(false);
+      setLoadingModal(true);
+  
+      // 1) Eliminar cada nota de crédito referenciada (asumo que iNotasCredito tiene elementos que contienen numeroDoc o son strings)
+      if (Array.isArray(iNotasCredito) && iNotasCredito.length > 0) {
+        for (const nc of iNotasCredito) {
+          // nc puede ser objeto o string/number; extraemos el número
+          const ncNumero = (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc);
+          if (!ncNumero) continue;
+          const ncRef = doc(db, "empresas", String(rut), "notasCredito", ncNumero);
+          // Intentamos borrar, si no existe seguir con el resto
+          try {
+            await deleteDoc(ncRef);
+          } catch (err) {
+            console.warn(`No se pudo eliminar nota de crédito ${ncNumero}:`, err);
+          }
+        }
+      }
+  
+      // 2) Eliminar la factura original
+      const facturaRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+      await deleteDoc(facturaRef);
+  
+      setLoadingModal(false);
+      setEditarModal(false);
+      setErrorModal("Factura y notas de crédito eliminadas correctamente");
+      handleBuscar();
+    } catch (error) {
+      console.error("Error eliminando factura y notas de crédito:", error);
+      setLoadingModal(false);
+      setErrorModal("Error eliminando las notas de crédito o la factura");
+    }
+  };
+  
+  const handleVincularNotasCredito = async () => {
+    const { rut, tipoDoc, numeroDoc } = deleteInfo;
+  
+    const destinoTipo = vincularTipoDoc === "Factura electrónica" ? "facturas" : "facturasExentas";
+    const destinoNumero = String(vincularNumeroDoc).trim();
+  
+    if (!destinoNumero) {
+      setErrorModal("Error - Número de documento inexistente");
+      return;
+    }
+  
+    try {
+      setLoadingModal(true);
+  
+      // 1) Validar existencia del documento destino
+      const destinoRef = doc(db, "empresas", String(rut), destinoTipo, destinoNumero);
+      const destinoSnap = await getDoc(destinoRef);
+  
+      if (!destinoSnap.exists()) {
+        setLoadingModal(false);
+        setErrorModal("Error - Número de documento inexistente");
+        return;
+      }
+
+      if (String(destinoNumero) === String(numeroDoc)) {
+        setLoadingModal(false);
+        setErrorModal("Error - El número de factura a vincular es el actual");
+        return;
+      }
+  
+      const destinoData = destinoSnap.data();
+      if (destinoData.estado === "pagado") {
+        setLoadingModal(false);
+        setErrorModal("Error - El documento destino se encuentra con egreso.");
+        return;
+      }
+  
+      const notasExistentes = Array.isArray(destinoData.notasCredito) ? destinoData.notasCredito : [];
+      const notasAtrasladar = Array.isArray(iNotasCredito) ? iNotasCredito : [];
+  
+      // 2) Evitar duplicados
+      const numerosExistentes = new Set(notasExistentes.map(n => 
+        (typeof n === "object" && n.numeroDoc) ? String(n.numeroDoc) : String(n)
+      ));
+      const nuevasNotasConcatenadas = [...notasExistentes];
+  
+      for (const nc of notasAtrasladar) {
+        const ncNum = (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc);
+        if (!numerosExistentes.has(ncNum)) {
+          nuevasNotasConcatenadas.push(nc);
+          numerosExistentes.add(ncNum);
+        }
+      }
+  
+      // 3) Calcular abonoNc (suma de los totales de las notas de crédito)
+      let abonoNc = 0;
+  
+      for (const nc of nuevasNotasConcatenadas) {
+        const ncNum = (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc);
+        if (!ncNum) continue;
+  
+        const ncRef = doc(db, "empresas", String(rut), "notasCredito", ncNum);
+        const ncSnap = await getDoc(ncRef);
+  
+        if (ncSnap.exists()) {
+          const ncData = ncSnap.data();
+          const totalNc = Number(ncData.total || 0);
+          abonoNc += totalNc;
+        }
+      }
+  
+      // 4) Calcular totalDescontado (totalFactura - abonoNc)
+      const totalFactura = Number(destinoData.total || 0);
+      const totalDescontado = Math.max(totalFactura - abonoNc, 0);
+  
+      // 5) Actualizar documento destino
+      await updateDoc(destinoRef, {
+        notasCredito: nuevasNotasConcatenadas,
+        abonoNc,
+        totalDescontado,
+      });
+  
+      // 6) Actualizar cada nota de crédito con su nuevo número de factura asociada
+      for (const nc of notasAtrasladar) {
+        const ncNum = (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc);
+        if (!ncNum) continue;
+  
+        const ncRef = doc(db, "empresas", String(rut), "notasCredito", ncNum);
+        try {
+          await updateDoc(ncRef, { numeroDocNc: destinoNumero });
+        } catch (err) {
+          console.warn(`No se pudo actualizar numeroDocNc para nota ${ncNum}:`, err);
+        }
+      }
+  
+      // 7) Eliminar factura original
+      const facturaRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+      await deleteDoc(facturaRef);
+  
+      setLoadingModal(false);
+      setVincularModal(false);
+      setEditarModal(false);
+      setErrorModal("Notas vinculadas y factura actualizada correctamente");
+      handleBuscar();
+  
+    } catch (error) {
+      console.error("Error vinculando notas de crédito:", error);
+      setLoadingModal(false);
+      setErrorModal("Error al vincular las notas de crédito");
+    }
+  };
+  
+  const handleVincularSinEliminarNotasCredito = async () => {
+    const { rut, tipoDoc, numeroDoc } = deleteInfo;
+  
+    const destinoTipo = vincularTipoDoc === "Factura electrónica" ? "facturas" : "facturasExentas";
+    const destinoNumero = String(vincularNumeroDoc).trim();
+  
+    if (!destinoNumero) {
+      setErrorModal("Error - Número de documento inexistente");
+      return;
+    }
+  
+    try {
+      setLoadingModal(true);
+  
+      // 1) Obtener factura origen
+      const facturaRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+      const facturaSnap = await getDoc(facturaRef);
+      if (!facturaSnap.exists()) {
+        setLoadingModal(false);
+        setErrorModal("Error - La factura origen no existe");
+        return;
+      }
+      const facturaData = facturaSnap.data();
+  
+      // 2) Verificar que tenga notas de crédito asociadas
+      const notasAtrasladar = Array.isArray(facturaData.notasCredito)
+        ? facturaData.notasCredito
+        : [];
+      if (notasAtrasladar.length === 0) {
+        setLoadingModal(false);
+        setErrorModal("Error - La factura no tiene notas de crédito para desvincular");
+        return;
+      }
+  
+      // 3) Evitar vincular a sí misma
+      if (String(destinoNumero) === String(numeroDoc)) {
+        setLoadingModal(false);
+        setErrorModal("Error - El número de factura a vincular es el actual");
+        return;
+      }
+  
+      // 4) Validar destino
+      const destinoRef = doc(db, "empresas", String(rut), destinoTipo, destinoNumero);
+      const destinoSnap = await getDoc(destinoRef);
+      if (!destinoSnap.exists()) {
+        setLoadingModal(false);
+        setErrorModal("Error - El documento destino no existe");
+        return;
+      }
+      const destinoData = destinoSnap.data();
+  
+      if (destinoData.estado === "pagado") {
+        setLoadingModal(false);
+        setErrorModal("Error - El documento destino se encuentra con egreso.");
+        return;
+      }
+  
+      // 5) Agregar notas al destino (evitando duplicados)
+      const notasExistentesDestino = Array.isArray(destinoData.notasCredito)
+        ? destinoData.notasCredito
+        : [];
+      const numerosExistentes = new Set(
+        notasExistentesDestino.map(n =>
+          (typeof n === "object" && n.numeroDoc) ? String(n.numeroDoc) : String(n)
+        )
+      );
+  
+      const nuevasNotasDestino = [...notasExistentesDestino];
+      for (const nc of notasAtrasladar) {
+        const ncNum = (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc);
+        if (!numerosExistentes.has(ncNum)) {
+          nuevasNotasDestino.push(nc);
+          numerosExistentes.add(ncNum);
+        }
+      }
+  
+      // 6) Recalcular abonoNc y totalDescontado del destino
+      let abonoNcDestino = 0;
+      for (const nc of nuevasNotasDestino) {
+        const ncNum = (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc);
+        if (!ncNum) continue;
+  
+        const ncRef = doc(db, "empresas", String(rut), "notasCredito", ncNum);
+        const ncSnap = await getDoc(ncRef);
+        if (ncSnap.exists()) {
+          const ncData = ncSnap.data();
+          abonoNcDestino += Number(ncData.total || 0);
+        }
+      }
+  
+      const totalFacturaDestino = Number(destinoData.total || 0);
+      const totalDescontadoDestino = Math.max(totalFacturaDestino - abonoNcDestino, 0);
+  
+      // 7) Actualizar destino
+      await updateDoc(destinoRef, {
+        notasCredito: nuevasNotasDestino,
+        abonoNc: abonoNcDestino,
+        totalDescontado: totalDescontadoDestino,
+      });
+  
+      // 8) Actualizar cada nota de crédito con su nueva factura asociada
+      for (const nc of notasAtrasladar) {
+        const ncNum = (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc);
+        if (!ncNum) continue;
+  
+        const ncRef = doc(db, "empresas", String(rut), "notasCredito", ncNum);
+        await updateDoc(ncRef, { numeroDocNc: destinoNumero });
+      }
+  
+      // 9) Quitar las notas de crédito de la factura origen
+      await updateDoc(facturaRef, {
+        notasCredito: deleteField(),
+        abonoNc: deleteField(),
+        totalDescontado: deleteField(),
+      });
+  
+      handleBuscar();
+      setLoadingModal(false);
+      setVincularModal(false);
+      setEditarModal(false);
+      setErrorModal("Notas de crédito desvinculadas y asociadas al nuevo documento correctamente");
+      handleBuscar();
+  
+    } catch (error) {
+      console.error("Error al desvincular notas de crédito:", error);
+      setLoadingModal(false);
+      setErrorModal("Error al desvincular las notas de crédito");
+    }
+  };
+  
 
   return (
     <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
@@ -645,9 +997,12 @@ const RRevisionDocumentos = () => {
 
           <TextButton 
             text="Buscar" 
-            className="bg-white self-end hover:bg-white/60 active:bg-white/30 h-7 w-fit place-self-center" 
+            className="bg-white self-end hover:bg-white/60 active:bg-white/30 h-7 w-fit place-self-center px-5 py-5" 
             classNameText="font-black"
-            onClick={handleBuscar} 
+            onClick={() => {
+              handleBuscar();
+              setLoadingModal(true);
+            }} 
           />
         </div>
 
@@ -749,23 +1104,9 @@ const RRevisionDocumentos = () => {
             </Modal>
       )}
 
-      {loadingModal && (
-            <Modal>
-                <p className="font-black">Cargando</p>
-            </Modal>
-      )}
+      
 
-      {errorModal && (
-        <Modal onClickOutside={() => setErrorModal("")}>
-            <div className="flex flex-col items-center gap-4 p-4">
-                <p className="text-red-300 font-bold">{errorModal}</p>
-                <YButton
-                    text="Cerrar"
-                    onClick={() => setErrorModal("")}
-                />
-            </div>
-        </Modal>
-      )}
+      
 
       {revisionModal && (
         <Modal 
@@ -1057,14 +1398,24 @@ const RRevisionDocumentos = () => {
 
             <div className="flex flex-col items-center">
               <p className="text-center font-semibold">Configuración documento</p>
-              <div className="flex flex-col items-center gap-y-2 rounded-xl bg-black/40 p-2 h-full">
+              <div className="flex flex-col items-center gap-y-2 rounded-xl bg-black/40 p-2 h-full min-w-64">
+                {iTipoDoc === "Factura electrónica" && (
+                  <TextButton 
+                    text="Desvincular nota de crédito"
+                    className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center"
+                    onClick={() => {
+                      setVincularNumeroDoc("");
+                      setVincularTipoDoc("Factura electrónica");
+                      setVincularSinEliminar(true); // 🟢 Nueva bandera para distinguir este modo
+                      setVincularModal(true);
+                    }}
+                  />
+                )}
+                
                 <TextButton 
-                  text="Desvincular nota de crédito"
+                  text="Eliminar documento" 
                   className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center"
-                />
-                <TextButton 
-                  text="Eliminar documento"
-                  className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center"
+                  onClick={() => setConfirmDeleteModal(true)} 
                 />
                 <TextButton 
                   text="Confirmar edición"
@@ -1079,6 +1430,152 @@ const RRevisionDocumentos = () => {
           
           
         </Modal>
+      )}
+
+      {confirmDeleteModal && (
+        <Modal onClickOutside={() => setConfirmDeleteModal(false)} className="!absolute !top-24">
+          <div className="flex flex-col items-center gap-6 p-6">
+            <p className="text-lg font-bold text-center">
+              ¿Está seguro que desea eliminar la {iTipoDoc} N° {iNumeroDoc}?
+            </p>
+            <div className="flex gap-24">
+              <TextButton 
+                text="Cancelar" 
+                className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center px-4 rounded-3xl"
+                onClick={() => setConfirmDeleteModal(false)} 
+              />
+              <TextButton 
+                text="Confirmar" 
+                className="bg-white text-black font-black m-2 hover:bg-red-400 active:bg-red-600 w-[95%] justify-center px-4 rounded-3xl"
+                onClick={handleConfirmDelete}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {hasNotasCreditoModal && (
+        <Modal onClickOutside={() => setHasNotasCreditoModal(false)} className="!absolute !top-24">
+          <div className="flex flex-col items-center gap-4 p-6 max-w-[100%]">
+            <p className="text-lg font-bold text-center">
+              La {iTipoDoc} N°{iNumeroDoc} tiene Notas de crédito asociadas:
+            </p>
+
+            <div className="w-full max-h-56 overflow-y-auto bg-black/20 rounded p-3">
+              <ul className="list-disc pl-5">
+                {iNotasCredito && iNotasCredito.length > 0 ? (
+                  iNotasCredito.map((nc, idx) => (
+                    <li key={idx} className="mb-1">
+                      {typeof nc === "object" && nc.numeroDoc ? `Nota de crédito N°${nc.numeroDoc}` : `Nota de crédito N°${nc}`}
+                    </li>
+                  ))
+                ) : (
+                  <li>No se encontraron notas de crédito</li>
+                )}
+              </ul>
+            </div>
+
+            <div className="flex gap-4 mt-4 w-full">
+              <TextButton
+                text="Cancelar"
+                className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center py-7 rounded-3xl"
+                onClick={() => setHasNotasCreditoModal(false)}
+              />
+
+              <TextButton
+                text="Eliminar Notas de crédito"
+                className="bg-white text-black font-black m-2 hover:bg-red-300 active:bg-red-500 w-[95%] justify-center py-7 rounded-3xl"
+                onClick={async () => {
+                  // llama función que elimina factura + notas
+                  await handleEliminarConNotasCredito();
+                }}
+              />
+
+              <TextButton
+                text="Vincular a otro documento y eliminar"
+                className="bg-white text-black font-black m-2 hover:bg-blue-300 active:bg-blue-500 w-[95%] justify-center py-7 rounded-3xl"
+                onClick={() => {
+                  setHasNotasCreditoModal(false);
+                  setVincularNumeroDoc("");
+                  setVincularTipoDoc("Factura electrónica");
+                  setVincularModal(true);
+                }}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {vincularModal && (
+        <Modal onClickOutside={() => {
+                setVincularModal(false);
+                setVincularSinEliminar(false); // ← reseteamos también si el usuario hace clic fuera
+              }} 
+              className="!absolute !top-24"
+        >
+          <div className="flex flex-col gap-4 p-6 w-[90%] max-w-xl">
+            <p className="text-lg font-bold">Vincular notas de crédito a otro documento</p>
+
+            <div className="relative overflow-visible">
+            <DropdownMenu
+              classNameMenu="w-full"
+              classNameList="!z-[9999]"
+              tittle="Tipo de documento destino"
+              items={["Factura electrónica", "Factura exenta"]}
+              value={vincularTipoDoc}
+              onSelect={setVincularTipoDoc}
+            />
+            </div>
+
+            <Textfield
+              label="Número de documento para relacionar las notas de crédito"
+              type="number"
+              value={vincularNumeroDoc}
+              onChange={(e) => setVincularNumeroDoc(e.target.value)}
+            />
+
+            <div className="flex gap-3 mt-4">
+              <TextButton
+                text="Cancelar"
+                className="bg-white text-black font-black m-2 hover:bg-red-300 active:bg-red-500 w-[95%] justify-center rounded-3xl"
+                onClick={() => {
+                  setVincularModal(false);
+                  setVincularSinEliminar(false); // ← reseteamos modo “sin eliminar”
+                }}
+              />
+              <TextButton
+                text="Confirmar"
+                className="bg-white text-black font-black m-2 hover:bg-green-300 active:bg-green-500 w-[95%] justify-center rounded-3xl"
+                onClick={async () => {
+                  if (vincularSinEliminar) {
+                    await handleVincularSinEliminarNotasCredito(); // 🟢 Nueva función
+                  } else {
+                    await handleVincularNotasCredito(); // comportamiento anterior
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+
+      {errorModal && (
+        <Modal onClickOutside={() => setErrorModal("")}>
+            <div className="flex flex-col items-center gap-4 p-4">
+                <p className="text-red-300 font-bold">{errorModal}</p>
+                <YButton
+                    text="Cerrar"
+                    onClick={() => setErrorModal("")}
+                />
+            </div>
+        </Modal>
+      )}
+
+      {loadingModal && (
+            <Modal>
+                <p className="font-black">Cargando</p>
+            </Modal>
       )}
 
       {/* Footer fijo */}
