@@ -31,18 +31,23 @@ const RProcesar = () => {
     const [creditoCliente, setCreditoCliente]       = useState(0);
     const [creditoProveedor, setCreditoProveedor]   = useState(0);
 
+    // Estado de búsqueda
+    const [searchTerm, setSearchTerm] = useState("");
+
     useEffect(() => {
         // Referencia a la colección "empresas"
         const empresasRef = collection(db, "empresas");
-    
+
         // Suscribirse a los cambios en tiempo real
         const unsubscribe = onSnapshot(empresasRef, (snapshot) => {
             const empresasData = snapshot.docs.map(doc => doc.data());
             setRows(empresasData);
         }, (error) => {
+            // Ignorar errores de permisos durante el logout
+            if (error.code === 'permission-denied') return;
             console.error("Error obteniendo empresas:", error);
         });
-    
+
         // Cleanup cuando el componente se desmonte
         return () => unsubscribe();
     }, []);
@@ -169,6 +174,16 @@ const RProcesar = () => {
     
     const [rows, setRows] = useState([]); // <- Aquí guardamos las filas de la "tabla"
 
+    // Filtrar filas según el término de búsqueda
+    const filteredRows = rows.filter((row) => {
+        const term = searchTerm.toLowerCase();
+        return (
+            row.rut?.toLowerCase().includes(term) ||
+            row.razon?.toLowerCase().includes(term) ||
+            row.giro?.toLowerCase().includes(term)
+        );
+    });
+
     const [showModal, setShowModal] = useState(false);
     const [editModal, setEditModal] = useState(false);
     const [loadingModal, setLoadingModal] = useState(false);
@@ -246,9 +261,15 @@ const RProcesar = () => {
                                 <div className="w-[12%] text-center">Proveedor</div>
                                 <div className="w-[16%] text-center">Acciones</div>
                             </div>
-                            <SearchBar></SearchBar>
+                            <div className="mb-3">
+                                <SearchBar
+                                    placeholder="Buscar por RUT, razón social o giro..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
                             {/* Filas dinámicas */}
-                            {rows.map((row, index) => (
+                            {filteredRows.map((row, index) => (
                                 <div key={index} className="flex items-center mb-1 px-2 py-3 hover:bg-white/5 rounded-lg transition-colors border-b border-white/5 last:border-b-0">
                                     <div className="w-[18%] text-center text-sm font-medium">{formatRUT(row.rut)}</div>
                                     <div className="w-[22%] text-center text-sm">{row.razon}</div>
@@ -310,6 +331,13 @@ const RProcesar = () => {
                             {rows.length === 0 && (
                                 <div className="text-center text-gray-400 mt-4">
                                     No hay empresas ingresadas
+                                </div>
+                            )}
+
+                            {/* Si no hay resultados de búsqueda */}
+                            {rows.length > 0 && filteredRows.length === 0 && (
+                                <div className="text-center text-gray-400 mt-4">
+                                    No se encontraron empresas con ese criterio
                                 </div>
                             )}
                         </div>

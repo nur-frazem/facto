@@ -4,7 +4,7 @@ import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
 import { useNavigate } from "react-router-dom";
 import { VolverButton, YButton, TextButton, XButton } from "../../components/Button";
-import { DropdownMenu, DropdownMenuList } from "../../components/Textfield";
+import { DropdownMenu, DropdownMenuList, DatepickerField } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { SearchBar } from "../../components/Textfield";
 import { Modal, LoadingModal } from "../../components/modal";
@@ -35,15 +35,17 @@ const RProcesar = () => {
     // Referencia a la colección "empresas"
     useEffect(() => {
           const empresasRef = collection(db, "empresas");
-      
+
           // Suscribirse a los cambios en tiempo real
           const unsubscribe = onSnapshot(empresasRef, (snapshot) => {
               const empresasData = snapshot.docs.map(doc => doc.data());
               setRows(empresasData);
           }, (error) => {
+              // Ignorar errores de permisos durante el logout
+              if (error.code === 'permission-denied') return;
               console.error("Error obteniendo empresas:", error);
           });
-      
+
           // Cleanup cuando el componente se desmonte
           return () => unsubscribe();
       }, []);
@@ -69,6 +71,9 @@ const RProcesar = () => {
     //MODAL
     const[loadingModal, setLoadingModal] = useState(false);
     const[procesarModal, setProcesarModal] = useState(false);
+
+    // Fecha de pago (por defecto hoy)
+    const [fechaPagoSeleccionada, setFechaPagoSeleccionada] = useState(new Date());
 
     // OBTENCIÓN DE DOCUMENTOS PARA EMPRESA SELECCIONADA
     useEffect(() => {
@@ -149,7 +154,8 @@ const RProcesar = () => {
       const handleProcesarDocs = async () => {
         try {
           setLoadingModal(true);
-          const fechaActual = new Date();
+          const fechaProceso = new Date(); // Fecha en que se procesa (hoy)
+          const fechaPago = fechaPagoSeleccionada; // Fecha de pago seleccionada por el usuario
 
           // 1. Agrupar documentos por rut y tipo
           const docsPorEmpresa = {};
@@ -173,7 +179,8 @@ const RProcesar = () => {
               await updateDoc(docRef, {
                 estado: "pagado",
                 pagoUsuario: userId,
-                fechaPago: fechaActual
+                fechaPago: fechaPago,
+                fechaProceso: fechaProceso
               });
 
               // Leer el documento para ver si tiene notas de crédito asociadas
@@ -188,7 +195,8 @@ const RProcesar = () => {
                       await updateDoc(ncRef, {
                         estado: "pagado",
                         pagoUsuario: userId,
-                        fechaPago: fechaActual
+                        fechaPago: fechaPago,
+                        fechaProceso: fechaProceso
                       });
                     })
                   );
@@ -204,7 +212,8 @@ const RProcesar = () => {
           const pagoRef = doc(db, "pago_recepcion", String(numeroEgreso));
           await setDoc(pagoRef, {
             numeroEgreso,
-            fecha: fechaActual,
+            fecha: fechaProceso,
+            fechaPago: fechaPago,
             totalEgreso: totalDocumentos,
             facturas: await Promise.all(
               Object.entries(docsPorEmpresa).map(async ([rut, docs]) => {
@@ -253,12 +262,14 @@ const RProcesar = () => {
               rut,
               facturas: docs.map(d => d.numeroDoc),
             })),
-            totalDocumentos
+            totalDocumentos,
+            fechaPago
           );
 
           setProcesarModal(false);
           setDocumentosAgregados([]);
           setFacturas([]);
+          setFechaPagoSeleccionada(new Date()); // Reset to today
           setLoadingModal(false);
         } catch (error) {
           console.error("Error al procesar documentos", error);
@@ -313,6 +324,8 @@ const RProcesar = () => {
                             }
                         items={rows.map((row) => `${formatRUT(row.rut)} ${row.razon}`)}
                         value={giro}
+                        searchable={true}
+                        searchPlaceholder="Buscar por RUT o razón social..."
                         onSelect={
                             (item) => {setGiro(item);
                             const rutSolo = item.split(" ")[0];
@@ -551,9 +564,21 @@ const RProcesar = () => {
 
                         {documentosAgregados.length > 0 && (
                             <div className="flex flex-col gap-4">
-                                <div className="flex justify-end items-center gap-4 bg-black/20 p-3 rounded-lg">
-                                    <span className="text-lg font-semibold">Total Egreso:</span>
-                                    <span className="text-2xl font-black text-green-400">{formatCLP(totalDocumentos)}</span>
+                                {/* Fecha de pago y Total */}
+                                <div className="flex justify-between items-end gap-4">
+                                    <div className="flex-shrink-0">
+                                        <DatepickerField
+                                            label="Fecha de pago"
+                                            selectedDate={fechaPagoSeleccionada}
+                                            onChange={(date) => setFechaPagoSeleccionada(date)}
+                                            placeholder="Seleccione fecha"
+                                            className="w-48"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-4 bg-black/20 p-3 rounded-lg">
+                                        <span className="text-lg font-semibold">Total Egreso:</span>
+                                        <span className="text-2xl font-black text-green-400">{formatCLP(totalDocumentos)}</span>
+                                    </div>
                                 </div>
                                 <div className="flex justify-between">
                                     <XButton

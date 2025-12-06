@@ -5,7 +5,7 @@ import { formatRUT } from "./formatRUT";
 import { formatCLP } from "./formatCurrency";
 
 // Función para generar PDF
-export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso) => {
+export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, fechaPago = null) => {
   const pdf = new jsPDF();
 
   // Header izquierda
@@ -29,10 +29,12 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso) 
   const titleWidth = pdf.getTextWidth("Pago Recepción");
   pdf.line(105 - titleWidth / 2, 42, 105 + titleWidth / 2, 42);
 
-  // Fecha de pago
-  const fechaPago = new Date().toLocaleDateString("es-CL");
+  // Fecha de pago (usar la fecha proporcionada o la fecha actual como fallback)
+  const fechaPagoStr = fechaPago
+    ? (fechaPago instanceof Date ? fechaPago : new Date(fechaPago)).toLocaleDateString("es-CL")
+    : new Date().toLocaleDateString("es-CL");
   pdf.setFontSize(12);
-  pdf.text(`Fecha de pago: ${fechaPago}`, 20, 55);
+  pdf.text(`Fecha de pago: ${fechaPagoStr}`, 20, 55);
 
   // Línea divisoria
   pdf.line(20, 60, 190, 60);

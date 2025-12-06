@@ -1,13 +1,15 @@
 import {SidebarWithContentSeparator} from "../../components/sidebar";
 import React from 'react';
 import Footer from "../../components/Footer";
-import { H1Tittle, PSubtitle } from "../../components/Fonts";
+import { H1Tittle } from "../../components/Fonts";
 import { Card } from "../../components/Container";
 import { VolverButton } from "../../components/Button";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
-const CClientesProveedores = () => {
+const CIndex = () => {
     const navigate = useNavigate();
+    const { tienePermiso } = useAuth();
 
     return(
         <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
@@ -29,6 +31,12 @@ const CClientesProveedores = () => {
                 <Card title="Cuenta" />
                 <Card title="Papelera temporal" />
                 <Card title="Configurar Clientes/proveedores" onClick={() => navigate("/configuracion-clientesProveedores")}/>
+                {tienePermiso("ASIGNAR_ROLES") && (
+                    <Card
+                        title="Gestión de Usuarios y Roles"
+                        onClick={() => navigate("/configuracion-roles")}
+                    />
+                )}
             </div>
 
             {/* Footer fijo */}
@@ -36,8 +44,8 @@ const CClientesProveedores = () => {
                 <Footer />
             </div>
         </div>
-            
+
     );
 }
 
-export default CClientesProveedores;
+export default CIndex;

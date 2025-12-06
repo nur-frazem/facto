@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
 import { VolverButton } from "../../components/Button";
+import { DropdownMenu } from "../../components/Textfield";
 import { useNavigate } from "react-router-dom";
 import { Modal, LoadingModal } from "../../components/modal";
 
@@ -69,6 +70,10 @@ const RCalendario = () => {
   const [selectedDay, setSelectedDay] = useState(null);
   const [dayModalOpen, setDayModalOpen] = useState(false);
 
+  // State for provider companies filter
+  const [providerCompanies, setProviderCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState("Todos");
+
   // Fetch all documents from all companies
   useEffect(() => {
     const fetchAllDocuments = async () => {
@@ -76,11 +81,21 @@ const RCalendario = () => {
       try {
         const empresasSnap = await getDocs(collection(db, "empresas"));
         const allDocs = [];
+        const providers = [];
 
         for (const empresaDoc of empresasSnap.docs) {
           const empresaData = empresaDoc.data();
           const rut = empresaDoc.id;
           const razon = empresaData.razon || "Sin nombre";
+
+          // Collect provider companies
+          if (empresaData.proveedor) {
+            providers.push({
+              rut,
+              razon,
+              label: `${formatRUT(rut)} - ${razon}`
+            });
+          }
 
           // Document types to fetch
           const tiposDoc = ["facturas", "facturasExentas", "notasCredito", "boletas"];
@@ -92,6 +107,11 @@ const RCalendario = () => {
 
             docsSnap.docs.forEach((docSnap) => {
               const docData = docSnap.data();
+              // For fechaPago: use fechaPago if available, otherwise fall back to fechaProceso
+              // This handles legacy documents that only had fechaPago as processing date
+              const fechaPagoDate = docData.fechaPago?.toDate ? docData.fechaPago.toDate() : null;
+              const fechaProcesoDate = docData.fechaProceso?.toDate ? docData.fechaProceso.toDate() : null;
+
               allDocs.push({
                 id: docSnap.id,
                 tipo,
@@ -102,13 +122,20 @@ const RCalendario = () => {
                 estado: docData.estado,
                 fechaE: docData.fechaE?.toDate ? docData.fechaE.toDate() : null,
                 fechaV: docData.fechaV?.toDate ? docData.fechaV.toDate() : null,
-                fechaPago: docData.fechaPago?.toDate ? docData.fechaPago.toDate() : null,
+                // Use fechaPago for calendar display (the actual payment date)
+                // If fechaProceso exists, it means the new structure is in use
+                // If not, fechaPago is the legacy processing date which we still show
+                fechaPago: fechaPagoDate,
+                fechaProceso: fechaProcesoDate,
                 formaPago: docData.formaPago,
               });
             });
           }
         }
 
+        // Sort providers by razon social
+        providers.sort((a, b) => a.razon.localeCompare(b.razon));
+        setProviderCompanies(providers);
         setAllDocuments(allDocs);
       } catch (error) {
         console.error("Error fetching documents:", error);
@@ -155,6 +182,18 @@ const RCalendario = () => {
     return days;
   }, [currentMonth, currentYear]);
 
+  // Filter documents based on selected company
+  const filteredDocuments = useMemo(() => {
+    if (selectedCompany === "Todos") {
+      return allDocuments;
+    }
+    // Find the selected company's RUT
+    const selectedProvider = providerCompanies.find(p => p.label === selectedCompany);
+    if (!selectedProvider) return allDocuments;
+
+    return allDocuments.filter(doc => doc.rut === selectedProvider.rut);
+  }, [allDocuments, selectedCompany, providerCompanies]);
+
   // Create a map of dates to documents for quick lookup
   const documentsByDate = useMemo(() => {
     const map = {
@@ -162,7 +201,7 @@ const RCalendario = () => {
       paid: {}, // Documents paid on each date (fechaPago) - green
     };
 
-    allDocuments.forEach((doc) => {
+    filteredDocuments.forEach((doc) => {
       // Add to expiring map ONLY if has fechaV AND is NOT paid
       if (doc.fechaV && doc.estado !== "pagado") {
         const dateKey = doc.fechaV.toDateString();
@@ -183,7 +222,7 @@ const RCalendario = () => {
     });
 
     return map;
-  }, [allDocuments]);
+  }, [filteredDocuments]);
 
   // Calculate monthly statistics
   const monthlyStats = useMemo(() => {
@@ -194,7 +233,7 @@ const RCalendario = () => {
     let overdueCount = 0; // Past due, unpaid
     let overdueTotal = 0;
 
-    allDocuments.forEach((doc) => {
+    filteredDocuments.forEach((doc) => {
       // Check if document expires this month AND is NOT paid
       if (doc.fechaV && doc.estado !== "pagado") {
         const docMonth = doc.fechaV.getMonth();
@@ -224,7 +263,7 @@ const RCalendario = () => {
     });
 
     return { pendingCount, pendingTotal, paidCount, paidTotal, overdueCount, overdueTotal };
-  }, [allDocuments, currentMonth, currentYear, today]);
+  }, [filteredDocuments, currentMonth, currentYear, today]);
 
   // Navigation functions
   const goToPreviousMonth = () => {
@@ -356,6 +395,19 @@ const RCalendario = () => {
             >
               Hoy
             </button>
+
+            {/* Company Filter */}
+            <div className="flex items-center gap-2 ml-4 pl-4 border-l border-white/20">
+              <DropdownMenu
+                tittle="Filtrar por proveedor"
+                items={["Todos", ...providerCompanies.map((company) => company.label)]}
+                value={selectedCompany}
+                onSelect={(item) => setSelectedCompany(item)}
+                searchable={true}
+                searchPlaceholder="Buscar proveedor..."
+                classNameMenu="min-w-[280px]"
+              />
+            </div>
           </div>
 
           {/* Monthly Stats */}

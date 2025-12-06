@@ -34,17 +34,19 @@ const RIngresar = () => {
   }, []);
 
   // Referencia a la colección "empresas"
-  useEffect(() => { 
+  useEffect(() => {
       const empresasRef = collection(db, "empresas");
-  
+
       // Suscribirse a los cambios en tiempo real
       const unsubscribe = onSnapshot(empresasRef, (snapshot) => {
           const empresasData = snapshot.docs.map(doc => doc.data());
           setRows(empresasData);
       }, (error) => {
+          // Ignorar errores de permisos durante el logout
+          if (error.code === 'permission-denied') return;
           console.error("Error obteniendo empresas:", error);
       });
-  
+
       // Cleanup cuando el componente se desmonte
       return () => unsubscribe();
   }, []);
@@ -140,8 +142,9 @@ const RIngresar = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loadingModal, setLoadingModal] = useState(false);
 
-  // Estado de errores
+  // Estado de errores y éxito
   const [errorDoc ,setErrorDoc] = useState("");
+  const [successDoc, setSuccessDoc] = useState("");
   const [errors, setErrors] = useState({});
   const ECampo = "!";
 
@@ -289,12 +292,14 @@ const RIngresar = () => {
         }
 
         await setDoc(documentoRef, factura);
+        setLoadingModal(false);
         setIsModalOpen(false);
         handleResetParams();
-        window.location.reload();
+        setSuccessDoc(`Factura electrónica N° ${numeroDoc} ingresada exitosamente`);
       } catch (err) {
         console.error("Error guardando documento:", err);
         setLoadingModal(false);
+        setErrorDoc("Error al guardar el documento");
       }
     }
 
@@ -311,12 +316,14 @@ const RIngresar = () => {
         }
 
         await setDoc(documentoRef, facturaExenta);
+        setLoadingModal(false);
         setIsModalOpen(false);
         handleResetParams();
-        window.location.reload();
+        setSuccessDoc(`Factura exenta N° ${numeroDoc} ingresada exitosamente`);
       } catch (err) {
         console.error("Error guardando documento:", err);
         setLoadingModal(false);
+        setErrorDoc("Error al guardar el documento");
       }
     }
 
@@ -333,12 +340,14 @@ const RIngresar = () => {
         }
 
         await setDoc(documentoRef, boleta);
+        setLoadingModal(false);
         setIsModalOpen(false);
         handleResetParams();
-        window.location.reload();
+        setSuccessDoc(`Boleta N° ${numeroDoc} ingresada exitosamente`);
       } catch (err) {
         console.error("Error guardando boleta:", err);
         setLoadingModal(false);
+        setErrorDoc("Error al guardar la boleta");
       }
     }
 
@@ -387,16 +396,16 @@ const RIngresar = () => {
           totalDescontado: (facturaData.totalDescontado ?? facturaData.total) - total
         });
 
+        setLoadingModal(false);
         setIsModalOpen(false);
         handleResetParams();
-        window.location.reload();
+        setSuccessDoc(`Nota de crédito N° ${numeroDoc} ingresada exitosamente`);
       } catch (err) {
         console.error("Error guardando nota de crédito:", err);
         setLoadingModal(false);
+        setErrorDoc("Error al guardar la nota de crédito");
       }
     }
-
-    setLoadingModal(false);
   }
 
   const handleResetParams = () => {
@@ -447,6 +456,8 @@ const RIngresar = () => {
               }
             items={rows.map((row) => `${formatRUT(row.rut)} ${row.razon}`)}
             value={selectedGiro}
+            searchable={true}
+            searchPlaceholder="Buscar por RUT o razón social..."
             onSelect={async (item) => {
               setSelectedGiro(item);
               setErrors((prev) => ({ ...prev, selectedGiro: undefined }));
@@ -828,6 +839,14 @@ const RIngresar = () => {
       title="Error"
       message={errorDoc}
       variant="error"
+    />
+
+    <AlertModal
+      isOpen={!!successDoc}
+      onClose={() => setSuccessDoc("")}
+      title="Documento ingresado"
+      message={successDoc}
+      variant="success"
     />
 
     <LoadingModal isOpen={loadingModal} message="Procesando documento..." />

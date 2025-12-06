@@ -1,13 +1,21 @@
 import {SidebarWithContentSeparator} from "../../components/sidebar";
 import React from 'react';
 import Footer from "../../components/Footer";
-import { H1Tittle, PSubtitle } from "../../components/Fonts";
+import { H1Tittle } from "../../components/Fonts";
 import { Card } from "../../components/Container";
 import { VolverButton } from "../../components/Button";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 const RIndex = () => {
     const navigate = useNavigate();
+    const { tienePermiso } = useAuth();
+
+    // Permisos
+    const puedeIngresar = tienePermiso("INGRESAR_DOCUMENTOS");
+    const puedeProcesar = tienePermiso("PROCESAR_PAGOS");
+    const puedeVerDocumentos = tienePermiso("VER_DOCUMENTOS");
+    const puedeVerCalendario = tienePermiso("VER_CALENDARIO");
 
     return(
         <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
@@ -26,10 +34,26 @@ const RIndex = () => {
 
             {/* Contenido principal */}
             <div className="flex flex-col flex-wrap justify-start content-center gap-6 mt-10">
-                <Card title="Ingreso de documentos" onClick={() => navigate("/recepcion-index/ingresar")} />
-                <Card title="Procesar documentos" onClick={() => navigate("/recepcion-index/procesar")} />
-                <Card title="Revisión de documentos" onClick={() => navigate("/recepcion-index/revision-documentos")} />
-                <Card title="Calendario interactivo" onClick={() => navigate("/recepcion-index/calendario")} />
+                <Card
+                    title="Ingreso de documentos"
+                    onClick={() => navigate("/recepcion-index/ingresar")}
+                    hidden={!puedeIngresar}
+                />
+                <Card
+                    title="Procesar documentos"
+                    onClick={() => navigate("/recepcion-index/procesar")}
+                    hidden={!puedeProcesar}
+                />
+                <Card
+                    title="Revisión de documentos"
+                    onClick={() => navigate("/recepcion-index/revision-documentos")}
+                    hidden={!puedeVerDocumentos}
+                />
+                <Card
+                    title="Calendario interactivo"
+                    onClick={() => navigate("/recepcion-index/calendario")}
+                    hidden={!puedeVerCalendario}
+                />
             </div>
 
             {/* Footer fijo */}
@@ -37,7 +61,7 @@ const RIndex = () => {
                 <Footer />
             </div>
         </div>
-            
+
     );
 }
 

@@ -27,8 +27,13 @@ export function Card({
   hasButton = true,
   content = null,
   contentClassName = "",
-  className = ""
+  className = "",
+  disabled = false,
+  hidden = false
 }) {
+  // Si está oculto, no renderizar
+  if (hidden) return null;
+
   const hasDescription = description.trim() !== "";
 
   return (
@@ -42,15 +47,16 @@ export function Card({
         flex
         ${hasDescription ? "flex-col gap-y-3 relative" : "items-center justify-between"}
         ${content !== null ? "w-auto" : "w-96"}
+        ${disabled ? "opacity-50 cursor-not-allowed" : ""}
         ${className}
       `}
     >
       {/* Header */}
       <div className="flex items-center gap-3">
         {logo && (
-          <img src={logo} alt="logo" className="w-6 h-6 object-contain" />
+          <img src={logo} alt="logo" className={`w-6 h-6 object-contain ${disabled ? "opacity-50" : ""}`} />
         )}
-        <h2 className="text-white text-base font-semibold">{title}</h2>
+        <h2 className={`text-base font-semibold ${disabled ? "text-slate-400" : "text-white"}`}>{title}</h2>
       </div>
 
       {/* Description */}
@@ -70,21 +76,27 @@ export function Card({
       {/* Button */}
       {hasButton && (
         <button
-          onClick={onClick}
+          onClick={disabled ? undefined : onClick}
+          disabled={disabled}
           className={`
             w-10 h-10
             flex items-center justify-center
             rounded-full
-            bg-white/5 hover:bg-white/10 active:bg-white/15
             transition-all duration-200
             group
             ${hasDescription ? "absolute bottom-4 right-4" : ""}
+            ${disabled
+              ? "bg-white/5 cursor-not-allowed"
+              : "bg-white/5 hover:bg-white/10 active:bg-white/15"
+            }
           `}
         >
           <img
             src={arrowRightWhite}
             alt="Continuar"
-            className="w-5 h-5 object-contain opacity-70 group-hover:opacity-100 transition-opacity"
+            className={`w-5 h-5 object-contain transition-opacity ${
+              disabled ? "opacity-30" : "opacity-70 group-hover:opacity-100"
+            }`}
           />
         </button>
       )}

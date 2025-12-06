@@ -20,6 +20,9 @@ import {
 } from "@heroicons/react/24/solid";
 import { ChevronRightIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { useNavigate, useLocation } from "react-router-dom";
+import { signOut } from "firebase/auth";
+import { auth } from "../../firebaseConfig";
+import { useAuth, ROLES_LABELS } from "../context/AuthContext";
 
 // Smooth accordion animation
 function AccordionContent({ isOpen, children }) {
@@ -60,12 +63,24 @@ export function SidebarWithContentSeparator() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const { userData, tienePermiso, getRol } = useAuth();
 
   const toggleAccordion = (name) => {
     setOpenAccordions((prev) => ({
       ...prev,
       [name]: !prev[name],
     }));
+  };
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate("/");
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+      navigate("/");
+    }
   };
 
   // Detect screen size
@@ -115,6 +130,28 @@ export function SidebarWithContentSeparator() {
     rounded-lg text-sm
   `;
 
+  // Verificar permisos para mostrar items del menú
+  const puedeVerRecepcion = tienePermiso("VER_DOCUMENTOS") || tienePermiso("INGRESAR_DOCUMENTOS") || tienePermiso("PROCESAR_PAGOS");
+  const puedeIngresarDocumentos = tienePermiso("INGRESAR_DOCUMENTOS");
+  const puedeProcesarPagos = tienePermiso("PROCESAR_PAGOS");
+  const puedeVerDocumentos = tienePermiso("VER_DOCUMENTOS");
+  const puedeVerCalendario = tienePermiso("VER_CALENDARIO");
+  const puedeVerInformes = tienePermiso("VER_INFORMES");
+  const puedeVerConfiguracion = tienePermiso("VER_CONFIGURACION");
+
+  // Obtener color del badge de rol
+  const getRolBadgeColor = () => {
+    const rol = getRol();
+    switch (rol) {
+      case "super_admin": return "bg-purple-500/30 text-purple-300 border-purple-500/50";
+      case "admin": return "bg-blue-500/30 text-blue-300 border-blue-500/50";
+      case "gestor": return "bg-green-500/30 text-green-300 border-green-500/50";
+      case "digitador": return "bg-yellow-500/30 text-yellow-300 border-yellow-500/50";
+      case "visor": return "bg-slate-500/30 text-slate-300 border-slate-500/50";
+      default: return "bg-slate-500/30 text-slate-300 border-slate-500/50";
+    }
+  };
+
   return (
     <Card
       className={`
@@ -147,6 +184,16 @@ export function SidebarWithContentSeparator() {
         )}
       </div>
 
+      {/* User info badge */}
+      {!collapsed && userData && (
+        <div className="mb-4 px-2">
+          <div className={`px-3 py-2 rounded-lg border ${getRolBadgeColor()}`}>
+            <p className="text-xs font-medium truncate">{userData.nombre || userData.email}</p>
+            <p className="text-[10px] opacity-70">{ROLES_LABELS[getRol()] || getRol()}</p>
+          </div>
+        </div>
+      )}
+
       <List className="flex-1 overflow-y-auto p-0 pb-14 scrollbar-custom">
         {/* Home */}
         <ListItem
@@ -159,90 +206,104 @@ export function SidebarWithContentSeparator() {
           {!collapsed && <span className="ml-2">Inicio</span>}
         </ListItem>
 
-        {/* Recepción Accordion */}
-        <Accordion
-          open={openAccordions.recepcion}
-          icon={
-            <ChevronDownIcon
-              strokeWidth={2.5}
-              className={`h-4 w-4 transition-transform text-slate-400 ${
-                openAccordions.recepcion ? "rotate-180" : ""
-              } ${collapsed ? "hidden" : "block"}`}
-            />
-          }
-        >
-          <ListItem
-            className={`p-0 ${isActiveSection("recepcion") && !openAccordions.recepcion ? activeItemStyles : ""}`}
-            selected={openAccordions.recepcion}
-            onClick={() => toggleAccordion("recepcion")}
+        {/* Recepción Accordion - Solo si tiene algún permiso de recepción */}
+        {puedeVerRecepcion && (
+          <Accordion
+            open={openAccordions.recepcion}
+            icon={
+              <ChevronDownIcon
+                strokeWidth={2.5}
+                className={`h-4 w-4 transition-transform text-slate-400 ${
+                  openAccordions.recepcion ? "rotate-180" : ""
+                } ${collapsed ? "hidden" : "block"}`}
+              />
+            }
           >
-            <AccordionHeader
-              className={`
-                border-b-0 p-3 flex items-center gap-2 rounded-lg
-                hover:bg-white/10 active:bg-white/15
-                transition-all duration-200
-                ${isActiveSection("recepcion") ? "text-white" : "text-slate-300"}
-              `}
+            <ListItem
+              className={`p-0 ${isActiveSection("recepcion") && !openAccordions.recepcion ? activeItemStyles : ""}`}
+              selected={openAccordions.recepcion}
+              onClick={() => toggleAccordion("recepcion")}
             >
-              <ListItemPrefix>
-                <DocumentArrowDownIcon className="h-5 w-5" />
-              </ListItemPrefix>
-              {!collapsed && (
-                <Typography className="mr-auto font-medium text-sm">
-                  Recepción
-                </Typography>
-              )}
-            </AccordionHeader>
-          </ListItem>
+              <AccordionHeader
+                className={`
+                  border-b-0 p-3 flex items-center gap-2 rounded-lg
+                  hover:bg-white/10 active:bg-white/15
+                  transition-all duration-200
+                  ${isActiveSection("recepcion") ? "text-white" : "text-slate-300"}
+                `}
+              >
+                <ListItemPrefix>
+                  <DocumentArrowDownIcon className="h-5 w-5" />
+                </ListItemPrefix>
+                {!collapsed && (
+                  <Typography className="mr-auto font-medium text-sm">
+                    Recepción
+                  </Typography>
+                )}
+              </AccordionHeader>
+            </ListItem>
 
-          {!collapsed && (
-            <AccordionContent isOpen={openAccordions.recepcion}>
-              <AccordionBody className="py-1">
-                <List className="p-0 pl-4">
-                  <ListItem
-                    className={`${subItemStyles} ${isActive("/recepcion-index/ingresar") ? "bg-accent-blue/20 text-white" : ""}`}
-                    onClick={() => navigate("/recepcion-index/ingresar")}
-                  >
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
-                    </ListItemPrefix>
-                    <span className="ml-1">Ingreso de documentos</span>
-                  </ListItem>
+            {!collapsed && (
+              <AccordionContent isOpen={openAccordions.recepcion}>
+                <AccordionBody className="py-1">
+                  <List className="p-0 pl-4">
+                    {/* Ingreso de documentos - Solo si puede ingresar */}
+                    {puedeIngresarDocumentos && (
+                      <ListItem
+                        className={`${subItemStyles} ${isActive("/recepcion-index/ingresar") ? "bg-accent-blue/20 text-white" : ""}`}
+                        onClick={() => navigate("/recepcion-index/ingresar")}
+                      >
+                        <ListItemPrefix>
+                          <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                        </ListItemPrefix>
+                        <span className="ml-1">Ingreso de documentos</span>
+                      </ListItem>
+                    )}
 
-                  <ListItem
-                    className={`${subItemStyles} ${isActive("/recepcion-index/procesar") ? "bg-accent-blue/20 text-white" : ""}`}
-                    onClick={() => navigate("/recepcion-index/procesar")}
-                  >
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
-                    </ListItemPrefix>
-                    <span className="ml-1">Procesar documentos</span>
-                  </ListItem>
+                    {/* Procesar documentos - Solo si puede procesar pagos */}
+                    {puedeProcesarPagos && (
+                      <ListItem
+                        className={`${subItemStyles} ${isActive("/recepcion-index/procesar") ? "bg-accent-blue/20 text-white" : ""}`}
+                        onClick={() => navigate("/recepcion-index/procesar")}
+                      >
+                        <ListItemPrefix>
+                          <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                        </ListItemPrefix>
+                        <span className="ml-1">Procesar documentos</span>
+                      </ListItem>
+                    )}
 
-                  <ListItem
-                    className={`${subItemStyles} ${isActive("/recepcion-index/revision-documentos") ? "bg-accent-blue/20 text-white" : ""}`}
-                    onClick={() => navigate("/recepcion-index/revision-documentos")}
-                  >
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
-                    </ListItemPrefix>
-                    <span className="ml-1">Revisión de documentos</span>
-                  </ListItem>
+                    {/* Revisión de documentos - Todos los que pueden ver documentos */}
+                    {puedeVerDocumentos && (
+                      <ListItem
+                        className={`${subItemStyles} ${isActive("/recepcion-index/revision-documentos") ? "bg-accent-blue/20 text-white" : ""}`}
+                        onClick={() => navigate("/recepcion-index/revision-documentos")}
+                      >
+                        <ListItemPrefix>
+                          <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                        </ListItemPrefix>
+                        <span className="ml-1">Revisión de documentos</span>
+                      </ListItem>
+                    )}
 
-                  <ListItem
-                    className={`${subItemStyles} ${isActive("/recepcion-index/calendario") ? "bg-accent-blue/20 text-white" : ""}`}
-                    onClick={() => navigate("/recepcion-index/calendario")}
-                  >
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
-                    </ListItemPrefix>
-                    <span className="ml-1">Calendario interactivo</span>
-                  </ListItem>
-                </List>
-              </AccordionBody>
-            </AccordionContent>
-          )}
-        </Accordion>
+                    {/* Calendario - Todos los que pueden ver calendario */}
+                    {puedeVerCalendario && (
+                      <ListItem
+                        className={`${subItemStyles} ${isActive("/recepcion-index/calendario") ? "bg-accent-blue/20 text-white" : ""}`}
+                        onClick={() => navigate("/recepcion-index/calendario")}
+                      >
+                        <ListItemPrefix>
+                          <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                        </ListItemPrefix>
+                        <span className="ml-1">Calendario interactivo</span>
+                      </ListItem>
+                    )}
+                  </List>
+                </AccordionBody>
+              </AccordionContent>
+            )}
+          </Accordion>
+        )}
 
         {/* Emisión Accordion */}
         <Accordion
@@ -306,34 +367,38 @@ export function SidebarWithContentSeparator() {
         {/* Divider */}
         <hr className={`my-3 border-white/10 ${collapsed ? "mx-2" : ""}`} />
 
-        {/* Informes */}
-        <ListItem
-          onClick={() => navigate("/informes-index")}
-          className={`${listItemStyles} ${isActive("/informes-index") ? activeItemStyles : ""}`}
-        >
-          <ListItemPrefix>
-            <PresentationChartLineIcon className="h-5 w-5" />
-          </ListItemPrefix>
-          {!collapsed && <span className="ml-2">Informes</span>}
-        </ListItem>
+        {/* Informes - Solo si tiene permiso */}
+        {puedeVerInformes && (
+          <ListItem
+            onClick={() => navigate("/informes-index")}
+            className={`${listItemStyles} ${isActive("/informes-index") ? activeItemStyles : ""}`}
+          >
+            <ListItemPrefix>
+              <PresentationChartLineIcon className="h-5 w-5" />
+            </ListItemPrefix>
+            {!collapsed && <span className="ml-2">Informes</span>}
+          </ListItem>
+        )}
 
-        {/* Configuración */}
-        <ListItem
-          onClick={() => navigate("/configuracion-index")}
-          className={`${listItemStyles} ${isActiveSection("configuracion") ? activeItemStyles : ""}`}
-        >
-          <ListItemPrefix>
-            <Cog6ToothIcon className="h-5 w-5" />
-          </ListItemPrefix>
-          {!collapsed && <span className="ml-2">Configuración</span>}
-        </ListItem>
+        {/* Configuración - Solo si tiene permiso */}
+        {puedeVerConfiguracion && (
+          <ListItem
+            onClick={() => navigate("/configuracion-index")}
+            className={`${listItemStyles} ${isActiveSection("configuracion") ? activeItemStyles : ""}`}
+          >
+            <ListItemPrefix>
+              <Cog6ToothIcon className="h-5 w-5" />
+            </ListItemPrefix>
+            {!collapsed && <span className="ml-2">Configuración</span>}
+          </ListItem>
+        )}
 
         {/* Spacer */}
         <div className="flex-grow" />
 
         {/* Logout */}
         <ListItem
-          onClick={() => navigate("/")}
+          onClick={handleLogout}
           className={`
             cursor-pointer text-slate-400
             hover:bg-danger/20 hover:text-danger

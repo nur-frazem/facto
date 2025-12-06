@@ -10,6 +10,7 @@ import { DropdownMenu, DatepickerRange, DatepickerField, Textfield } from "../..
 import { doc, getDoc, getDocs, setDoc, collection, onSnapshot, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { Card } from "../../components/Container";
+import { useAuth } from "../../context/AuthContext";
 import { cleanRUT, formatRUT } from "../../utils/formatRUT";
 import { formatCLP } from "../../utils/formatCurrency";
 import { generarPDF } from "../../utils/generarPDF";
@@ -21,6 +22,11 @@ import configIcon from "../../assets/Logos/config.png";
 
 const RRevisionDocumentos = () => {
   const navigate = useNavigate();
+  const { tienePermiso } = useAuth();
+
+  // Permisos del usuario
+  const puedeEditar = tienePermiso("EDITAR_DOCUMENTOS");
+  const puedeEliminar = tienePermiso("ELIMINAR_DOCUMENTOS");
 
   const [empresasConDocs, setEmpresasConDocs] = useState([]);
   const unsubscribeRef = useRef(null);
@@ -48,6 +54,7 @@ const RRevisionDocumentos = () => {
   const [iFechaIngreso, setIFechaIngreso] = useState("");
   const [iUsuarioPago, setIUsuarioPago] = useState("");
   const [iFechaPago, setIFechaPago] = useState("");
+  const [iFechaProceso, setIFechaProceso] = useState("");
 
   //Edición de documento
   const [iNumeroDocNuevo, setINumeroDocNuevo] = useState("");
@@ -206,6 +213,14 @@ const RRevisionDocumentos = () => {
                 tipo: sub,
               }));
               resolve(docsData);
+            }, (error) => {
+              // Ignorar errores de permisos durante el logout
+              if (error.code === 'permission-denied') {
+                resolve([]);
+                return;
+              }
+              console.error("Error en listener de subcolección:", error);
+              resolve([]);
             });
           });
         });
@@ -288,7 +303,12 @@ const RRevisionDocumentos = () => {
         const filtradas = empresas.filter((e) => e && e.documentos.length > 0);
         setEmpresasConDocs(filtradas);
       });
-      
+
+    }, (error) => {
+      // Ignorar errores de permisos durante el logout
+      if (error.code === 'permission-denied') return;
+      console.error("Error en listener de empresas:", error);
+      setLoadingModal(false);
     });
     setLoadingModal(false);
     unsubscribeRef.current = unsubscribe;
@@ -412,6 +432,7 @@ const RRevisionDocumentos = () => {
       setIFechaIngreso(toDateString(docData.fechaIngreso));
       setIUsuarioPago(docData.pagoUsuario);
       setIFechaPago(toDateString(docData.fechaPago));
+      setIFechaProceso(toDateString(docData.fechaProceso));
       setSeObtuvoTipo(true);
     }
 
@@ -438,6 +459,7 @@ const RRevisionDocumentos = () => {
       setIFechaIngreso(toDateString(docData.fechaIngreso));
       setIUsuarioPago(docData.pagoUsuario);
       setIFechaPago(toDateString(docData.fechaPago));
+      setIFechaProceso(toDateString(docData.fechaProceso));
       setSeObtuvoTipo(true);
     }
 
@@ -458,6 +480,7 @@ const RRevisionDocumentos = () => {
       setIFechaIngreso(toDateString(docData.fechaIngreso));
       setIUsuarioPago(docData.pagoUsuario);
       setIFechaPago(toDateString(docData.fechaPago));
+      setIFechaProceso(toDateString(docData.fechaProceso));
       setSeObtuvoTipo(true);
     }
 
@@ -564,6 +587,11 @@ const RRevisionDocumentos = () => {
     setINumeroDocNc("");
     setCurrentDocRut("");
     setCurrentDocTipo("");
+    setIUsuarioIngreso("");
+    setIFechaIngreso("");
+    setIUsuarioPago("");
+    setIFechaPago("");
+    setIFechaProceso("");
   };
 
   // Confirmar edición del documento
@@ -1210,13 +1238,15 @@ const RRevisionDocumentos = () => {
                             onClick={() => handleGenerarPDF(empresa.rut, doc.numeroDoc, doc.tipo)}
                             title="Egreso"
                           />
-                          <ImgButton
-                            src={configIcon}
-                            classNameImg="w-4"
-                            className="flex-none p-1"
-                            title="Editar"
-                            onClick={() => handleEditarDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
-                          />
+                          {puedeEditar && (
+                            <ImgButton
+                              src={configIcon}
+                              classNameImg="w-4"
+                              className="flex-none p-1"
+                              title="Editar"
+                              onClick={() => handleEditarDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
+                            />
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1392,8 +1422,15 @@ const RRevisionDocumentos = () => {
 
                 {iFechaPago && (
                   <div className="flex justify-between gap-x-4">
+                    <span>Fecha de pago:</span>
+                    <span className="font-semibold text-green-400">{iFechaPago}</span>
+                  </div>
+                )}
+
+                {iFechaProceso && (
+                  <div className="flex justify-between gap-x-4">
                     <span>Fecha de procesamiento:</span>
-                    <span>{iFechaPago}</span>
+                    <span>{iFechaProceso}</span>
                   </div>
                 )}
               </div>
@@ -1539,8 +1576,8 @@ const RRevisionDocumentos = () => {
                   </div>
                 )}
 
-                {/* Botón desvincular NC - solo para facturas con NC */}
-                {(iTipoDoc === "Factura electrónica" || iTipoDoc === "Factura exenta") &&
+                {/* Botón desvincular NC - solo para facturas con NC y usuarios con permiso de edición */}
+                {puedeEditar && (iTipoDoc === "Factura electrónica" || iTipoDoc === "Factura exenta") &&
                   iNotasCredito && iNotasCredito.length > 0 && iNotasCredito[0] !== "" && (
                   <TextButton
                     text="Desvincular notas de crédito"
@@ -1554,11 +1591,13 @@ const RRevisionDocumentos = () => {
                   />
                 )}
 
-                <TextButton
-                  text="Eliminar documento"
-                  className="bg-danger text-white font-semibold hover:bg-danger-hover active:bg-danger-active w-full justify-center py-3 rounded-lg"
-                  onClick={() => setConfirmDeleteModal(true)}
-                />
+                {puedeEliminar && (
+                  <TextButton
+                    text="Eliminar documento"
+                    className="bg-danger text-white font-semibold hover:bg-danger-hover active:bg-danger-active w-full justify-center py-3 rounded-lg"
+                    onClick={() => setConfirmDeleteModal(true)}
+                  />
+                )}
 
                 <div className="flex-grow" />
 

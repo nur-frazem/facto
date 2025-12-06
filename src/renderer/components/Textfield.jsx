@@ -180,11 +180,16 @@ export function DropdownMenu({
   classNameList = "",
   value,
   onSelect,
+  searchable = false,
+  searchPlaceholder = "Buscar...",
 }) {
   const [internalSelected, setInternalSelected] = React.useState(tittle);
   const [open, setOpen] = React.useState(false);
   const [menuWidth, setMenuWidth] = React.useState(null);
+  const [searchTerm, setSearchTerm] = React.useState("");
   const handlerRef = React.useRef(null);
+  const buttonRef = React.useRef(null);
+  const searchInputRef = React.useRef(null);
 
   React.useEffect(() => {
     if (value !== undefined) {
@@ -201,16 +206,52 @@ export function DropdownMenu({
     return () => resizeObserver.disconnect();
   }, [handlerRef]);
 
+  // Focus search input when menu opens
+  React.useEffect(() => {
+    if (open && searchable && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    }
+    // Clear search when menu closes
+    if (!open) {
+      setSearchTerm("");
+    }
+  }, [open, searchable]);
+
+  const handleOpenChange = (isOpen) => {
+    setOpen(isOpen);
+    // Blur the button when menu closes to prevent aria-hidden warning
+    if (!isOpen && buttonRef.current) {
+      buttonRef.current.blur();
+    }
+  };
+
   const handleSelect = (item) => {
     if (value === undefined) {
       setInternalSelected(item);
     }
     setOpen(false);
     if (onSelect) onSelect(item);
+    // Blur button after selection
+    if (buttonRef.current) {
+      buttonRef.current.blur();
+    }
   };
 
+  // Filter items based on search term
+  const filteredItems = React.useMemo(() => {
+    if (!searchable || !searchTerm.trim()) {
+      return items;
+    }
+    const term = searchTerm.toLowerCase();
+    return items.filter((item) =>
+      String(item).toLowerCase().includes(term)
+    );
+  }, [items, searchTerm, searchable]);
+
   return (
-    <Menu open={open} handler={setOpen}>
+    <Menu open={open} handler={handleOpenChange} dismiss={{ outsidePress: true }}>
       <div className="flex flex-col">
         <span className={labelStyles}>{tittle}</span>
         <MenuHandler
@@ -225,7 +266,10 @@ export function DropdownMenu({
             ${classNameMenu}
           `}
         >
-          <Button className="p-0 bg-transparent text-white w-full shadow-none hover:shadow-none">
+          <Button
+            ref={buttonRef}
+            className="p-0 bg-transparent text-white w-full shadow-none hover:shadow-none"
+          >
             <div className="flex items-center justify-between w-full">
               <span className="text-sm font-normal truncate">{internalSelected || tittle}</span>
               <ChevronDownIcon
@@ -249,15 +293,51 @@ export function DropdownMenu({
           ${classNameList}
         `}
       >
-        {items.map((item, index) => (
-          <MenuItem
-            key={index}
-            onClick={() => handleSelect(item)}
-            className="w-full px-4 py-2 text-white text-sm font-normal hover:bg-white/10 transition-colors"
-          >
-            {item}
-          </MenuItem>
-        ))}
+        {/* Search input for searchable dropdowns */}
+        {searchable && (
+          <div className="px-2 pb-2 pt-1 border-b border-white/10">
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="w-full px-3 py-2 bg-white/5 text-white text-sm placeholder-slate-400 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                // Prevent menu from closing on Enter if there are filtered items
+                if (e.key === "Enter" && filteredItems.length > 0) {
+                  e.preventDefault();
+                  handleSelect(filteredItems[0]);
+                }
+                // Prevent menu from closing on Escape, just clear search
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setSearchTerm("");
+                }
+              }}
+            />
+          </div>
+        )}
+
+        {/* Items list */}
+        <div className={`${searchable ? 'max-h-48 overflow-y-auto scrollbar-custom' : ''}`}>
+          {filteredItems.length > 0 ? (
+            filteredItems.map((item, index) => (
+              <MenuItem
+                key={index}
+                onClick={() => handleSelect(item)}
+                className="w-full px-4 py-2 text-white text-sm font-normal hover:bg-white/10 transition-colors"
+              >
+                {item}
+              </MenuItem>
+            ))
+          ) : (
+            <div className="px-4 py-3 text-sm text-slate-400 text-center">
+              No se encontraron resultados
+            </div>
+          )}
+        </div>
       </MenuList>
     </Menu>
   );

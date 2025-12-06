@@ -76,8 +76,11 @@ export function VolverButton({ onClick, className = "" }) {
   );
 }
 
-// Text button (ghost style)
+// Text button (ghost style by default, can be overridden with className)
 export function TextButton({ onClick, text = "", className = "", classNameText = "", disabled = false }) {
+  // Check if a background color is provided in className
+  const hasCustomBg = className.includes('bg-');
+
   return (
     <button
       onClick={onClick}
@@ -87,10 +90,10 @@ export function TextButton({ onClick, text = "", className = "", classNameText =
         px-4 h-10
         text-white font-medium text-sm
         rounded-lg
-        bg-transparent hover:bg-white/10 active:bg-white/15
         transition-all duration-200
         focus:outline-none focus:ring-2 focus:ring-white/20
-        disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent
+        disabled:opacity-50 disabled:cursor-not-allowed
+        ${hasCustomBg ? '' : 'bg-transparent hover:bg-white/10 active:bg-white/15 disabled:hover:bg-transparent'}
         ${className}
       `}
     >
