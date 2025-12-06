@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { VolverButton, TextButton, YButton, XButton } from "../../components/Button";
 import { DropdownMenu, DropdownMenuList, SearchBar, Textfield, CheckboxDropdown } from "../../components/Textfield";
 import { Card } from "../../components/Container";
-import { Modal } from "../../components/modal";
+import { Modal, LoadingModal, AlertModal } from "../../components/modal";
 
 import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig"; // ajusta la ruta a tu config
@@ -64,7 +64,6 @@ const RProcesar = () => {
         setErrors(newErrors);
 
         if (Object.keys(newErrors).length === 0) {
-            {/* ENVIAR VALORES AL BACKEND */}
             const empresa = {
                 rut,
                 razon,
@@ -73,34 +72,34 @@ const RProcesar = () => {
                 direccion,
                 telefono,
                 correo,
-                cliente : esCliente,
-                proveedor : esProveedor,
-                credito_cliente : creditoCliente,
-                credito_proveedor : creditoProveedor
-              };
-            
-            // Guardar en Firestore usando rut como ID
+                cliente: esCliente,
+                proveedor: esProveedor,
+                credito_cliente: creditoCliente,
+                credito_proveedor: creditoProveedor
+            };
+
             try {
+                setLoadingModal(true);
                 const empresaRef = doc(db, "empresas", rut);
                 const docSnap = await getDoc(empresaRef);
-    
+
                 if (docSnap.exists()) {
-                    // Documento ya existe
-                    console.warn("Este RUT ya existe");
-                    setErrorRut("Este rut ya existe");
+                    setLoadingModal(false);
+                    setErrorRut("Este RUT ya existe en el sistema");
                     return;
                 }
-    
-                // Documento no existe, creamos uno nuevo
+
                 await setDoc(empresaRef, empresa);
-    
+                setLoadingModal(false);
                 setShowModal(false);
                 handleResetParams();
 
-              } catch (err) {
+            } catch (err) {
                 console.error("Error guardando empresa:", err);
-              }
-         }
+                setLoadingModal(false);
+                setErrorRut("Error al guardar la empresa");
+            }
+        }
     };
 
     const handleEditEmpresa = async () => {
@@ -116,7 +115,6 @@ const RProcesar = () => {
         setErrors(newErrors);
 
         if (Object.keys(newErrors).length === 0) {
-            {/* ENVIAR VALORES AL BACKEND */}
             const empresa = {
                 rut,
                 razon,
@@ -125,53 +123,49 @@ const RProcesar = () => {
                 direccion,
                 telefono,
                 correo,
-                cliente : esCliente,
-                proveedor : esProveedor,
-                credito_cliente : creditoCliente,
-                credito_proveedor : creditoProveedor
-              };
-            
-            // Guardar en Firestore usando rut como ID
-            try {
-                const empresaRef = doc(db, "empresas", rut);
-                const docSnap = await getDoc(empresaRef);
+                cliente: esCliente,
+                proveedor: esProveedor,
+                credito_cliente: creditoCliente,
+                credito_proveedor: creditoProveedor
+            };
 
+            try {
                 setLoadingModal(true);
+                const empresaRef = doc(db, "empresas", rut);
                 await setDoc(empresaRef, empresa);
                 setLoadingModal(false);
-    
                 setEditModal(false);
                 handleResetParams();
 
-              } catch (err) {
+            } catch (err) {
                 console.error("Error guardando empresa:", err);
-              }
-         }
+                setLoadingModal(false);
+                setErrorRut("Error al actualizar la empresa");
+            }
+        }
     };
 
-    const handleEliminarEmpresa = async (rut) => {
-        if (!rut) {
-          console.error("Debes proporcionar un RUT válido");
-          return;
+    const handleEliminarEmpresa = async (rutEmpresa) => {
+        if (!rutEmpresa) {
+            setErrorRut("Debes proporcionar un RUT válido");
+            return;
         }
-      
+
         try {
-            const empresaRef = doc(db, "empresas", rut);
-            
             setLoadingModal(true);
+            const empresaRef = doc(db, "empresas", rutEmpresa);
             await deleteDoc(empresaRef);
             setLoadingModal(false);
             setEliminarModal(false);
             setEditModal(false);
             handleResetParams();
-      
-            console.log(`Empresa con RUT ${rut} eliminada correctamente`);
-            // Opcional: refrescar la tabla o lista de empresas
-            // handleEmpresaPrint();
+
         } catch (err) {
-          console.error("Error eliminando empresa:", err);
+            console.error("Error eliminando empresa:", err);
+            setLoadingModal(false);
+            setErrorRut("Error al eliminar la empresa");
         }
-      };
+    };
     
     const [rows, setRows] = useState([]); // <- Aquí guardamos las filas de la "tabla"
 
@@ -211,17 +205,7 @@ const RProcesar = () => {
     }
 
     const handleEmpresaPrint = () => {
-        console.log("rut: " + rut);
-        console.log("razon: " + razon);
-        console.log("giro: " + giro);
-        console.log("comuna: " + comuna);
-        console.log("dirección: " + direccion);
-        console.log("teléfono: " + telefono);
-        console.log("correo: " + correo);
-        console.log("es cliente: " + esCliente);
-        console.log("dias crédito: " + creditoCliente);
-        console.log("es proveedor: " + esProveedor);
-        console.log("dias crédito: " + creditoProveedor);
+        // Debug function removed for security
     }
 
     return (
@@ -241,9 +225,9 @@ const RProcesar = () => {
 
             {/* Contenido principal */}
             <div className="flex flex-col flex-wrap justify-start mt-10 ml-5 mr-5">
-            <TextButton text="Nuevo +"
-                        className="h-min bg-white hover:bg-white/50 active:bg-white/30 transition-colors duration-200 mr-auto mb-4"
-                        classNameText="font-black text-xl text-black"
+            <TextButton text="Agregar empresa"
+                        className="h-10 px-5 bg-success hover:bg-success-hover active:bg-success-active transition-colors duration-200 mr-auto mb-4 rounded-lg"
+                        classNameText="font-semibold text-base text-white"
                         onClick={handleModal}
                         />
 
@@ -254,46 +238,71 @@ const RProcesar = () => {
                     content={
                         <div>
                             {/* Encabezados */}
-                            <div className="flex font-bold mb-2 px-0">
-                                <div className="w-1/5 text-center">RUT</div>
-                                <div className="w-1/5 text-center">Razón social</div>
-                                <div className="w-1/5 text-center">Giro</div>
-                                <div className="w-1/5 text-center">Cliente</div>
-                                <div className="w-1/5 text-center">Proveedor</div>
-                                <div className="mr-20"></div>
+                            <div className="flex font-semibold text-sm text-slate-300 mb-3 px-2 py-2 bg-white/5 rounded-lg">
+                                <div className="w-[18%] text-center">RUT</div>
+                                <div className="w-[22%] text-center">Razón social</div>
+                                <div className="w-[20%] text-center">Giro</div>
+                                <div className="w-[12%] text-center">Cliente</div>
+                                <div className="w-[12%] text-center">Proveedor</div>
+                                <div className="w-[16%] text-center">Acciones</div>
                             </div>
-                            <hr className="mb-4" />
                             <SearchBar></SearchBar>
                             {/* Filas dinámicas */}
                             {rows.map((row, index) => (
-                                <div key={index} className="flex mb-2 px-0 pt-2">
-                                    <div className="w-1/5 text-center font-semibold">{formatRUT(row.rut)}</div>
-                                    <div className="w-1/5 text-center font-semibold">{row.razon}</div>
-                                    <div className="w-1/5 text-center font-semibold">{row.giro}</div>
-                                    <div className="w-1/5 text-center">
-                                        {row.cliente ? <span className="text-green-500 font-bold">✔</span> : <span className="text-red-500 font-bold">✖</span>}
+                                <div key={index} className="flex items-center mb-1 px-2 py-3 hover:bg-white/5 rounded-lg transition-colors border-b border-white/5 last:border-b-0">
+                                    <div className="w-[18%] text-center text-sm font-medium">{formatRUT(row.rut)}</div>
+                                    <div className="w-[22%] text-center text-sm">{row.razon}</div>
+                                    <div className="w-[20%] text-center text-sm text-slate-400">{row.giro}</div>
+                                    <div className="w-[12%] flex justify-center">
+                                        {row.cliente ? (
+                                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-success/20">
+                                                <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-600/30">
+                                                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className="w-1/5 text-center">
-                                        {row.proveedor ? <span className="text-green-500 font-bold">✔</span> : <span className="text-red-500 font-bold">✖</span>}
+                                    <div className="w-[12%] flex justify-center">
+                                        {row.proveedor ? (
+                                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-success/20">
+                                                <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-600/30">
+                                                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </span>
+                                        )}
                                     </div>
-                                    <TextButton 
-                                        className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3" 
-                                        text="Editar" 
-                                        onClick={() => {
-                                            setRut(row.rut);
-                                            setRazon(row.razon);
-                                            setGiro(row.giro);
-                                            setComuna(row.comuna);
-                                            setDireccion(row.direccion);
-                                            setTelefono(row.telefono);
-                                            setCorreo(row.correo);
-                                            setEsCliente(row.cliente);
-                                            setEsProveedor(row.proveedor);
-                                            setCreditoCliente(row.credito_cliente);
-                                            setCreditoProveedor(row.credito_proveedor);
-                                            handleEditModal();
-                                        }}
-                                    />
+                                    <div className="w-[16%] flex justify-center">
+                                        <TextButton
+                                            className="py-1.5 px-4 h-8 bg-accent-blue text-white font-medium hover:bg-blue-600 active:bg-blue-700 rounded-md"
+                                            text="Editar"
+                                            onClick={() => {
+                                                setRut(row.rut);
+                                                setRazon(row.razon);
+                                                setGiro(row.giro);
+                                                setComuna(row.comuna);
+                                                setDireccion(row.direccion);
+                                                setTelefono(row.telefono);
+                                                setCorreo(row.correo);
+                                                setEsCliente(row.cliente);
+                                                setEsProveedor(row.proveedor);
+                                                setCreditoCliente(row.credito_cliente);
+                                                setCreditoProveedor(row.credito_proveedor);
+                                                handleEditModal();
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             ))}
 
@@ -309,10 +318,10 @@ const RProcesar = () => {
 
                 {showModal && (
                     <Modal onClickOutside={() => setShowModal(false)}
-                            className=" mb-auto mt-40 w-max"
+                            className="!absolute !top-20 !max-w-3xl"
                             >
-                        <H1Tittle text="Nuevo cliente/proveedor" marginTop="mt-1"/>
-                        <div className="grid grid-rows-3 grid-cols-3 gap-x-12 gap-y-4">
+                        <h2 className="text-xl font-bold text-center mb-6">Nueva empresa</h2>
+                        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
                             {/* RUT */}
                             <Textfield 
                                 label={<>
@@ -423,52 +432,68 @@ const RProcesar = () => {
                                 }} 
                             />
                         </div>
-                        <div className="grid grid-rows-1 grid-cols-2 gap-x-32 mt-4">
-                            {/* CLIENTE */}
-                            <CheckboxDropdown 
-                                label="¿Es cliente?" 
-                                items={[
-                                    <Textfield 
-                                        label="Días de crédito:" 
-                                        type="number" 
-                                        classNameInput="w-16 h-6 self-center"
-                                        value={creditoCliente}
-                                        onChange={(e) => {
-                                            const value = Math.min(Number(e.target.value), 999);
-                                            setCreditoCliente(value);
-                                        }}
+
+                        <div className="border-t border-white/10 mt-6 pt-5">
+                            <p className="text-sm font-medium text-slate-300 mb-4">Tipo de relación comercial</p>
+                            <div className="grid grid-cols-2 gap-x-8">
+                                {/* CLIENTE */}
+                                <CheckboxDropdown
+                                    label="¿Es cliente?"
+                                    items={[
+                                        <Textfield
+                                            label="Días de crédito:"
+                                            type="number"
+                                            classNameInput="w-20 h-8"
+                                            value={creditoCliente}
+                                            onChange={(e) => {
+                                                const value = Math.min(Number(e.target.value), 999);
+                                                setCreditoCliente(value);
+                                            }}
                                         />
-                                ]}
-                                value={esCliente}
-                                onChange={(newValue) => {
-                                    setEsCliente(newValue)
+                                    ]}
+                                    value={esCliente}
+                                    onChange={(newValue) => {
+                                        setEsCliente(newValue)
+                                    }}
+                                />
+                                {/* PROVEEDOR */}
+                                <CheckboxDropdown
+                                    label="¿Es Proveedor?"
+                                    items={[
+                                        <Textfield
+                                            label="Días de crédito:"
+                                            type="number"
+                                            value={creditoProveedor}
+                                            classNameInput="w-20 h-8"
+                                            onChange={(e) => {
+                                                const value = Math.min(Number(e.target.value), 999);
+                                                setCreditoProveedor(value);
+                                            }}
+                                        />
+                                    ]}
+                                    value={esProveedor}
+                                    onChange={(newValue) => {
+                                        setEsProveedor(newValue)
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-white/10">
+                            <TextButton
+                                text="Cancelar"
+                                className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-lg"
+                                onClick={() => {
+                                    setShowModal(false);
+                                    handleResetParams();
                                 }}
                             />
-                            {/* PROVEEDOR */}
-                            <CheckboxDropdown 
-                                label="¿Es Proveedor?" 
-                                items={[
-                                    <Textfield 
-                                        label="Días de crédito:" 
-                                        type="number" 
-                                        value={creditoProveedor} 
-                                        classNameInput="w-16 h-6 self-center"
-                                        onChange={(e) => {
-                                            const value = Math.min(Number(e.target.value), 999);
-                                            setCreditoProveedor(value);
-                                        }} 
-                                    />
-                                ]}
-                                value={esProveedor}
-                                onChange={(newValue) => {
-                                    setEsProveedor(newValue)
-                                }}
-                            /> 
+                            <TextButton
+                                text="Guardar empresa"
+                                className="px-5 py-2 bg-success text-white font-medium hover:bg-success-hover active:bg-success-active rounded-lg"
+                                onClick={handleNewEmpresa}
+                            />
                         </div>
-                        <YButton 
-                            text="Guardar"
-                            onClick={handleNewEmpresa}
-                        />
                     </Modal>
                 )}
 
@@ -477,10 +502,10 @@ const RProcesar = () => {
                         setEditModal(false);
                         handleResetParams();
                     }}
-                            className=" mb-auto mt-40 w-max"
+                            className="!absolute !top-20 !max-w-3xl"
                             >
-                        <H1Tittle text="Editar información existente" marginTop="mt-1"/>
-                        <div className="grid grid-rows-3 grid-cols-3 gap-x-12 gap-y-4">
+                        <h2 className="text-xl font-bold text-center mb-6">Editar empresa</h2>
+                        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
                             {/* RUT */}
                             <Textfield 
                                 label={<>
@@ -591,106 +616,118 @@ const RProcesar = () => {
                                 }} 
                             />
                         </div>
-                        <div className="grid grid-rows-1 grid-cols-2 gap-x-32 mt-4">
-                            {/* CLIENTE */}
-                            <CheckboxDropdown 
-                                label="¿Es cliente?" 
-                                items={[
-                                    <Textfield 
-                                        label="Días de crédito:" 
-                                        type="number" 
-                                        classNameInput="w-16 h-6 self-center"
-                                        value={creditoCliente}
-                                        onChange={(e) => {
-                                            const value = Math.min(Number(e.target.value), 999);
-                                            setCreditoCliente(value);
-                                        }}
+
+                        <div className="border-t border-white/10 mt-6 pt-5">
+                            <p className="text-sm font-medium text-slate-300 mb-4">Tipo de relación comercial</p>
+                            <div className="grid grid-cols-2 gap-x-8">
+                                {/* CLIENTE */}
+                                <CheckboxDropdown
+                                    label="¿Es cliente?"
+                                    items={[
+                                        <Textfield
+                                            label="Días de crédito:"
+                                            type="number"
+                                            classNameInput="w-20 h-8"
+                                            value={creditoCliente}
+                                            onChange={(e) => {
+                                                const value = Math.min(Number(e.target.value), 999);
+                                                setCreditoCliente(value);
+                                            }}
                                         />
-                                ]}
-                                value={esCliente}
-                                onChange={(newValue) => {
-                                    setEsCliente(newValue)
-                                }}
-                            />
-                            {/* PROVEEDOR */}
-                            <CheckboxDropdown 
-                                label="¿Es Proveedor?" 
-                                items={[
-                                    <Textfield 
-                                        label="Días de crédito:" 
-                                        type="number" 
-                                        value={creditoProveedor} 
-                                        classNameInput="w-16 h-6 self-center"
-                                        onChange={(e) => {
-                                            const value = Math.min(Number(e.target.value), 999);
-                                            setCreditoProveedor(value);
-                                        }} 
-                                    />
-                                ]}
-                                value={esProveedor}
-                                onChange={(newValue) => {
-                                    setEsProveedor(newValue)
-                                }}
-                            /> 
+                                    ]}
+                                    value={esCliente}
+                                    onChange={(newValue) => {
+                                        setEsCliente(newValue)
+                                    }}
+                                />
+                                {/* PROVEEDOR */}
+                                <CheckboxDropdown
+                                    label="¿Es Proveedor?"
+                                    items={[
+                                        <Textfield
+                                            label="Días de crédito:"
+                                            type="number"
+                                            value={creditoProveedor}
+                                            classNameInput="w-20 h-8"
+                                            onChange={(e) => {
+                                                const value = Math.min(Number(e.target.value), 999);
+                                                setCreditoProveedor(value);
+                                            }}
+                                        />
+                                    ]}
+                                    value={esProveedor}
+                                    onChange={(newValue) => {
+                                        setEsProveedor(newValue)
+                                    }}
+                                />
+                            </div>
                         </div>
-                        <div className="flex justify-between">
-                            <YButton 
-                                text="Actualizar datos"
-                                onClick={handleEditEmpresa}
-                            />  
-                            <XButton
-                                text="Eliminar cliente/proveedor"
+
+                        <div className="flex justify-between items-center gap-3 mt-6 pt-4 border-t border-white/10">
+                            <TextButton
+                                text="Eliminar empresa"
+                                className="px-4 py-2 bg-danger text-white font-medium hover:bg-danger-hover active:bg-danger-active rounded-lg"
                                 onClick={handleEliminarModal}
                             />
-
-                            <XButton
-                                text="Cancelar"
-                                onClick={() => {
-                                    handleResetParams();
-                                    setEditModal(false);
-                                }}
-                            />
+                            <div className="flex gap-3">
+                                <TextButton
+                                    text="Cancelar"
+                                    className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-lg"
+                                    onClick={() => {
+                                        handleResetParams();
+                                        setEditModal(false);
+                                    }}
+                                />
+                                <TextButton
+                                    text="Guardar cambios"
+                                    className="px-5 py-2 bg-success text-white font-medium hover:bg-success-hover active:bg-success-active rounded-lg"
+                                    onClick={handleEditEmpresa}
+                                />
+                            </div>
                         </div>
                     </Modal>
                 )}
 
                 {eliminarModal && (
-                    <Modal>
-                        <div>
-                            <H1Tittle text="ADVERTENCIA!" />
-                            <PSubtitle 
-                                text="¿Esta seguro que desea eliminar esta empresa?"
-                            />
-                            <p>Todos los documentos serán eliminados!</p>
-                            <div className="flex justify-between mt-8">
-                                <YButton text="ELIMINAR"
-                                    onClick={() => handleEliminarEmpresa(rut)}
-                                    />
-                                <XButton text="CANCELAR"
+                    <Modal onClickOutside={() => setEliminarModal(false)} className="!max-w-md">
+                        <div className="text-center">
+                            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/20 flex items-center justify-center">
+                                <svg className="w-8 h-8 text-danger" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.194-.833-2.964 0L3.34 16.5C2.57 17.333 3.532 19 5.072 19z" />
+                                </svg>
+                            </div>
+                            <h3 className="text-xl font-bold mb-2">Eliminar empresa</h3>
+                            <p className="text-slate-300 text-sm mb-2">
+                                ¿Está seguro que desea eliminar esta empresa?
+                            </p>
+                            <p className="text-danger text-sm font-medium mb-6">
+                                Todos los documentos asociados serán eliminados permanentemente.
+                            </p>
+                            <div className="flex justify-center gap-4">
+                                <TextButton
+                                    text="Cancelar"
+                                    className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-full"
                                     onClick={() => setEliminarModal(false)}
                                 />
-                            </div>   
+                                <TextButton
+                                    text="Eliminar"
+                                    className="px-5 py-2 bg-danger text-white font-medium hover:bg-danger-hover active:bg-danger-active rounded-full"
+                                    onClick={() => handleEliminarEmpresa(rut)}
+                                />
+                            </div>
                         </div>
                     </Modal>
                 )}
 
-                {errorRut && (
-                    <Modal onClickOutside={() => setErrorRut("")}>
-                        <div className="flex flex-col items-center gap-4 p-4">
-                            <p className="text-red-500 font-bold">{errorRut}</p>
-                            <YButton
-                                text="Cerrar"
-                                onClick={() => setErrorRut("")}
-                            />
-                        </div>
-                    </Modal>
-                )}
+                <AlertModal
+                    isOpen={!!errorRut}
+                    onClose={() => setErrorRut("")}
+                    title="Error"
+                    message={errorRut}
+                    variant="error"
+                />
 
-                {loadingModal && (
-                    <Modal>
-                        <p className="font-black">Cargando</p>
-                    </Modal>
-                )}
+                <LoadingModal isOpen={loadingModal} message="Procesando..." />
             </div>
                 {/* giro - comuna - direccion - telefono - correo */}
             {/* Footer fijo */}

@@ -5,8 +5,6 @@ import {
   List,
   ListItem,
   ListItemPrefix,
-  ListItemSuffix,
-  Chip,
   Accordion,
   AccordionHeader,
   AccordionBody,
@@ -21,9 +19,9 @@ import {
   HomeIcon,
 } from "@heroicons/react/24/solid";
 import { ChevronRightIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
-// Animación suave de apertura/cierre de accordion
+// Smooth accordion animation
 function AccordionContent({ isOpen, children }) {
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [maxHeight, setMaxHeight] = useState(isOpen ? "1000px" : "0px");
@@ -58,7 +56,10 @@ export function SidebarWithContentSeparator() {
     emision: false,
   });
   const [collapsed, setCollapsed] = useState(false);
-  const [isLockedCollapsed, setIsLockedCollapsed] = useState(false); // Bloqueo
+  const [isLockedCollapsed, setIsLockedCollapsed] = useState(false);
+
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const toggleAccordion = (name) => {
     setOpenAccordions((prev) => ({
@@ -67,9 +68,7 @@ export function SidebarWithContentSeparator() {
     }));
   };
 
-  const navigate = useNavigate();
-
-  // Detectar tamaño de pantalla y bloquear si es iPad o menor
+  // Detect screen size
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth <= 1024) {
@@ -81,111 +80,163 @@ export function SidebarWithContentSeparator() {
       }
     };
 
-    handleResize(); // Ejecutar en montaje
+    handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // Auto-open accordion based on current route
+  useEffect(() => {
+    if (location.pathname.includes("recepcion")) {
+      setOpenAccordions(prev => ({ ...prev, recepcion: true }));
+    } else if (location.pathname.includes("emision")) {
+      setOpenAccordions(prev => ({ ...prev, emision: true }));
+    }
+  }, [location.pathname]);
+
+  const isActive = (path) => location.pathname === path;
+  const isActiveSection = (section) => location.pathname.includes(section);
+
+  const listItemStyles = `
+    cursor-pointer text-slate-300
+    hover:bg-white/10 hover:text-white
+    active:bg-white/15
+    transition-all duration-200
+    rounded-lg mb-1
+  `;
+
+  const activeItemStyles = "bg-primary/50 text-white";
+
+  const subItemStyles = `
+    cursor-pointer text-slate-400
+    hover:bg-white/5 hover:text-white
+    active:bg-white/10
+    transition-all duration-200
+    rounded-lg text-sm
+  `;
 
   return (
     <Card
       className={`
         h-full rounded-none
-        p-4 
-        shadow-xl shadow-blue-gray-900/5
-        bg-gradient-to-t from-sky-900 to-sky-950
+        p-3
+        shadow-xl
+        bg-gradient-to-b from-surface-light to-surface
+        border-r border-white/5
         flex flex-col
-        transition-width duration-300
-        ${collapsed ? "w-20" : "w-72 max-w-[20rem]"}
+        transition-all duration-300
+        ${collapsed ? "w-[4.5rem]" : "w-64"}
         overflow-hidden
       `}
     >
-      {/* Toggle button */}
-      <div className="flex justify-between items-center mb-2 px-2">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-4 px-2">
         {!collapsed && (
-          <Typography variant="h5" className="text-gray-100 cursor-default">
+          <Typography variant="h5" className="text-white font-bold tracking-wide">
             FACTO
           </Typography>
         )}
         {!isLockedCollapsed && (
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label={collapsed ? "Expandir" : "Contraer"}
           >
-            <Bars3Icon className="h-6 w-6 text-gray-700 dark:text-gray-300" />
+            <Bars3Icon className="h-5 w-5 text-slate-400" />
           </button>
         )}
       </div>
 
-      <List className="flex-1 overflow-y-auto p-0">
-
+      <List className="flex-1 overflow-y-auto p-0 pb-14 scrollbar-custom">
         {/* Home */}
-        <ListItem className="cursor-pointer text-gray-100 hover:bg-black/20  
-                          active:bg-black/40 transition-all duration-300"
-                  onClick={() => navigate("/home")}>
-            <ListItemPrefix>
-              <HomeIcon className="h-5 w-5 mr-2" />
-            </ListItemPrefix>
-            {!collapsed && "Home"}
+        <ListItem
+          className={`${listItemStyles} ${isActive("/home") ? activeItemStyles : ""}`}
+          onClick={() => navigate("/home")}
+        >
+          <ListItemPrefix>
+            <HomeIcon className="h-5 w-5" />
+          </ListItemPrefix>
+          {!collapsed && <span className="ml-2">Inicio</span>}
         </ListItem>
 
-        {/* recepcion Accordion */}
+        {/* Recepción Accordion */}
         <Accordion
           open={openAccordions.recepcion}
           icon={
             <ChevronDownIcon
               strokeWidth={2.5}
-              className={`mx-auto h-4 w-4 transition-transform text-gray-100 ${
+              className={`h-4 w-4 transition-transform text-slate-400 ${
                 openAccordions.recepcion ? "rotate-180" : ""
               } ${collapsed ? "hidden" : "block"}`}
             />
           }
         >
           <ListItem
-            className="p-0"
+            className={`p-0 ${isActiveSection("recepcion") && !openAccordions.recepcion ? activeItemStyles : ""}`}
             selected={openAccordions.recepcion}
             onClick={() => toggleAccordion("recepcion")}
-            style={{ cursor: "pointer" }}
           >
-            <AccordionHeader className="border-b-0 text-base p-3 flex items-center gap-2  rounded-lg hover:bg-black/20 
-                                      active:bg-black/40  transition-all duration-300">
+            <AccordionHeader
+              className={`
+                border-b-0 p-3 flex items-center gap-2 rounded-lg
+                hover:bg-white/10 active:bg-white/15
+                transition-all duration-200
+                ${isActiveSection("recepcion") ? "text-white" : "text-slate-300"}
+              `}
+            >
               <ListItemPrefix>
-                <DocumentArrowDownIcon className="h-5 w-5 text-gray-100" />
+                <DocumentArrowDownIcon className="h-5 w-5" />
               </ListItemPrefix>
               {!collapsed && (
-                <Typography className="mr-auto font-normal text-gray-100">
+                <Typography className="mr-auto font-medium text-sm">
                   Recepción
                 </Typography>
               )}
             </AccordionHeader>
           </ListItem>
+
           {!collapsed && (
             <AccordionContent isOpen={openAccordions.recepcion}>
-              <AccordionBody className="py-1 text-gray-100">
-                <List className="p-0">
-                  <ListItem className=" hover:bg-black/20 transition-all duration-100"
-                            onClick={() => navigate("/recepcion-index/ingresar")}
-                            >
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                    </ListItemPrefix>
-                    Ingreso de documentos
-                  </ListItem>
-                  <ListItem className=" hover:bg-black/20 transition-all duration-100"
-                            onClick={() => navigate("/recepcion-index/procesar")}
-                            >
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
-                    </ListItemPrefix>
-                    Procesar documentos
-                  </ListItem>
-                  <ListItem className= " hover:bg-black/20  transition-all duration-100"
-                            onClick={() => navigate("/recepcion-index/revision-documentos")}
+              <AccordionBody className="py-1">
+                <List className="p-0 pl-4">
+                  <ListItem
+                    className={`${subItemStyles} ${isActive("/recepcion-index/ingresar") ? "bg-accent-blue/20 text-white" : ""}`}
+                    onClick={() => navigate("/recepcion-index/ingresar")}
                   >
                     <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
+                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
                     </ListItemPrefix>
-                    Revisión de documentos
+                    <span className="ml-1">Ingreso de documentos</span>
+                  </ListItem>
+
+                  <ListItem
+                    className={`${subItemStyles} ${isActive("/recepcion-index/procesar") ? "bg-accent-blue/20 text-white" : ""}`}
+                    onClick={() => navigate("/recepcion-index/procesar")}
+                  >
+                    <ListItemPrefix>
+                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                    </ListItemPrefix>
+                    <span className="ml-1">Procesar documentos</span>
+                  </ListItem>
+
+                  <ListItem
+                    className={`${subItemStyles} ${isActive("/recepcion-index/revision-documentos") ? "bg-accent-blue/20 text-white" : ""}`}
+                    onClick={() => navigate("/recepcion-index/revision-documentos")}
+                  >
+                    <ListItemPrefix>
+                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                    </ListItemPrefix>
+                    <span className="ml-1">Revisión de documentos</span>
+                  </ListItem>
+
+                  <ListItem
+                    className={`${subItemStyles} ${isActive("/recepcion-index/calendario") ? "bg-accent-blue/20 text-white" : ""}`}
+                    onClick={() => navigate("/recepcion-index/calendario")}
+                  >
+                    <ListItemPrefix>
+                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                    </ListItemPrefix>
+                    <span className="ml-1">Calendario interactivo</span>
                   </ListItem>
                 </List>
               </AccordionBody>
@@ -199,7 +250,7 @@ export function SidebarWithContentSeparator() {
           icon={
             <ChevronDownIcon
               strokeWidth={2.5}
-              className={`mx-auto h-4 w-4 transition-transform text-gray-100 ${
+              className={`h-4 w-4 transition-transform text-slate-400 ${
                 openAccordions.emision ? "rotate-180" : ""
               } ${collapsed ? "hidden" : "block"}`}
             />
@@ -209,34 +260,42 @@ export function SidebarWithContentSeparator() {
             className="p-0"
             selected={openAccordions.emision}
             onClick={() => toggleAccordion("emision")}
-            style={{ cursor: "pointer" }}
           >
-            <AccordionHeader className="border-b-0 p-3 flex items-center gap-2 rounded-lg hover:bg-black/20 active:bg-black/40 transition-all duration-300">
+            <AccordionHeader
+              className={`
+                border-b-0 p-3 flex items-center gap-2 rounded-lg
+                hover:bg-white/10 active:bg-white/15
+                transition-all duration-200
+                ${isActiveSection("emision") ? "text-white" : "text-slate-300"}
+              `}
+            >
               <ListItemPrefix>
-                <PaperAirplaneIcon className="h-5 w-5 text-gray-100" />
+                <PaperAirplaneIcon className="h-5 w-5" />
               </ListItemPrefix>
               {!collapsed && (
-                <Typography className="mr-auto font-normal text-gray-100">
+                <Typography className="mr-auto font-medium text-sm">
                   Emisión
                 </Typography>
               )}
             </AccordionHeader>
           </ListItem>
+
           {!collapsed && (
             <AccordionContent isOpen={openAccordions.emision}>
-              <AccordionBody className="py-1 text-gray-100 ">
-                <List className="p-0">
-                  <ListItem className="hover:bg-black/20 transition-all duration-100">
+              <AccordionBody className="py-1">
+                <List className="p-0 pl-4">
+                  <ListItem className={subItemStyles}>
                     <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5 " />
+                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
                     </ListItemPrefix>
-                    Revisión de documentos
+                    <span className="ml-1">Revisión de documentos</span>
                   </ListItem>
-                  <ListItem className="hover:bg-black/20 transition-all duration-100">
+
+                  <ListItem className={subItemStyles}>
                     <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={3} className="h-3 w-5" />
+                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
                     </ListItemPrefix>
-                    Modificar estados de pago
+                    <span className="ml-1">Estados de pago</span>
                   </ListItem>
                 </List>
               </AccordionBody>
@@ -244,37 +303,49 @@ export function SidebarWithContentSeparator() {
           )}
         </Accordion>
 
-        <hr className={`my-2 border-blue-900 ${collapsed ? "mx-4" : ""}`} />
+        {/* Divider */}
+        <hr className={`my-3 border-white/10 ${collapsed ? "mx-2" : ""}`} />
 
-
-        <ListItem 
+        {/* Informes */}
+        <ListItem
           onClick={() => navigate("/informes-index")}
-          className="cursor-pointer text-gray-100 hover:bg-black/20 transition-all duration-300">
+          className={`${listItemStyles} ${isActive("/informes-index") ? activeItemStyles : ""}`}
+        >
           <ListItemPrefix>
-            <PresentationChartLineIcon className="h-5 w-5 mr-2" />
+            <PresentationChartLineIcon className="h-5 w-5" />
           </ListItemPrefix>
-          {!collapsed && "Informes"}
+          {!collapsed && <span className="ml-2">Informes</span>}
         </ListItem>
 
-
-        <ListItem className="cursor-pointer text-gray-100 hover:bg-black/20 transition-all duration-300"
+        {/* Configuración */}
+        <ListItem
           onClick={() => navigate("/configuracion-index")}
-          >
+          className={`${listItemStyles} ${isActiveSection("configuracion") ? activeItemStyles : ""}`}
+        >
           <ListItemPrefix>
-            <Cog6ToothIcon className="h-5 w-5 mr-2" />
+            <Cog6ToothIcon className="h-5 w-5" />
           </ListItemPrefix>
-          {!collapsed && "Configuración"}
+          {!collapsed && <span className="ml-2">Configuración</span>}
         </ListItem>
 
+        {/* Spacer */}
+        <div className="flex-grow" />
 
+        {/* Logout */}
         <ListItem
           onClick={() => navigate("/")}
-          className="cursor-pointer flex items-center gap-2 text-gray-100 hover:bg-black/20 transition-all duration-300"
+          className={`
+            cursor-pointer text-slate-400
+            hover:bg-danger/20 hover:text-danger
+            active:bg-danger/30
+            transition-all duration-200
+            rounded-lg mt-2
+          `}
         >
           <ListItemPrefix>
             <PowerIcon className="h-5 w-5" />
           </ListItemPrefix>
-          {!collapsed && "Cerrar sesión"}
+          {!collapsed && <span className="ml-2">Cerrar sesión</span>}
         </ListItem>
       </List>
     </Card>

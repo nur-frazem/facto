@@ -5,7 +5,7 @@ import { H1Tittle } from "../../components/Fonts";
 import { VolverButton, YButton, XButton } from "../../components/Button";
 import { useNavigate } from "react-router-dom";
 import { Textfield, DropdownMenu, DatepickerField } from "../../components/Textfield";
-import { Modal } from "../../components/modal";
+import { Modal, LoadingModal, AlertModal } from "../../components/modal";
 
 import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
@@ -93,37 +93,47 @@ const RIngresar = () => {
   const [rowTipoDoc, setRowTipoDoc] = useState([]);
   const [rowFormaPago, setRowFormaPago] = useState([]);
 
+  // Valores de los campos
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [selectedGiro, setSelectedGiro] = useState(null);
+  const [giroRut, setGiroRut] = useState("");
+  const [numeroDoc, setNumeroDoc] = useState("");
+  const [numeroDocNc, setNumeroDocNc] = useState("");
+  const [tipoDocNc, setTipoDocNc] = useState(""); // Tipo de documento a vincular con NC
+  const [formaPago, setFormaPago] = useState("");
+
   const [fechaE, setFechaE] = useState(null);
   const [fechaV, setFechaV] = useState(null);
   const [creditoProveedor, setCreditoProveedor] = useState(0);
 
-  //Valores monto documento textfield
+  // Valores monto documento textfield
   const [neto, setNeto] = useState("");
   const [iva, setIva] = useState("");
   const [otros, setOtros] = useState(0);
   const [flete, setFlete] = useState(0);
   const [retencion, setRetencion] = useState(0);
 
+  // Calcular IVA automáticamente (solo para documentos que tienen IVA)
   useEffect(() => {
-  const netoNumber = Number(neto) || 0;
-  const fleteNumber = Number(flete) || 0;
-  setIva(((netoNumber + fleteNumber) * 0.19).toFixed(0)); // redondeado sin decimales
-}, [neto, flete]);
+    if (selectedDoc === "Factura exenta") {
+      setIva(0);
+    } else {
+      const netoNumber = Number(neto) || 0;
+      const fleteNumber = Number(flete) || 0;
+      setIva(((netoNumber + fleteNumber) * 0.19).toFixed(0));
+    }
+  }, [neto, flete, selectedDoc]);
 
-  const total = (Number(neto) || 0) + (Number(iva) || 0) + (Number(otros) || 0) + (Number(flete) || 0) - (Number(retencion) || 0);
-
-  //Valores de los campos
-  const [selectedDoc, setSelectedDoc] = useState(null);
-  const [selectedGiro, setSelectedGiro] = useState(null);
-  const [giroRut ,setGiroRut] = useState("");
-  const [numeroDoc, setNumeroDoc] = useState("");
-  const [numeroDocNc, setNumeroDocNc] = useState("");
-  const [formaPago, setFormaPago] = useState("");
+  // Total calculado (Factura exenta no incluye IVA)
+  const ivaParaTotal = selectedDoc === "Factura exenta" ? 0 : (Number(iva) || 0);
+  const total = (Number(neto) || 0) + ivaParaTotal + (Number(otros) || 0) + (Number(flete) || 0) - (Number(retencion) || 0);
 
   useEffect(() => {
     setFormaPago("");
     setFechaE("");
     setFechaV("");
+    setTipoDocNc("");
+    setNumeroDocNc("");
   }, [selectedDoc, selectedGiro]);
 
   //modal
@@ -174,13 +184,15 @@ const RIngresar = () => {
     } 
   
     // NC solo si visible
-    if (selectedGiro && selectedDoc === "Nota de crédito" && numeroDocNc === "") {
-      newErrors.numeroDocNc = ECampo;
+    if (selectedGiro && selectedDoc === "Nota de crédito") {
+      if (!tipoDocNc) newErrors.tipoDocNc = ECampo;
+      if (numeroDocNc === "") newErrors.numeroDocNc = ECampo;
     }
   
     // Totales solo si visible
     if (selectedGiro && selectedDoc && neto === "") newErrors.neto = ECampo;
-    if (selectedGiro && selectedDoc && iva === "") newErrors.iva = ECampo;
+    // IVA no es requerido para Factura exenta
+    if (selectedGiro && selectedDoc && selectedDoc !== "Factura exenta" && iva === "") newErrors.iva = ECampo;
     if (selectedGiro && selectedDoc && flete === "") newErrors.flete = ECampo;
     if (selectedGiro && selectedDoc && retencion === "") newErrors.retencion = ECampo;
   
@@ -193,168 +205,197 @@ const RIngresar = () => {
   };
   
   const handleEnviarDoc = async () => {
-    const fechaVDate = fechaV; // ya es un Date
+    const fechaVDate = fechaV;
     const fechaActual = new Date();
 
     let estado = fechaVDate < fechaActual ? "vencido" : "pendiente";
-    if(formaPago != "Crédito"){
+    if(formaPago !== "Crédito"){
       estado = "pagado";
-      if(selectedDoc == "Nota de crédito"){
+      if(selectedDoc === "Nota de crédito"){
         estado = "pendiente"
       }
     }
-
-    console.log("fechaVDate:", fechaVDate, "fechaActual:", fechaActual, "estado:", estado);
 
     const factura = {
       numeroDoc,
       formaPago,
       fechaE,
       fechaV,
-      neto,
-      flete,
-      retencion,
-      otros,
-      iva,
+      neto: Number(neto),
+      flete: Number(flete),
+      retencion: Number(retencion),
+      otros: Number(otros),
+      iva: Number(iva),
       total,
       estado,
-      ingresoUsuario : userId,
-      fechaIngreso : fechaActual
-    }
+      ingresoUsuario: userId,
+      fechaIngreso: fechaActual
+    };
+
+    // Factura exenta no tiene IVA
+    const facturaExenta = {
+      numeroDoc,
+      formaPago,
+      fechaE,
+      fechaV,
+      neto: Number(neto),
+      flete: Number(flete),
+      retencion: Number(retencion),
+      otros: Number(otros),
+      total,
+      estado,
+      ingresoUsuario: userId,
+      fechaIngreso: fechaActual
+    };
 
     const boleta = {
       numeroDoc,
       fechaE,
-      neto,
-      iva,
+      neto: Number(neto),
+      iva: Number(iva),
       total,
-      estado,
-      ingresoUsuario : userId,
-      fechaIngreso : fechaActual
-    }
+      estado: "pagado",
+      ingresoUsuario: userId,
+      fechaIngreso: fechaActual
+    };
 
     const notaCredito = {
       numeroDoc,
       numeroDocNc,
       fechaE,
-      neto,
-      flete,
-      retencion,
-      otros,
-      iva,
+      neto: Number(neto),
+      flete: Number(flete),
+      retencion: Number(retencion),
+      otros: Number(otros),
+      iva: Number(iva),
       total,
       estado,
-      ingresoUsuario : userId,
-      fechaIngreso : fechaActual
-    }
+      ingresoUsuario: userId,
+      fechaIngreso: fechaActual
+    };
+
     setLoadingModal(true);
-    if(selectedDoc == "Factura electrónica" || selectedDoc == "Factura exenta"){
+
+    // Factura electrónica
+    if(selectedDoc === "Factura electrónica"){
       try {
         const documentoRef = doc(db, "empresas", String(giroRut), "facturas", String(numeroDoc));
         const docSnap = await getDoc(documentoRef);
-  
+
         if (docSnap.exists()) {
-            // Documento ya existe
             setLoadingModal(false);
-            console.warn("Este documento ya esta ingresado");
-            setErrorDoc("Este documento ya esta ingresado");
+            setErrorDoc("Este documento ya está ingresado");
             return;
         }
-  
-        // Documento no existe, creamos uno nuevo
+
         await setDoc(documentoRef, factura);
-  
         setIsModalOpen(false);
         handleResetParams();
         window.location.reload();
-  
       } catch (err) {
         console.error("Error guardando documento:", err);
+        setLoadingModal(false);
       }
     }
 
-    else if(selectedDoc=="Boleta"){
+    // Factura exenta - va a colección facturasExentas
+    if(selectedDoc === "Factura exenta"){
       try {
-        estado = "pagado";
-        const documentoRef = doc(db, "empresas", String(giroRut), "boletas", String(numeroDoc));
+        const documentoRef = doc(db, "empresas", String(giroRut), "facturasExentas", String(numeroDoc));
         const docSnap = await getDoc(documentoRef);
-  
+
         if (docSnap.exists()) {
-            // Documento ya existe
             setLoadingModal(false);
-            console.warn("Este documento ya esta ingresado");
-            setErrorDoc("Este documento ya esta ingresado");
+            setErrorDoc("Este documento ya está ingresado");
             return;
         }
-  
-        // Documento no existe, creamos uno nuevo
-        await setDoc(documentoRef, boleta);
-  
+
+        await setDoc(documentoRef, facturaExenta);
         setIsModalOpen(false);
         handleResetParams();
         window.location.reload();
-  
       } catch (err) {
-        console.error("Error guardando empresa:", err);
+        console.error("Error guardando documento:", err);
+        setLoadingModal(false);
       }
     }
 
-    else if(selectedDoc=="Nota de crédito"){
+    // Boleta
+    if(selectedDoc === "Boleta"){
       try {
-        estado = "pendiente";
-        const documentoRef = doc(db, "empresas", String(giroRut), "notasCredito", String(numeroDoc));
+        const documentoRef = doc(db, "empresas", String(giroRut), "boletas", String(numeroDoc));
         const docSnap = await getDoc(documentoRef);
-  
+
         if (docSnap.exists()) {
-            // Documento ya existe
             setLoadingModal(false);
-            console.warn("Este documento ya esta ingresado");
-            setErrorDoc("Este documento ya esta ingresado");
+            setErrorDoc("Este documento ya está ingresado");
             return;
         }
-  
-        //Buscamos la factura asociada
-        const facturaRef = doc(db, "empresas", String(giroRut), "facturas", String(numeroDocNc));
+
+        await setDoc(documentoRef, boleta);
+        setIsModalOpen(false);
+        handleResetParams();
+        window.location.reload();
+      } catch (err) {
+        console.error("Error guardando boleta:", err);
+        setLoadingModal(false);
+      }
+    }
+
+    // Nota de crédito
+    if(selectedDoc === "Nota de crédito"){
+      try {
+        const documentoRef = doc(db, "empresas", String(giroRut), "notasCredito", String(numeroDoc));
+        const docSnap = await getDoc(documentoRef);
+
+        if (docSnap.exists()) {
+            setLoadingModal(false);
+            setErrorDoc("Este documento ya está ingresado");
+            return;
+        }
+
+        // Buscar la factura asociada según el tipo seleccionado
+        const tipoFacturaAsociada = tipoDocNc === "Factura exenta" ? "facturasExentas" : "facturas";
+        const facturaRef = doc(db, "empresas", String(giroRut), tipoFacturaAsociada, String(numeroDocNc));
         const facturaSnap = await getDoc(facturaRef);
 
         if (!facturaSnap.exists()) {
-          // Si no se encuentra la factura asociada
           setLoadingModal(false);
-          console.warn("No se encuentra la factura asociada");
-          setErrorDoc("No se encuentra la factura asociada");
+          setErrorDoc(`No se encuentra la ${tipoDocNc.toLowerCase()} N° ${numeroDocNc}`);
           return;
         }
 
         const facturaData = facturaSnap.data();
 
-        // Validar estado
         if (facturaData.estado === "pagado") {
           setLoadingModal(false);
-          console.warn("El documento asociado ya se encuentra pagado");
           setErrorDoc("El documento asociado ya se encuentra pagado");
           return;
         }
 
-        // Documento no existe, creamos uno nuevo
-        await setDoc(documentoRef, notaCredito);
+        // Guardar nota de crédito con referencia al tipo de factura
+        await setDoc(documentoRef, {
+          ...notaCredito,
+          tipoFacturaAsociada
+        });
 
-        // Actualizamos la factura asociada
+        // Actualizar la factura asociada
         const abonoActual = facturaData.abonoNc || 0;
-
         await updateDoc(facturaRef, {
           abonoNc: abonoActual + total,
-          notasCredito: arrayUnion(numeroDoc), // añade el numeroDoc de la NC
-          totalDescontado: (facturaData.totalDescontado ?? facturaData.total) - total //Se descuenta el total de esta NC en el total descontado de la factura
+          notasCredito: arrayUnion(numeroDoc),
+          totalDescontado: (facturaData.totalDescontado ?? facturaData.total) - total
         });
-  
+
         setIsModalOpen(false);
         handleResetParams();
         window.location.reload();
-  
       } catch (err) {
-        console.error("Error guardando empresa:", err);
+        console.error("Error guardando nota de crédito:", err);
+        setLoadingModal(false);
       }
     }
+
     setLoadingModal(false);
   }
 
@@ -367,6 +408,7 @@ const RIngresar = () => {
     setFechaE("");
     setFechaV("");
     setNumeroDocNc("");
+    setTipoDocNc("");
     setNeto(0);
     setFlete(0);
     setRetencion(0);
@@ -547,13 +589,36 @@ const RIngresar = () => {
 
           
 
-          {/* NC */}
+          {/* NC - Tipo de documento a vincular */}
           {selectedDoc === "Nota de crédito" && selectedGiro != null ? (
+            <DropdownMenu
+              tittle={
+                <>
+                  Tipo de documento a vincular
+                  {errors.tipoDocNc && (
+                    <span className="text-red-300 font-black"> - {errors.tipoDocNc}</span>
+                  )}
+                </>
+              }
+              items={["Factura electrónica", "Factura exenta"]}
+              value={tipoDocNc}
+              onSelect={(item) => {
+                setTipoDocNc(item);
+                setErrors((prev) => ({ ...prev, tipoDocNc: undefined }));
+              }}
+              classNameMenu={errors.tipoDocNc && ("ring-red-400 ring-2")}
+            />
+          ) : (
+            <div />
+          )}
+
+          {/* NC - Número de documento a vincular */}
+          {selectedDoc === "Nota de crédito" && selectedGiro != null && tipoDocNc ? (
             <Textfield
               className="font-bold"
               label={
                 <>
-                  N° de Factura a descontar NC
+                  N° de {tipoDocNc === "Factura exenta" ? "Factura exenta" : "Factura"} a vincular
                   {errors.numeroDocNc && (
                     <span className="text-red-300 font-black"> - {errors.numeroDocNc}</span>
                   )}
@@ -666,7 +731,8 @@ const RIngresar = () => {
             <div></div>
           )}
 
-          {selectedGiro != null && selectedDoc != null ? (
+          {/* IVA - No mostrar para Factura exenta */}
+          {selectedGiro != null && selectedDoc != null && selectedDoc !== "Factura exenta" ? (
             <Textfield
               className="font-bold"
               label={
@@ -681,7 +747,7 @@ const RIngresar = () => {
               onChange={(e) => {
                 setIva(e.target.value);
                 setErrors((prev) => ({ ...prev, iva: undefined }));
-            }}
+              }}
               classNameLabel="font-bold"
               placeholder="$"
               classNameInput={errors.iva && ("ring-red-400 ring-2")}
@@ -724,26 +790,29 @@ const RIngresar = () => {
       {isModalOpen && (
         <Modal>
           <h2 className="text-xl font-bold mb-4">¿Están correctos los datos?</h2>
-            <div className="grid grid-cols-2 grid-rows-5 gap-y-3 gap-x-10">
-              <p className="font-semibold">Giro:</p>
+            <div className="grid grid-cols-2 gap-y-3 gap-x-10">
+              <p className="font-semibold">Empresa:</p>
               <p>{selectedGiro}</p>
               <p className="font-semibold">Tipo documento:</p>
               <p>{selectedDoc}</p>
               <p className="font-semibold">N° documento:</p>
               <p>{numeroDoc}</p>
-              <div />
-              <div />
+              {selectedDoc === "Nota de crédito" && (
+                <>
+                  <p className="font-semibold">Vinculada a:</p>
+                  <p>{tipoDocNc} N° {numeroDocNc}</p>
+                </>
+              )}
               <p className="font-semibold">Monto total:</p>
               <p>{new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(total)}</p>
-
             </div>
-            <hr className=" border-black mt-1" />
+            <hr className="border-white/20 mt-4" />
             <div className="mt-6 flex justify-between">
                 <XButton
                   text="Corregir"
                   onClick={() => setIsModalOpen(false)}
                 />
-                <YButton 
+                <YButton
                   text="Ingresar"
                   onClick={() => {
                     handleEnviarDoc();
@@ -753,23 +822,15 @@ const RIngresar = () => {
         </Modal>
     )}
 
-    {errorDoc && (
-      <Modal onClickOutside={() => setErrorDoc("")}>
-          <div className="flex flex-col items-center gap-4 p-4">
-              <p className="text-red-500 font-bold">{errorDoc}</p>
-              <YButton
-                  text="Cerrar"
-                  onClick={() => setErrorDoc("")}
-              />
-          </div>
-      </Modal>
-    )}
+    <AlertModal
+      isOpen={!!errorDoc}
+      onClose={() => setErrorDoc("")}
+      title="Error"
+      message={errorDoc}
+      variant="error"
+    />
 
-    {loadingModal && (
-      <Modal>
-          <p className="font-black">Cargando</p>
-      </Modal>
-    )}
+    <LoadingModal isOpen={loadingModal} message="Procesando documento..." />
           
 
       {/* Footer fijo */}

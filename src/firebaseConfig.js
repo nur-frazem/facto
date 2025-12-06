@@ -5,15 +5,29 @@ import { getFirestore } from "firebase/firestore";
 // Si necesitas Storage:
 // import { getStorage } from "firebase/storage";
 
-// Configuración obtenida desde Firebase Console
+// Configuración desde variables de entorno (ver .env.example)
 const firebaseConfig = {
-  apiKey: "AIzaSyBQearlgbhryxrGXdUT3dGAYYdOaJ6Z9C0",
-  authDomain: "facto-b4efd.firebaseapp.com",
-  projectId: "facto-b4efd",
-  storageBucket: "facto-b4efd.appspot.com",
-  messagingSenderId: "407426442010",
-  appId: "1:407426442010:web:c293561adc47b4c41b02a3"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
+
+// Validar que las variables de entorno estén configuradas
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID'
+];
+
+for (const envVar of requiredEnvVars) {
+  if (!import.meta.env[envVar]) {
+    console.error(`Missing required environment variable: ${envVar}`);
+    console.error('Please copy .env.example to .env.local and configure your Firebase credentials');
+  }
+}
 
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);

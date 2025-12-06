@@ -29,6 +29,7 @@ const RIndex = () => {
                 <Card title="Ingreso de documentos" onClick={() => navigate("/recepcion-index/ingresar")} />
                 <Card title="Procesar documentos" onClick={() => navigate("/recepcion-index/procesar")} />
                 <Card title="Revisión de documentos" onClick={() => navigate("/recepcion-index/revision-documentos")} />
+                <Card title="Calendario interactivo" onClick={() => navigate("/recepcion-index/calendario")} />
             </div>
 
             {/* Footer fijo */}

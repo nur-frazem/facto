@@ -2,12 +2,12 @@ import { SidebarWithContentSeparator } from "../../components/sidebar";
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Footer from "../../components/Footer";
-import { Modal } from "../../components/modal";
+import { Modal, LoadingModal, AlertModal } from "../../components/modal";
 import { H1Tittle } from "../../components/Fonts";
 import { VolverButton, TextButton, ImgButton, YButton } from "../../components/Button";
 import { DropdownMenu, DatepickerRange, DatepickerField, Textfield } from "../../components/Textfield";
 
-import { doc, getDoc, getDocs, collection, onSnapshot, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
+import { doc, getDoc, getDocs, setDoc, collection, onSnapshot, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { Card } from "../../components/Container";
 import { cleanRUT, formatRUT } from "../../utils/formatRUT";
@@ -88,7 +88,9 @@ const RRevisionDocumentos = () => {
 
   const [vincularSinEliminar, setVincularSinEliminar] = useState(false);
 
-  
+  // Estado para guardar info del documento actual en edición
+  const [currentDocRut, setCurrentDocRut] = useState("");
+  const [currentDocTipo, setCurrentDocTipo] = useState("");
 
   // Estados de filtros
   const [selectedTipoDoc, setSelectedTipoDoc] = useState("Todos");
@@ -387,25 +389,16 @@ const RRevisionDocumentos = () => {
     setSeObtuvoTipo(false);
     handleResetParams();
 
-    if(tipoDoc == "facturas"){
+    // Factura electrónica
+    if(tipoDoc === "facturas"){
       if(docData.notasCredito){
         setIAbonoNc(docData.abonoNc);
         setINotasCredito(docData.notasCredito);
         setITotalDescontado(docData.totalDescontado);
       }
       setIEstado(docData.estado);
-      if (docData.fechaE) {
-        setIFechaE(docData.fechaE.toDate());
-      } else {
-        setIFechaE(null);
-      }
-      
-      if (docData.fechaV) {
-        setIFechaV(docData.fechaV.toDate());
-      } else {
-        setIFechaV(null);
-      }
-
+      setIFechaE(toDate(docData.fechaE));
+      setIFechaV(toDate(docData.fechaV));
       setIFlete(docData.flete);
       setIFormaPago(docData.formaPago);
       setIIva(docData.iva);
@@ -416,33 +409,42 @@ const RRevisionDocumentos = () => {
       setITotal(docData.total);
       setITipoDoc("Factura electrónica");
       setIUsuarioIngreso(docData.ingresoUsuario);
-      if (docData.fechaIngreso) {
-        setIFechaIngreso(
-          docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
-        );
-      } else {
-        setIFechaIngreso("");
-      }
-
+      setIFechaIngreso(toDateString(docData.fechaIngreso));
       setIUsuarioPago(docData.pagoUsuario);
-      if (docData.fechaPago) {
-        setIFechaPago(
-          docData.fechaPago.toDate().toLocaleDateString('es-CL')
-        );
-      } else {
-        setIFechaPago("");
-      }
-
+      setIFechaPago(toDateString(docData.fechaPago));
       setSeObtuvoTipo(true);
     }
 
-    if(tipoDoc == "notasCredito"){
-      setIEstado(docData.estado);
-      if (docData.fechaE) {
-        setIFechaE(docData.fechaE.toDate());
-      } else {
-        setIFechaE(null);
+    // Factura exenta
+    if(tipoDoc === "facturasExentas"){
+      if(docData.notasCredito){
+        setIAbonoNc(docData.abonoNc);
+        setINotasCredito(docData.notasCredito);
+        setITotalDescontado(docData.totalDescontado);
       }
+      setIEstado(docData.estado);
+      setIFechaE(toDate(docData.fechaE));
+      setIFechaV(toDate(docData.fechaV));
+      setIFlete(docData.flete);
+      setIFormaPago(docData.formaPago);
+      setIIva(0); // Factura exenta no tiene IVA
+      setINeto(docData.neto);
+      setINumeroDoc(docData.numeroDoc);
+      setIOtros(docData.otros);
+      setIRetencion(docData.retencion);
+      setITotal(docData.total);
+      setITipoDoc("Factura exenta");
+      setIUsuarioIngreso(docData.ingresoUsuario);
+      setIFechaIngreso(toDateString(docData.fechaIngreso));
+      setIUsuarioPago(docData.pagoUsuario);
+      setIFechaPago(toDateString(docData.fechaPago));
+      setSeObtuvoTipo(true);
+    }
+
+    // Nota de crédito
+    if(tipoDoc === "notasCredito"){
+      setIEstado(docData.estado);
+      setIFechaE(toDate(docData.fechaE));
       setIFlete(docData.flete);
       setIIva(docData.iva);
       setINeto(docData.neto);
@@ -453,52 +455,24 @@ const RRevisionDocumentos = () => {
       setITotal(docData.total);
       setITipoDoc("Nota de crédito");
       setIUsuarioIngreso(docData.ingresoUsuario);
-      if (docData.fechaIngreso) {
-        setIFechaIngreso(
-          docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
-        );
-      } else {
-        setIFechaIngreso("");
-      }
-
+      setIFechaIngreso(toDateString(docData.fechaIngreso));
       setIUsuarioPago(docData.pagoUsuario);
-      if (docData.fechaPago) {
-        setIFechaPago(
-          docData.fechaPago.toDate().toLocaleDateString('es-CL')
-        );
-      } else {
-        setIFechaPago("");
-      }
-
+      setIFechaPago(toDateString(docData.fechaPago));
       setSeObtuvoTipo(true);
     }
 
-    if(tipoDoc == "boletas"){
+    // Boleta
+    if(tipoDoc === "boletas"){
       setIEstado(docData.estado);
-      if (docData.fechaE) {
-        setIFechaE(docData.fechaE.toDate());
-      } else {
-        setIFechaE(null);
-      }
+      setIFechaE(toDate(docData.fechaE));
       setIIva(docData.iva);
       setINeto(docData.neto);
       setINumeroDoc(docData.numeroDoc);
       setITotal(docData.total);
       setITipoDoc("Boleta");
       setIUsuarioIngreso(docData.ingresoUsuario);
-      if (docData.fechaIngreso) {
-        setIFechaIngreso(
-          docData.fechaIngreso.toDate().toLocaleDateString('es-CL')
-        );
-      } else {
-        setIFechaIngreso("");
-      }
-
+      setIFechaIngreso(toDateString(docData.fechaIngreso));
       setSeObtuvoTipo(true);
-    }
-
-    if (!(seObtuvoTipo)){
-      setErrorModal("Error - No se pudo obtener el tipo de documento");
     }
   };
 
@@ -536,13 +510,10 @@ const RRevisionDocumentos = () => {
     handleResetParams();
 
     try {
-      setLoadingModal(true);
-      handleResetParams();
       const docRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
       const docSnap = await getDoc(docRef);
 
       if(!docSnap.exists()){
-        console.warn("Error obteniendo documento en la base de datos");
         setErrorModal("Error obteniendo documento en la base de datos");
         setLoadingModal(false);
         return;
@@ -550,26 +521,28 @@ const RRevisionDocumentos = () => {
 
       const docData = docSnap.data();
 
-      if((tipoDoc == "facturas" && docData.estado !== "pagado") || (tipoDoc == "notasCredito" && docData.estado !== "pagado") || (tipoDoc == "boletas")){
-        console.log("es modificable");
+      // Solo permitir editar documentos no pagados (excepto boletas que siempre son pagadas)
+      const puedeEditar =
+        (tipoDoc === "facturas" && docData.estado !== "pagado") ||
+        (tipoDoc === "facturasExentas" && docData.estado !== "pagado") ||
+        (tipoDoc === "notasCredito" && docData.estado !== "pagado") ||
+        tipoDoc === "boletas";
+
+      if(puedeEditar){
         handleSetParams(docData, tipoDoc);
-        if(seObtuvoTipo){
-          setCambioValoresEdit(true);
-          setDeleteInfo({ rut, tipoDoc, numeroDoc });
-          setEditarModal(true);
-          setLoadingModal(false);
-        } 
-      }
-      else{
+        setCambioValoresEdit(true);
+        setDeleteInfo({ rut, tipoDoc, numeroDoc });
+        setCurrentDocRut(rut);
+        setCurrentDocTipo(tipoDoc);
+        setEditarModal(true);
+      } else {
         setErrorModal("El documento no se puede modificar ya que tiene egreso.");
-        setLoadingModal(false);
       }
+      setLoadingModal(false);
     } catch (error) {
       console.error("Error obteniendo información de documento:", error);
       setLoadingModal(false);
     }
-    
-    setLoadingModal(false);
   };
 
   const handleResetParams = () => {
@@ -589,6 +562,121 @@ const RRevisionDocumentos = () => {
     setIAbonoNc("");
     setITotalDescontado("");
     setINumeroDocNc("");
+    setCurrentDocRut("");
+    setCurrentDocTipo("");
+  };
+
+  // Confirmar edición del documento
+  const handleConfirmarEdicion = async () => {
+    const { rut, tipoDoc, numeroDoc } = deleteInfo;
+
+    try {
+      setLoadingModal(true);
+
+      // Verificar si cambió el número de documento
+      const numeroDocCambio = String(iNumeroDocNuevo) !== String(iNumeroDoc);
+
+      if (numeroDocCambio) {
+        // Verificar que el nuevo número no exista
+        const nuevoDocRef = doc(db, "empresas", String(rut), String(tipoDoc), String(iNumeroDocNuevo));
+        const nuevoDocSnap = await getDoc(nuevoDocRef);
+
+        if (nuevoDocSnap.exists()) {
+          setLoadingModal(false);
+          setErrorModal("Ya existe un documento con ese número");
+          return;
+        }
+      }
+
+      // Preparar datos actualizados
+      const datosActualizados = {
+        numeroDoc: iNumeroDocNuevo,
+        fechaE: iFechaENuevo,
+        neto: Number(iNetoNuevo) || 0,
+        flete: Number(iFleteNuevo) || 0,
+        retencion: Number(iRetencionNuevo) || 0,
+        otros: Number(iOtrosNuevo) || 0,
+        total: Number(iTotalNuevo) || 0
+      };
+
+      // Solo agregar IVA si no es factura exenta
+      if (tipoDoc !== "facturasExentas") {
+        datosActualizados.iva = Number(iIvaNuevo) || 0;
+      }
+
+      // Solo agregar fechaV si existe (para documentos a crédito)
+      if (iFechaVNuevo) {
+        datosActualizados.fechaV = iFechaVNuevo;
+      }
+
+      if (numeroDocCambio) {
+        // Si cambió el número, crear nuevo doc y eliminar el antiguo
+        const docRefAntiguo = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+        const docSnapAntiguo = await getDoc(docRefAntiguo);
+
+        if (docSnapAntiguo.exists()) {
+          const datosOriginales = docSnapAntiguo.data();
+          const nuevoDocRef = doc(db, "empresas", String(rut), String(tipoDoc), String(iNumeroDocNuevo));
+
+          // Combinar datos originales con actualizados
+          await setDoc(nuevoDocRef, { ...datosOriginales, ...datosActualizados });
+          await deleteDoc(docRefAntiguo);
+
+          // Si es una nota de crédito, actualizar la referencia en la factura asociada
+          if (tipoDoc === "notasCredito" && datosOriginales.numeroDocNc) {
+            const tipoFactura = datosOriginales.tipoFacturaAsociada || "facturas";
+            const facturaRef = doc(db, "empresas", String(rut), tipoFactura, String(datosOriginales.numeroDocNc));
+            const facturaSnap = await getDoc(facturaRef);
+
+            if (facturaSnap.exists()) {
+              const facturaData = facturaSnap.data();
+              if (Array.isArray(facturaData.notasCredito)) {
+                const nuevasNotas = facturaData.notasCredito.map(nc => {
+                  const ncNum = typeof nc === "object" ? nc.numeroDoc : nc;
+                  if (String(ncNum) === String(numeroDoc)) {
+                    return typeof nc === "object" ? { ...nc, numeroDoc: iNumeroDocNuevo } : iNumeroDocNuevo;
+                  }
+                  return nc;
+                });
+                await updateDoc(facturaRef, { notasCredito: nuevasNotas });
+              }
+            }
+          }
+
+          // Si es una factura con notas de crédito vinculadas, actualizar numeroDocNc en cada NC
+          if ((tipoDoc === "facturas" || tipoDoc === "facturasExentas") &&
+              Array.isArray(datosOriginales.notasCredito) &&
+              datosOriginales.notasCredito.length > 0) {
+            await Promise.all(
+              datosOriginales.notasCredito.map(async (nc) => {
+                const ncNumero = typeof nc === "object" ? nc.numeroDoc : nc;
+                if (!ncNumero) return;
+
+                const ncRef = doc(db, "empresas", String(rut), "notasCredito", String(ncNumero));
+                try {
+                  await updateDoc(ncRef, { numeroDocNc: iNumeroDocNuevo });
+                } catch (err) {
+                  console.warn(`No se pudo actualizar numeroDocNc en NC ${ncNumero}:`, err);
+                }
+              })
+            );
+          }
+        }
+      } else {
+        // Si no cambió el número, solo actualizar
+        const docRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+        await updateDoc(docRef, datosActualizados);
+      }
+
+      setLoadingModal(false);
+      setEditarModal(false);
+      setErrorModal("Documento actualizado correctamente");
+      handleBuscar();
+    } catch (error) {
+      console.error("Error actualizando documento:", error);
+      setLoadingModal(false);
+      setErrorModal("Error al actualizar el documento");
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -616,22 +704,58 @@ const RRevisionDocumentos = () => {
         return;
       }
   
-      // ⚡ Caso especial: si es una nota de crédito, eliminarla del array notasCredito de la factura asociada
+      // Caso especial: si es una nota de crédito, actualizar la factura asociada
       if (tipoDoc === "notasCredito" && docData.numeroDocNc) {
-        const facturaRef = doc(db, "empresas", String(rut), "facturas", String(docData.numeroDocNc));
-        const facturaSnap = await getDoc(facturaRef);
-  
+        // Buscar la factura en facturas o facturasExentas
+        const tipoFactura = docData.tipoFacturaAsociada || "facturas";
+        let facturaRef = doc(db, "empresas", String(rut), tipoFactura, String(docData.numeroDocNc));
+        let facturaSnap = await getDoc(facturaRef);
+
+        // Si no existe en el tipo guardado, buscar en el otro
+        if (!facturaSnap.exists() && tipoFactura === "facturas") {
+          facturaRef = doc(db, "empresas", String(rut), "facturasExentas", String(docData.numeroDocNc));
+          facturaSnap = await getDoc(facturaRef);
+        } else if (!facturaSnap.exists() && tipoFactura === "facturasExentas") {
+          facturaRef = doc(db, "empresas", String(rut), "facturas", String(docData.numeroDocNc));
+          facturaSnap = await getDoc(facturaRef);
+        }
+
         if (facturaSnap.exists()) {
           const facturaData = facturaSnap.data();
+
+          // Filtrar la nota de crédito del array
           if (Array.isArray(facturaData.notasCredito)) {
-            // Filtramos el número de la nota de crédito que estamos eliminando
             const nuevasNotas = facturaData.notasCredito.filter(
-              (nc) => nc.numeroDoc !== numeroDoc && nc !== numeroDoc
+              (nc) => {
+                const ncNum = typeof nc === "object" ? nc.numeroDoc : nc;
+                return String(ncNum) !== String(numeroDoc);
+              }
             );
-            await updateDoc(facturaRef, { notasCredito: nuevasNotas });
+
+            // Restar el total de la NC del abonoNc
+            const totalNc = Number(docData.total) || 0;
+            const nuevoAbonoNc = Math.max((facturaData.abonoNc || 0) - totalNc, 0);
+            const totalFactura = Number(facturaData.total) || 0;
+            const nuevoTotalDescontado = totalFactura - nuevoAbonoNc;
+
+            // Actualizar la factura
+            if (nuevasNotas.length === 0) {
+              // Si no quedan notas de crédito, eliminar los campos
+              await updateDoc(facturaRef, {
+                notasCredito: deleteField(),
+                abonoNc: deleteField(),
+                totalDescontado: deleteField()
+              });
+            } else {
+              await updateDoc(facturaRef, {
+                notasCredito: nuevasNotas,
+                abonoNc: nuevoAbonoNc,
+                totalDescontado: nuevoTotalDescontado
+              });
+            }
           }
         }
-      } //FALTA ELIMINAR/RESTAR EN ABONONC Y TOTALDESCONTADO
+      }
   
       // Eliminar documento normalmente
       await deleteDoc(docRef);
@@ -995,14 +1119,14 @@ const RRevisionDocumentos = () => {
             onChange={(e) => setFiltroFolio(e.target.value)}
           />
 
-          <TextButton 
-            text="Buscar" 
-            className="bg-white self-end hover:bg-white/60 active:bg-white/30 h-7 w-fit place-self-center px-5 py-5" 
+          <TextButton
+            text="Buscar"
+            className="bg-accent-blue text-white self-end hover:bg-blue-600 active:bg-blue-700 h-7 w-fit place-self-center px-5 py-5"
             classNameText="font-black"
             onClick={() => {
               handleBuscar();
               setLoadingModal(true);
-            }} 
+            }}
           />
         </div>
 
@@ -1012,17 +1136,15 @@ const RRevisionDocumentos = () => {
           content={
             <div>
               {/* Encabezado */}
-              <div className="flex items-center font-bold mb-2">
-                <div className="w-[20%] text-center text-sm">Tipo documento</div>
-                <div className="w-[10%] text-center text-sm">N° Folio</div>
-                <div className="w-[15%] text-center text-sm">Fecha emisión</div>
-                <div className="w-[15%] text-center text-sm">Fecha Vencimiento</div>
-                <div className="w-[20%] text-center text-sm">Monto</div>
-                <div className="w-[10%] text-center text-sm">Estado folio</div>
-                <div className="w-[10%] text-center text-sm"></div>
+              <div className="flex items-center font-semibold text-xs text-slate-300 mb-2 bg-white/5 rounded-lg py-2">
+                <div className="w-[17%] text-center">Tipo</div>
+                <div className="w-[10%] text-center">Folio</div>
+                <div className="w-[14%] text-center">Emisión</div>
+                <div className="w-[14%] text-center">Vencimiento</div>
+                <div className="w-[15%] text-center">Monto</div>
+                <div className="w-[12%] text-center">Estado</div>
+                <div className="w-[18%] text-center">Acciones</div>
               </div>
-
-              <hr className="mb-4" />
 
               {/* Contenido dinámico */}
               <div className="flex flex-col">
@@ -1036,58 +1158,66 @@ const RRevisionDocumentos = () => {
                     {empresa.documentos.map((doc) => (
                       <div
                         key={`${empresa.rut}-${doc.tipo}-${doc.id}`}
-                        className="flex items-center mb-1 border-b py-2"
+                        className="flex items-center py-2 hover:bg-white/5 rounded-lg border-b border-white/5"
                       >
-                        <div className="w-[20%] text-center text-sm px-2">
+                        <div className="w-[17%] text-center text-xs px-1">
                           {doc.tipo === "facturas"
-                            ? "Factura electrónica"
+                            ? "Fact. electrónica"
                             : doc.tipo === "facturasExentas"
-                            ? "Factura exenta"
+                            ? "Fact. exenta"
                             : doc.tipo === "boletas"
                             ? "Boleta"
                             : doc.tipo === "notasCredito"
-                            ? "Nota de crédito"
-                            : "Guía electrónica"}
+                            ? "Nota crédito"
+                            : "Guía elect."}
                         </div>
-                        <div className="w-[10%] text-center text-sm px-2">
+                        <div className="w-[10%] text-center text-xs font-medium">
                           {doc.numeroDoc ?? "-"}
                         </div>
-                        <div className="w-[15%] text-center text-sm px-2">
+                        <div className="w-[14%] text-center text-xs">
                           {doc.fechaE?.toDate ? doc.fechaE.toDate().toLocaleDateString("es-CL") : "-"}
                         </div>
-                        <div className="w-[15%] text-center text-sm px-2">
+                        <div className="w-[14%] text-center text-xs">
                           {doc.fechaV?.toDate ? doc.fechaV.toDate().toLocaleDateString("es-CL") : "-"}
                         </div>
-                        <div className="w-[20%] text-center text-sm px-2">
+                        <div className="w-[15%] text-center text-xs font-medium">
                           {doc.total != null ? `$${doc.total.toLocaleString("es-CL")}` : "-"}
                         </div>
-                        <div className="w-[10%] text-center text-sm px-2">
-                          {doc.estado ?? "-"}
+                        <div className="w-[12%] flex justify-center">
+                          <span className={`
+                            inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize
+                            ${doc.estado === "pagado"
+                              ? "bg-success/20 text-success"
+                              : doc.estado === "vencido"
+                              ? "bg-yellow-500/20 text-yellow-400"
+                              : "bg-slate-500/20 text-slate-400"}
+                          `}>
+                            {doc.estado ?? "-"}
+                          </span>
                         </div>
-                        <div className="w-[10%] flex justify-center gap-x-2">
-                          <ImgButton 
-                            src={searchIcon} 
-                            classNameImg="w-5" 
-                            className="flex-none" 
+                        <div className="w-[18%] flex justify-center gap-1">
+                          <ImgButton
+                            src={searchIcon}
+                            classNameImg="w-4"
+                            className="flex-none p-1"
                             onClick={() => handleRevisionDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
                             title="Detalles"
                           />
-                          <ImgButton 
-                            src={reportIcon} 
-                            classNameImg="w-5" 
-                            className="flex-none"
-                            onClick={() => handleGenerarPDF(empresa.rut, doc.numeroDoc, doc.tipo)} 
+                          <ImgButton
+                            src={reportIcon}
+                            classNameImg="w-4"
+                            className="flex-none p-1"
+                            onClick={() => handleGenerarPDF(empresa.rut, doc.numeroDoc, doc.tipo)}
                             title="Egreso"
                           />
-                          <ImgButton 
-                            src={configIcon} 
-                            classNameImg="w-5" 
-                            className="flex-none"
+                          <ImgButton
+                            src={configIcon}
+                            classNameImg="w-4"
+                            className="flex-none p-1"
                             title="Editar"
                             onClick={() => handleEditarDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
                           />
                         </div>
-                        
                       </div>
                     ))}
                   </div>
@@ -1123,7 +1253,7 @@ const RRevisionDocumentos = () => {
             <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
               <div className="flex justify-between gap-x-4">
                 <span>Fecha de emisión:</span>
-                <span>{iFechaE.toLocaleDateString('es-CL')}</span>
+                <span>{iFechaE ? iFechaE.toLocaleDateString('es-CL') : '-'}</span>
               </div>
 
               {iFechaV ? (
@@ -1131,7 +1261,7 @@ const RRevisionDocumentos = () => {
                   <span>Fecha de vencimiento:</span>
                   <span>{iFechaV.toLocaleDateString('es-CL')}</span>
                 </div>
-              ) : <div></div>}
+              ) : null}
 
               <div className="flex justify-between gap-x-4">
                 <span>Estado:</span>
@@ -1274,161 +1404,183 @@ const RRevisionDocumentos = () => {
       )}
 
       {editarModal && (
-        <Modal onClickOutside={() => setEditarModal(false)}
-        className="!absolute !top-24">
-          <p className="font-black text-3xl text-center">
-            {`Editar ${iTipoDoc} N°${iNumeroDoc}`}
+        <Modal
+          onClickOutside={() => setEditarModal(false)}
+          className="!absolute !top-20 !max-w-4xl"
+        >
+          <p className="font-black text-2xl text-center mb-4">
+            Editar {iTipoDoc} N°{iNumeroDoc}
           </p>
-          <div className="grid grid-cols-2 mt-4 gap-x-4">
-            <div className="flex flex-col">
-              <p className="text-center font-semibold">Editar parámetros de documento</p>
-              <div className="border-[12px] p-2 border-transparent rounded-xl bg-black/40 grid grid-cols-1 gap-y-4 max-h-96 overflow-y-scroll overflow-hidden scrollbar-custom">
-                <div>
-                  <Textfield 
-                    label="Número de documento: "
-                    value={iNumeroDocNuevo}
-                    onChange={
-                      (e) => {
-                        setINumeroDocNuevo(e.target.value);
-                        setNuevoChanged(!nuevoChanged);
-                    }}
-                    type="number"
-                  />
-                </div>
 
-                <div>
-                  <DatepickerField 
-                    label="Fecha de emisión: "
-                    selectedDate={iFechaENuevo}
-                    onChange={(datev) => {
-                      setIFechaENuevo(datev);
-                      setNuevoChanged(!nuevoChanged);
-                    }}
-                  />
-                </div>
+          <div className="grid grid-cols-2 gap-6">
+            {/* Columna izquierda - Campos editables */}
+            <div className="flex flex-col gap-4">
+              <p className="font-semibold text-lg border-b border-white/30 pb-2">
+                Datos del documento
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Textfield
+                  label="N° Documento"
+                  value={iNumeroDocNuevo}
+                  onChange={(e) => {
+                    setINumeroDocNuevo(e.target.value);
+                    setNuevoChanged(!nuevoChanged);
+                  }}
+                  type="number"
+                />
+
+                <DatepickerField
+                  label="Fecha de emisión"
+                  selectedDate={iFechaENuevo}
+                  onChange={(date) => {
+                    setIFechaENuevo(date);
+                    setNuevoChanged(!nuevoChanged);
+                  }}
+                />
 
                 {iFechaV && (
-                  <div>
-                    <DatepickerField 
-                      label="Fecha de vencimiento: "
-                      selectedDate={iFechaVNuevo}
-                      onChange={(datev) => {
-                        setIFechaVNuevo(datev);
-                        setNuevoChanged(!nuevoChanged);
-                      }}
-                    />
-                  </div>
+                  <DatepickerField
+                    label="Fecha vencimiento"
+                    selectedDate={iFechaVNuevo}
+                    onChange={(date) => {
+                      setIFechaVNuevo(date);
+                      setNuevoChanged(!nuevoChanged);
+                    }}
+                  />
                 )}
+              </div>
 
-                <div>
-                  <Textfield 
-                    label="Monto neto: "
-                    value={iNetoNuevo}
-                    onChange={(e) => {
-                      setINetoNuevo(e.target.value);
-                      setNuevoChanged(!nuevoChanged);
-                    }}
-                    currency
-                  />
-                </div>
+              <p className="font-semibold text-lg border-b border-white/30 pb-2 mt-2">
+                Montos
+              </p>
 
-                <div>
-                  <Textfield 
-                    label="Flete: "
-                    value={iFleteNuevo}
-                    onChange={(e) => {
-                      setIFleteNuevo(e.target.value);
-                      setNuevoChanged(!nuevoChanged);
-                    }}
-                    currency
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Textfield
+                  label="Neto"
+                  value={iNetoNuevo}
+                  onChange={(e) => {
+                    setINetoNuevo(e.target.value);
+                    setNuevoChanged(!nuevoChanged);
+                  }}
+                  currency
+                />
 
-                <div>
-                  <Textfield 
-                    label="Retención: "
-                    value={iRetencionNuevo}
-                    onChange={(e) => {
-                      setIRetencionNuevo(e.target.value);
-                      setNuevoChanged(!nuevoChanged);
-                    }}
-                    currency
-                  />
-                </div>
+                <Textfield
+                  label="Flete"
+                  value={iFleteNuevo}
+                  onChange={(e) => {
+                    setIFleteNuevo(e.target.value);
+                    setNuevoChanged(!nuevoChanged);
+                  }}
+                  currency
+                />
 
-                <div>
-                  <Textfield 
-                    label="IVA: "
+                <Textfield
+                  label="Retención"
+                  value={iRetencionNuevo}
+                  onChange={(e) => {
+                    setIRetencionNuevo(e.target.value);
+                    setNuevoChanged(!nuevoChanged);
+                  }}
+                  currency
+                />
+
+                <Textfield
+                  label="Otros impuestos"
+                  value={iOtrosNuevo}
+                  onChange={(e) => {
+                    setIOtrosNuevo(e.target.value);
+                    setNuevoChanged(!nuevoChanged);
+                  }}
+                  currency
+                />
+
+                {/* IVA solo para documentos que lo tienen */}
+                {iTipoDoc !== "Factura exenta" && (
+                  <Textfield
+                    label="IVA (19%)"
                     value={iIvaNuevo}
                     onChange={(e) => {
                       setIIvaNuevo(e.target.value);
                       setNuevoChanged(!nuevoChanged);
                     }}
                     currency
-                  />
-                </div>
-
-                <div>
-                  <Textfield 
-                    label="Otros impuestos: "
-                    value={iOtrosNuevo}
-                    onChange={(e) => {
-                      setIOtrosNuevo(e.target.value);
-                      setNuevoChanged(!nuevoChanged);
-                    }}
-                    currency
-                  />
-                </div>
-
-                <div>
-                  <Textfield 
-                    label="Total: "
-                    value={iTotalNuevo}
-                    onChange={(e) => {
-                      setITotalNuevo(e.target.value);
-                      setNuevoChanged(!nuevoChanged);
-                    }}
-                    currency
                     readOnly
                   />
-                </div>
-              </div>
+                )}
 
+                <Textfield
+                  label="Total"
+                  value={iTotalNuevo}
+                  currency
+                  readOnly
+                  classNameInput="font-bold bg-black/20"
+                />
+              </div>
             </div>
 
-            <div className="flex flex-col items-center">
-              <p className="text-center font-semibold">Configuración documento</p>
-              <div className="flex flex-col items-center gap-y-2 rounded-xl bg-black/40 p-2 h-full min-w-64">
-                {iTipoDoc === "Factura electrónica" && (
-                  <TextButton 
-                    text="Desvincular nota de crédito"
-                    className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center"
+            {/* Columna derecha - Acciones */}
+            <div className="flex flex-col">
+              <p className="font-semibold text-lg border-b border-white/30 pb-2 mb-4">
+                Acciones
+              </p>
+
+              <div className="flex flex-col gap-3 bg-black/20 rounded-xl p-4">
+                {/* Info sobre notas de crédito vinculadas */}
+                {iNotasCredito && iNotasCredito.length > 0 && iNotasCredito[0] !== "" && (
+                  <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-3 mb-2">
+                    <p className="text-sm font-semibold text-yellow-200">
+                      Notas de crédito asociadas: {iNotasCredito.length}
+                    </p>
+                    <p className="text-xs text-yellow-100/80 mt-1">
+                      Este documento tiene notas de crédito vinculadas
+                    </p>
+                  </div>
+                )}
+
+                {/* Botón desvincular NC - solo para facturas con NC */}
+                {(iTipoDoc === "Factura electrónica" || iTipoDoc === "Factura exenta") &&
+                  iNotasCredito && iNotasCredito.length > 0 && iNotasCredito[0] !== "" && (
+                  <TextButton
+                    text="Desvincular notas de crédito"
+                    className="bg-accent-blue text-white font-semibold hover:bg-blue-600 active:bg-blue-700 w-full justify-center py-3 rounded-lg"
                     onClick={() => {
                       setVincularNumeroDoc("");
                       setVincularTipoDoc("Factura electrónica");
-                      setVincularSinEliminar(true); // 🟢 Nueva bandera para distinguir este modo
+                      setVincularSinEliminar(true);
                       setVincularModal(true);
                     }}
                   />
                 )}
-                
-                <TextButton 
-                  text="Eliminar documento" 
-                  className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center"
-                  onClick={() => setConfirmDeleteModal(true)} 
+
+                <TextButton
+                  text="Eliminar documento"
+                  className="bg-danger text-white font-semibold hover:bg-danger-hover active:bg-danger-active w-full justify-center py-3 rounded-lg"
+                  onClick={() => setConfirmDeleteModal(true)}
                 />
-                <TextButton 
-                  text="Confirmar edición"
+
+                <div className="flex-grow" />
+
+                <TextButton
+                  text={confirmarEdicion ? "Guardar cambios" : "Sin cambios"}
                   disabled={!confirmarEdicion}
-                  className="bg-white text-black font-black hover:bg-white/50 active:bg-white/20  w-[95%] justify-center mt-auto mb-2"
+                  className={`font-semibold w-full justify-center py-3 mt-4 rounded-lg ${
+                    confirmarEdicion
+                      ? "bg-success text-white hover:bg-success-hover active:bg-success-active"
+                      : "bg-slate-600 text-slate-400 cursor-not-allowed"
+                  }`}
+                  onClick={confirmarEdicion ? handleConfirmarEdicion : undefined}
+                />
+
+                <TextButton
+                  text="Cancelar"
+                  className="bg-slate-600 text-white font-semibold hover:bg-slate-500 active:bg-slate-700 w-full justify-center py-2 rounded-lg"
+                  onClick={() => setEditarModal(false)}
                 />
               </div>
-              
             </div>
-            
           </div>
-          
-          
         </Modal>
       )}
 
@@ -1439,14 +1591,14 @@ const RRevisionDocumentos = () => {
               ¿Está seguro que desea eliminar la {iTipoDoc} N° {iNumeroDoc}?
             </p>
             <div className="flex gap-24">
-              <TextButton 
-                text="Cancelar" 
-                className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center px-4 rounded-3xl"
-                onClick={() => setConfirmDeleteModal(false)} 
+              <TextButton
+                text="Cancelar"
+                className="bg-slate-600 text-white font-black m-2 hover:bg-slate-500 active:bg-slate-700 w-[95%] justify-center px-4 rounded-3xl"
+                onClick={() => setConfirmDeleteModal(false)}
               />
-              <TextButton 
-                text="Confirmar" 
-                className="bg-white text-black font-black m-2 hover:bg-red-400 active:bg-red-600 w-[95%] justify-center px-4 rounded-3xl"
+              <TextButton
+                text="Confirmar"
+                className="bg-danger text-white font-black m-2 hover:bg-danger-hover active:bg-danger-active w-[95%] justify-center px-4 rounded-3xl"
                 onClick={handleConfirmDelete}
               />
             </div>
@@ -1478,13 +1630,13 @@ const RRevisionDocumentos = () => {
             <div className="flex gap-4 mt-4 w-full">
               <TextButton
                 text="Cancelar"
-                className="bg-white text-black font-black m-2 hover:bg-white/50 active:bg-white/20 w-[95%] justify-center py-7 rounded-3xl"
+                className="bg-slate-600 text-white font-black m-2 hover:bg-slate-500 active:bg-slate-700 w-[95%] justify-center py-7 rounded-3xl"
                 onClick={() => setHasNotasCreditoModal(false)}
               />
 
               <TextButton
                 text="Eliminar Notas de crédito"
-                className="bg-white text-black font-black m-2 hover:bg-red-300 active:bg-red-500 w-[95%] justify-center py-7 rounded-3xl"
+                className="bg-danger text-white font-black m-2 hover:bg-danger-hover active:bg-danger-active w-[95%] justify-center py-7 rounded-3xl"
                 onClick={async () => {
                   // llama función que elimina factura + notas
                   await handleEliminarConNotasCredito();
@@ -1493,7 +1645,7 @@ const RRevisionDocumentos = () => {
 
               <TextButton
                 text="Vincular a otro documento y eliminar"
-                className="bg-white text-black font-black m-2 hover:bg-blue-300 active:bg-blue-500 w-[95%] justify-center py-7 rounded-3xl"
+                className="bg-accent-blue text-white font-black m-2 hover:bg-blue-600 active:bg-blue-700 w-[95%] justify-center py-7 rounded-3xl"
                 onClick={() => {
                   setHasNotasCreditoModal(false);
                   setVincularNumeroDoc("");
@@ -1537,20 +1689,20 @@ const RRevisionDocumentos = () => {
             <div className="flex gap-3 mt-4">
               <TextButton
                 text="Cancelar"
-                className="bg-white text-black font-black m-2 hover:bg-red-300 active:bg-red-500 w-[95%] justify-center rounded-3xl"
+                className="bg-slate-600 text-white font-black m-2 hover:bg-slate-500 active:bg-slate-700 w-[95%] justify-center rounded-3xl py-2"
                 onClick={() => {
                   setVincularModal(false);
-                  setVincularSinEliminar(false); // ← reseteamos modo “sin eliminar”
+                  setVincularSinEliminar(false);
                 }}
               />
               <TextButton
                 text="Confirmar"
-                className="bg-white text-black font-black m-2 hover:bg-green-300 active:bg-green-500 w-[95%] justify-center rounded-3xl"
+                className="bg-success text-white font-black m-2 hover:bg-success-hover active:bg-success-active w-[95%] justify-center rounded-3xl py-2"
                 onClick={async () => {
                   if (vincularSinEliminar) {
-                    await handleVincularSinEliminarNotasCredito(); // 🟢 Nueva función
+                    await handleVincularSinEliminarNotasCredito();
                   } else {
-                    await handleVincularNotasCredito(); // comportamiento anterior
+                    await handleVincularNotasCredito();
                   }
                 }}
               />
@@ -1560,23 +1712,15 @@ const RRevisionDocumentos = () => {
       )}
 
 
-      {errorModal && (
-        <Modal onClickOutside={() => setErrorModal("")}>
-            <div className="flex flex-col items-center gap-4 p-4">
-                <p className="text-red-300 font-bold">{errorModal}</p>
-                <YButton
-                    text="Cerrar"
-                    onClick={() => setErrorModal("")}
-                />
-            </div>
-        </Modal>
-      )}
+      <AlertModal
+        isOpen={!!errorModal}
+        onClose={() => setErrorModal("")}
+        title={errorModal.includes("Error") ? "Error" : "Aviso"}
+        message={errorModal}
+        variant={errorModal.includes("Error") ? "error" : errorModal.includes("correctamente") ? "success" : "info"}
+      />
 
-      {loadingModal && (
-            <Modal>
-                <p className="font-black">Cargando</p>
-            </Modal>
-      )}
+      <LoadingModal isOpen={loadingModal} message="Cargando..." />
 
       {/* Footer fijo */}
       <div className="absolute bottom-0 left-0 w-full z-10">
@@ -1589,10 +1733,20 @@ const RRevisionDocumentos = () => {
 export default RRevisionDocumentos;
 
 function toDate(value) {
+  if (!value) return null;
   if (value instanceof Date) return value;
+  // Firestore Timestamp
+  if (value?.toDate && typeof value.toDate === 'function') {
+    return value.toDate();
+  }
   if (typeof value === "string" || typeof value === "number") {
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
   }
   return null;
+}
+
+function toDateString(value) {
+  const date = toDate(value);
+  return date ? date.toLocaleDateString('es-CL') : "";
 }

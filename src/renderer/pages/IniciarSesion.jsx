@@ -41,7 +41,6 @@ const IniciarSesion = () => {
                     await updateDoc(facturaRef, {
                     estado: "vencido",
                     });
-                    console.log(`Factura ${factura.id} actualizada a vencido`);
                 }
                 }
             }

@@ -7,15 +7,13 @@ import { VolverButton, YButton, TextButton, XButton } from "../../components/But
 import { DropdownMenu, DropdownMenuList } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { SearchBar } from "../../components/Textfield";
-import { Modal } from "../../components/modal";
+import { Modal, LoadingModal } from "../../components/modal";
 
 import { doc, updateDoc, setDoc, getDoc, getDocs, where, query, collection, onSnapshot, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 
 import { formatRUT, cleanRUT } from "../../utils/formatRUT";
 import { formatCLP } from "../../utils/formatCurrency";
-
-import jsPDF from "jspdf";
 import { generarPDF } from "../../utils/generarPDF";
 
 import { getAuth } from "firebase/auth";
@@ -72,132 +70,174 @@ const RProcesar = () => {
     const[loadingModal, setLoadingModal] = useState(false);
     const[procesarModal, setProcesarModal] = useState(false);
 
-    //OBTENCION DE DOCUMENTOS PARA EMPRESA SELECCIONADA
+    // OBTENCIÓN DE DOCUMENTOS PARA EMPRESA SELECCIONADA
     useEffect(() => {
         const handleRecibirDocs = async () => {
-          if (!giroRut) return; // no hay empresa seleccionada todavía
-      
+          if (!giroRut) return;
+
           try {
             setLoadingModal(true);
+
+            // Facturas electrónicas a crédito no pagadas
             const facturasRef = collection(db, "empresas", String(giroRut), "facturas");
-            const facturasQuery = query(facturasRef, where("formaPago", "==", "Crédito"), where("estado", "in", ["pendiente", "vencido"])); // Facturas crédito no pagadas
-            const notasCreditoRef = collection(db, "empresas", String(giroRut), "notasCredito");
-      
+            const facturasQuery = query(
+              facturasRef,
+              where("formaPago", "==", "Crédito"),
+              where("estado", "in", ["pendiente", "vencido"])
+            );
             const facturasSnap = await getDocs(facturasQuery);
+
+            // Facturas exentas a crédito no pagadas
+            const facturasExentasRef = collection(db, "empresas", String(giroRut), "facturasExentas");
+            const facturasExentasQuery = query(
+              facturasExentasRef,
+              where("formaPago", "==", "Crédito"),
+              where("estado", "in", ["pendiente", "vencido"])
+            );
+            const facturasExentasSnap = await getDocs(facturasExentasQuery);
+
+            // Notas de crédito
+            const notasCreditoRef = collection(db, "empresas", String(giroRut), "notasCredito");
             const notasCreditoSnap = await getDocs(notasCreditoRef);
-      
-            // Mapeo de facturas
-            let fact = facturasSnap.docs.map((doc) => ({
-              id: doc.id,
-              giroRut: giroRut, // agregar giroRut
-              ...doc.data(),
+
+            // Mapear facturas electrónicas
+            let factElec = facturasSnap.docs.map((docSnap) => ({
+              id: docSnap.id,
+              giroRut: giroRut,
+              tipoDoc: "facturas",
+              tipoDocLabel: "Factura electrónica",
+              ...docSnap.data(),
             }));
-      
-            // Filtrar facturas que ya están en documentosAgregados
-            fact = fact.filter(
+
+            // Mapear facturas exentas
+            let factExentas = facturasExentasSnap.docs.map((docSnap) => ({
+              id: docSnap.id,
+              giroRut: giroRut,
+              tipoDoc: "facturasExentas",
+              tipoDocLabel: "Factura exenta",
+              ...docSnap.data(),
+            }));
+
+            // Combinar todas las facturas
+            let todasFacturas = [...factElec, ...factExentas];
+
+            // Filtrar las que ya están en documentosAgregados
+            todasFacturas = todasFacturas.filter(
               (f) =>
                 !documentosAgregados.some(
-                  (d) => d.numeroDoc === f.numeroDoc && d.giroRut === f.giroRut
+                  (d) => d.numeroDoc === f.numeroDoc && d.giroRut === f.giroRut && d.tipoDoc === f.tipoDoc
                 )
             );
-      
-            const NC = notasCreditoSnap.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
+
+            const NC = notasCreditoSnap.docs.map((docSnap) => ({
+              id: docSnap.id,
+              ...docSnap.data(),
             }));
-      
-            setFacturas(fact);
+
+            setFacturas(todasFacturas);
             setNotasCredito(NC);
             setLoadingModal(false);
-            //console.log("Facturas filtradas:", fact);
-            //console.log("Notas de Crédito:", NC);
-            console.log("documentos agregados: ",documentosAgregados);
           } catch (error) {
             console.error("Error al traer documentos:", error);
+            setLoadingModal(false);
           }
         };
-      
+
         handleRecibirDocs();
-      }, [giroRut]); //,documentosAgregados
+      }, [giroRut]);
 
       const handleProcesarDocs = async () => {
         try {
           setLoadingModal(true);
           const fechaActual = new Date();
-      
-          // 1. Agrupar facturas por rut empresa
-          const facturasPorEmpresa = {};
+
+          // 1. Agrupar documentos por rut y tipo
+          const docsPorEmpresa = {};
           documentosAgregados.forEach((docAgregado) => {
-            if (!facturasPorEmpresa[docAgregado.giroRut]) {
-              facturasPorEmpresa[docAgregado.giroRut] = [];
+            const key = docAgregado.giroRut;
+            if (!docsPorEmpresa[key]) {
+              docsPorEmpresa[key] = [];
             }
-            facturasPorEmpresa[docAgregado.giroRut].push(docAgregado.numeroDoc);
+            docsPorEmpresa[key].push({
+              numeroDoc: docAgregado.numeroDoc,
+              tipoDoc: docAgregado.tipoDoc || "facturas"
+            });
           });
-      
-          // 2. Actualizar estado de facturas a "pagado" y sus notas de crédito asociadas también
+
+          // 2. Actualizar estado de documentos a "pagado" y sus notas de crédito
           await Promise.all(
             documentosAgregados.map(async (docAgregado) => {
-              const { giroRut, numeroDoc } = docAgregado;
-      
-              const facturaRef = doc(db, "empresas", String(giroRut), "facturas", String(numeroDoc));
-              await updateDoc(facturaRef, { estado: "pagado", pagoUsuario: userId, fechaPago : fechaActual});
-      
-              // Leer la factura para ver si tiene notas de crédito asociadas
-              const facturaSnap = await getDoc(facturaRef);
-              if (facturaSnap.exists()) {
-                const facturaData = facturaSnap.data();
-                if (facturaData.notasCredito && facturaData.notasCredito.length > 0) {
-                  // Marcar todas las NC asociadas como "pagado"
+              const { giroRut, numeroDoc, tipoDoc = "facturas" } = docAgregado;
+
+              const docRef = doc(db, "empresas", String(giroRut), tipoDoc, String(numeroDoc));
+              await updateDoc(docRef, {
+                estado: "pagado",
+                pagoUsuario: userId,
+                fechaPago: fechaActual
+              });
+
+              // Leer el documento para ver si tiene notas de crédito asociadas
+              const docSnap = await getDoc(docRef);
+              if (docSnap.exists()) {
+                const docData = docSnap.data();
+                if (docData.notasCredito && docData.notasCredito.length > 0) {
                   await Promise.all(
-                    facturaData.notasCredito.map(async (ncNum) => {
-                      const ncRef = doc(db, "empresas", String(giroRut), "notasCredito", String(ncNum));
-                      await updateDoc(ncRef, { estado: "pagado", pagoUsuario: userId, fechaPago : fechaActual });
+                    docData.notasCredito.map(async (ncNum) => {
+                      const ncNumero = typeof ncNum === "object" ? ncNum.numeroDoc : ncNum;
+                      const ncRef = doc(db, "empresas", String(giroRut), "notasCredito", String(ncNumero));
+                      await updateDoc(ncRef, {
+                        estado: "pagado",
+                        pagoUsuario: userId,
+                        fechaPago: fechaActual
+                      });
                     })
                   );
                 }
               }
             })
           );
-      
+
           // 3. Obtener el nuevo número de egreso
           const numeroEgreso = await generarNumeroEgreso();
-      
+
           // 4. Crear documento en pago_recepcion
           const pagoRef = doc(db, "pago_recepcion", String(numeroEgreso));
           await setDoc(pagoRef, {
             numeroEgreso,
-            fecha: new Date(),
+            fecha: fechaActual,
             totalEgreso: totalDocumentos,
             facturas: await Promise.all(
-              Object.entries(facturasPorEmpresa).map(async ([rut, facturas]) => {
+              Object.entries(docsPorEmpresa).map(async ([rut, docs]) => {
                 const facturasConNotas = await Promise.all(
-                  facturas.map(async (facturaNum) => {
-                    const facturaRef = doc(db, "empresas", rut, "facturas", facturaNum);
-                    const facturaSnap = await getDoc(facturaRef);
-                    if (!facturaSnap.exists()) return null;
-                    const facturaData = facturaSnap.data();
-      
+                  docs.map(async ({ numeroDoc, tipoDoc }) => {
+                    const docRef = doc(db, "empresas", rut, tipoDoc, numeroDoc);
+                    const docSnap = await getDoc(docRef);
+                    if (!docSnap.exists()) return null;
+                    const docData = docSnap.data();
+
                     let notasCreditoDetalle = [];
-                    if (facturaData.notasCredito && facturaData.notasCredito.length > 0) {
+                    if (docData.notasCredito && docData.notasCredito.length > 0) {
                       notasCreditoDetalle = await Promise.all(
-                        facturaData.notasCredito.map(async (ncNum) => {
-                          const ncRef = doc(db, "empresas", rut, "notasCredito", ncNum);
+                        docData.notasCredito.map(async (ncNum) => {
+                          const ncNumero = typeof ncNum === "object" ? ncNum.numeroDoc : ncNum;
+                          const ncRef = doc(db, "empresas", rut, "notasCredito", ncNumero);
                           const ncSnap = await getDoc(ncRef);
                           return ncSnap.exists() ? ncSnap.data() : null;
                         })
                       );
                     }
-      
+
                     return {
-                      numeroDoc: facturaData.numeroDoc,
-                      total: facturaData.total,
-                      totalDescontado: facturaData.totalDescontado ?? facturaData.total,
-                      abonoNc: facturaData.abonoNc ?? 0,
+                      numeroDoc: docData.numeroDoc,
+                      tipoDoc,
+                      total: docData.total,
+                      totalDescontado: docData.totalDescontado ?? docData.total,
+                      abonoNc: docData.abonoNc ?? 0,
                       notasCredito: notasCreditoDetalle.filter(Boolean),
                     };
                   })
                 );
-      
+
                 return {
                   rut,
                   facturas: facturasConNotas.filter(Boolean),
@@ -205,25 +245,30 @@ const RProcesar = () => {
               })
             ),
           });
-      
-          // 5. Generar PDF
+
+          // 5. Generar PDF (usando solo números de documento para compatibilidad)
           generarPDF(
             numeroEgreso,
-            Object.entries(facturasPorEmpresa).map(([rut, facturas]) => ({
+            Object.entries(docsPorEmpresa).map(([rut, docs]) => ({
               rut,
-              facturas,
+              facturas: docs.map(d => d.numeroDoc),
             })),
             totalDocumentos
           );
-      
-          console.log("Pago registrado correctamente");
+
           setProcesarModal(false);
           setDocumentosAgregados([]);
+          setFacturas([]);
           setLoadingModal(false);
         } catch (error) {
           console.error("Error al procesar documentos", error);
           setLoadingModal(false);
         }
+      };
+
+      // Limpiar todos los documentos agregados
+      const handleBorrarDocumentos = () => {
+        setDocumentosAgregados([]);
       };
 
       const generarNumeroEgreso = async () => {
@@ -277,53 +322,79 @@ const RProcesar = () => {
                 </div>
 
                 {/* Tabla dinámica */}
-                <Card   
-                    hasButton={false} 
+                <Card
+                    hasButton={false}
                     contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
                     content={
                         <div>
                             {/* Encabezados */}
                             <div className="flex justify-between font-bold mb-2">
-                                <div className="w-1/4 text-center">Número de documento</div>
-                                <div className="w-1/4 text-center">Fecha de vencimiento</div>
-                                <div className="w-1/4 text-center">Estado</div>
-                                <div className="w-1/4 text-center">Monto</div>
-                                <div className="mr-10"></div>
+                                <div className="w-[20%] text-center text-sm">Tipo</div>
+                                <div className="w-[15%] text-center text-sm">N° Doc</div>
+                                <div className="w-[20%] text-center text-sm">F. Vencimiento</div>
+                                <div className="w-[15%] text-center text-sm">Estado</div>
+                                <div className="w-[20%] text-center text-sm">Monto</div>
+                                <div className="w-[10%]"></div>
                             </div>
                             <hr className="mb-4" />
+
                             {/* Filas dinámicas */}
                             {facturas.map((row, index) => (
-                                <div key={index} className="flex justify-between mb-2">
-                                    <div className="w-1/3 text-center">{row.numeroDoc}</div>
-                                    <div className="w-1/3 text-center">{row.fechaV ? new Date(row.fechaV.seconds * 1000).toLocaleDateString() : ""}</div>
-                                    <div className="w-1/3 text-center">{row.estado}</div>
-                                    <div className="w-1/3 text-center">{formatCLP(row.totalDescontado ?? row.total)}</div>
-                                    <TextButton 
-                                        className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3"
-                                        text="+"
-                                        onClick={() => {
-                                                // Agregar a documentosAgregados
+                                <div key={`${row.tipoDoc}-${row.numeroDoc}-${index}`} className="flex justify-between mb-2 items-center">
+                                    <div className="w-[20%] text-center text-xs">
+                                        {row.tipoDocLabel || "Factura"}
+                                    </div>
+                                    <div className="w-[15%] text-center text-sm">{row.numeroDoc}</div>
+                                    <div className="w-[20%] text-center text-sm">
+                                        {row.fechaV?.toDate
+                                            ? row.fechaV.toDate().toLocaleDateString("es-CL")
+                                            : row.fechaV?.seconds
+                                            ? new Date(row.fechaV.seconds * 1000).toLocaleDateString("es-CL")
+                                            : "-"}
+                                    </div>
+                                    <div className={`w-[15%] text-center text-sm ${row.estado === "vencido" ? "text-red-400" : ""}`}>
+                                        {row.estado}
+                                    </div>
+                                    <div className="w-[20%] text-center text-sm">
+                                        {formatCLP(row.totalDescontado ?? row.total)}
+                                    </div>
+                                    <div className="w-[10%] flex justify-center">
+                                        <TextButton
+                                            className="py-0 my-0 h-6 w-6 px-0 bg-success text-white font-black hover:bg-success-hover active:bg-success-active rounded-md flex items-center justify-center"
+                                            text="+"
+                                            onClick={() => {
                                                 setDocumentosAgregados((prev) => [
-                                                ...prev,
-                                                {
-                                                    numeroDoc: row.numeroDoc,
-                                                    giroRut: giroRut,
-                                                    total: (row.totalDescontado ?? row.total),
-                                                }
+                                                    ...prev,
+                                                    {
+                                                        numeroDoc: row.numeroDoc,
+                                                        giroRut: row.giroRut || giroRut,
+                                                        tipoDoc: row.tipoDoc || "facturas",
+                                                        tipoDocLabel: row.tipoDocLabel || "Factura electrónica",
+                                                        total: row.totalDescontado ?? row.total,
+                                                    }
                                                 ]);
-
-                                                // Eliminar la fila actual de facturas
-                                                setFacturas((prev) => prev.filter((f) => f.numeroDoc !== row.numeroDoc));
-                                            }
-                                         }
-                                    />
+                                                setFacturas((prev) =>
+                                                    prev.filter((f) =>
+                                                        !(f.numeroDoc === row.numeroDoc && f.tipoDoc === row.tipoDoc)
+                                                    )
+                                                );
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             ))}
 
-                            {/* Si no hay filas */}
-                            {rows.length === 0 && (
+                            {/* Si no hay facturas */}
+                            {facturas.length === 0 && giroRut && (
                                 <div className="text-center text-gray-400 mt-4">
-                                    No hay documentos ingresados
+                                    No hay documentos pendientes de pago
+                                </div>
+                            )}
+
+                            {/* Si no hay empresa seleccionada */}
+                            {!giroRut && (
+                                <div className="text-center text-gray-400 mt-4">
+                                    Seleccione una empresa para ver sus documentos
                                 </div>
                             )}
                         </div>
@@ -331,64 +402,80 @@ const RProcesar = () => {
                 />
                 <hr className="my-4 border-transparent" />
                 <div className="flex gap-4 justify-between">
-                    <Card   
-                        hasButton={false} 
+                    <Card
+                        hasButton={false}
                         contentClassName="h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
                         className="min-w-[60%]"
                         content={
                             <div>
                                 {/* Encabezados */}
                                 <div className="text-center font-bold mb-2 px-0">
-                                    Documentos agregados
+                                    Documentos agregados ({documentosAgregados.length})
                                 </div>
                                 <hr className="mb-4" />
-                                
+
+                                {/* Encabezados de columna */}
+                                {documentosAgregados.length > 0 && (
+                                    <div className="flex justify-between font-semibold text-sm mb-2">
+                                        <div className="w-[25%] text-center">RUT</div>
+                                        <div className="w-[25%] text-center">Tipo</div>
+                                        <div className="w-[15%] text-center">N° Doc</div>
+                                        <div className="w-[25%] text-center">Monto</div>
+                                        <div className="w-[10%]"></div>
+                                    </div>
+                                )}
+
                                 {/* Filas dinámicas */}
                                 {documentosAgregados.map((row, index) => (
-                                    <div key={index} className="flex justify-between mb-2">
-                                        <div className="w-1/3 text-center">{formatRUT(row.giroRut)}</div>
-                                        <div className="w-1/3 text-center">{row.numeroDoc}</div>
-                                        <div className="w-1/3 text-center">{formatCLP(row.total)}</div>
-                                        <TextButton 
-                                        className="py-0 my-0 h-6 bg-white text-black font-black hover:bg-white/70 active:bg-white/50 mr-3"
-                                        text="-"
-                                        onClick={async () => {
-                                            // Eliminar solo el documento correcto de documentosAgregados
-                                            setDocumentosAgregados((prev) =>
-                                              prev.filter((f) => !(f.numeroDoc === row.numeroDoc && f.giroRut === row.giroRut))
-                                            );
-                                          
-                                            // Solo actualizar facturas si coincide con la empresa seleccionada
-                                            if (row.giroRut === giroRut) {
-                                              try {
-                                                const docRef = doc(db, "empresas", String(row.giroRut), "facturas", row.numeroDoc);
-                                                const docSnap = await getDoc(docRef);
-                                          
-                                                if (docSnap.exists()) {
-                                                  const facturaData = {
-                                                    id: docSnap.id,
-                                                    giroRut: row.giroRut,
-                                                    ...docSnap.data()
-                                                  };
-                                          
-                                                  setFacturas((prev) => [...prev, facturaData]);
-                                                } else {
-                                                  console.warn("No se encontró el documento en Firestore:", row.numeroDoc);
-                                                }
-                                              } catch (error) {
-                                                console.error("Error al recuperar documento de Firestore:", error);
-                                              }
-                                            }
-                                          }}
-                                          
-                                    />
+                                    <div key={`${row.tipoDoc}-${row.numeroDoc}-${row.giroRut}-${index}`} className="flex justify-between mb-2 items-center">
+                                        <div className="w-[25%] text-center text-sm">{formatRUT(row.giroRut)}</div>
+                                        <div className="w-[25%] text-center text-xs">{row.tipoDocLabel || "Factura"}</div>
+                                        <div className="w-[15%] text-center text-sm">{row.numeroDoc}</div>
+                                        <div className="w-[25%] text-center text-sm">{formatCLP(row.total)}</div>
+                                        <div className="w-[10%] flex justify-center">
+                                            <TextButton
+                                                className="py-0 my-0 h-6 w-6 px-0 bg-danger text-white font-black hover:bg-danger-hover active:bg-danger-active rounded-md flex items-center justify-center"
+                                                text="-"
+                                                onClick={async () => {
+                                                    const tipoDoc = row.tipoDoc || "facturas";
+
+                                                    // Eliminar de documentosAgregados
+                                                    setDocumentosAgregados((prev) =>
+                                                        prev.filter((f) =>
+                                                            !(f.numeroDoc === row.numeroDoc && f.giroRut === row.giroRut && f.tipoDoc === tipoDoc)
+                                                        )
+                                                    );
+
+                                                    // Solo re-agregar a facturas si coincide con la empresa seleccionada
+                                                    if (row.giroRut === giroRut) {
+                                                        try {
+                                                            const docRef = doc(db, "empresas", String(row.giroRut), tipoDoc, String(row.numeroDoc));
+                                                            const docSnap = await getDoc(docRef);
+
+                                                            if (docSnap.exists()) {
+                                                                const facturaData = {
+                                                                    id: docSnap.id,
+                                                                    giroRut: row.giroRut,
+                                                                    tipoDoc: tipoDoc,
+                                                                    tipoDocLabel: row.tipoDocLabel || "Factura electrónica",
+                                                                    ...docSnap.data()
+                                                                };
+                                                                setFacturas((prev) => [...prev, facturaData]);
+                                                            }
+                                                        } catch (error) {
+                                                            console.error("Error al recuperar documento:", error);
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                        </div>
                                     </div>
                                 ))}
 
-                                {/* Si no hay filas */}
-                                {rows.length === 0 && (
+                                {/* Si no hay documentos agregados */}
+                                {documentosAgregados.length === 0 && (
                                     <div className="text-center text-gray-400 mt-4">
-                                        No hay documentos ingresados
+                                        No hay documentos agregados
                                     </div>
                                 )}
                             </div>
@@ -417,68 +504,75 @@ const RProcesar = () => {
                             }
                         />
                         <div className="flex justify-between mt-8">
-                            <XButton className="h-8 text-xl" text="Borrar"/>
-                            <YButton 
-                                className="h-8 text-xl" 
+                            <XButton
+                                className="h-8 text-xl"
+                                text="Borrar"
+                                onClick={handleBorrarDocumentos}
+                                disabled={documentosAgregados.length === 0}
+                            />
+                            <YButton
+                                className="h-8 text-xl"
                                 text="Procesar"
                                 onClick={() => setProcesarModal(true)}
+                                disabled={documentosAgregados.length === 0}
                             />
                         </div>
                         
                     </div>
                 </div>
                 {procesarModal && (
-                    <Modal className="-translate-y-48 w-[70%] min-w-[70%]" onClickOutside={() => setProcesarModal(false)}>
-                        <p className="text-2xl font-black mb-4 justify-self-center">FACTURAS A PROCESAR</p>
-                        
-                        <Card 
+                    <Modal className="-translate-y-48 w-[75%] min-w-[70%]" onClickOutside={() => setProcesarModal(false)}>
+                        <p className="text-2xl font-black mb-4 text-center">DOCUMENTOS A PROCESAR</p>
+
+                        <Card
                             hasButton={false}
                             contentClassName="w-full h-52 overflow-y-auto scrollbar-custom"
-                            className="w-full mb-12"
+                            className="w-full mb-6"
                             content={
                                 <div>
-                                    <div className="flex justify-between font-bold mb-2">
-                                        <div className="w-1/3 text-center">RUT</div>
-                                        <div className="w-1/3 text-center">Número de documento</div>
-                                        <div className="w-1/3 text-center">Monto</div>
+                                    <div className="flex justify-between font-bold mb-2 text-sm">
+                                        <div className="w-[25%] text-center">RUT</div>
+                                        <div className="w-[25%] text-center">Tipo</div>
+                                        <div className="w-[20%] text-center">N° Documento</div>
+                                        <div className="w-[30%] text-center">Monto</div>
                                     </div>
                                     <hr className="mb-4" />
                                     {documentosAgregados.map((row, index) => (
-                                    <div key={index} className="flex justify-between mb-2">
-                                        <div className="w-1/3 text-center">{formatRUT(row.giroRut)}</div>
-                                        <div className="w-1/3 text-center">{row.numeroDoc}</div>
-                                        <div className="w-1/3 text-center">{formatCLP(row.total)}</div>
-                                    </div>))}
+                                        <div key={`modal-${row.tipoDoc}-${row.numeroDoc}-${index}`} className="flex justify-between mb-2">
+                                            <div className="w-[25%] text-center text-sm">{formatRUT(row.giroRut)}</div>
+                                            <div className="w-[25%] text-center text-xs">{row.tipoDocLabel || "Factura"}</div>
+                                            <div className="w-[20%] text-center text-sm">{row.numeroDoc}</div>
+                                            <div className="w-[30%] text-center text-sm">{formatCLP(row.total)}</div>
+                                        </div>
+                                    ))}
                                 </div>
                             }
                         />
-                        {documentosAgregados.length != 0 && (
-                            <div className="flex flex-col">
-                                <p className="text-xl font-black mr-5 self-end">Total Egreso: {formatCLP(totalDocumentos)}</p>
-                                <div className="flex justify-between mt-2">
-                                    <XButton 
-                                        className="ml-5" 
+
+                        {documentosAgregados.length > 0 && (
+                            <div className="flex flex-col gap-4">
+                                <div className="flex justify-end items-center gap-4 bg-black/20 p-3 rounded-lg">
+                                    <span className="text-lg font-semibold">Total Egreso:</span>
+                                    <span className="text-2xl font-black text-green-400">{formatCLP(totalDocumentos)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <XButton
+                                        className="ml-2"
                                         text="Cancelar"
-                                        onClick={() => setProcesarModal(false)} 
+                                        onClick={() => setProcesarModal(false)}
                                     />
-                                    <YButton 
-                                        className="mr-5" 
-                                        text="Aceptar"
+                                    <YButton
+                                        className="mr-2"
+                                        text="Confirmar y Generar Egreso"
                                         onClick={() => handleProcesarDocs()}
                                     />
                                 </div>
                             </div>
-                            )}
-                        
-
+                        )}
                     </Modal>
                 )}
 
-                {loadingModal && (
-                      <Modal>
-                          <p className="font-black">Cargando</p>
-                      </Modal>
-                )}
+                <LoadingModal isOpen={loadingModal} message="Procesando documentos..." />
             </div>
 
             {/* Footer fijo */}

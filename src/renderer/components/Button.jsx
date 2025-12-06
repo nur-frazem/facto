@@ -1,70 +1,148 @@
 import { CButton } from "./Container";
 import arrowLeftWhite from "../assets/Logos/arrowLeftWhite.png";
 
-export function YButton({ onClick, text, className="", classNameContainer="" }) {
-    return (
-        <CButton className={`${classNameContainer}`}>
-            <button
-                onClick={onClick}
-                className={`bg-[#17183B] hover:bg-[#2b2e5f] active:bg-[#080813] min-w-32 h-12 leading-none
-                            text-white font-semibold flex items-center justify-center px-4 rounded-full transition-colors duration-200 ${className}`}>
-                    {text}
-            </button>
-        </CButton>
-        
-    );
+// Primary action button (blue)
+export function YButton({ onClick, text, className = "", classNameContainer = "", disabled = false }) {
+  return (
+    <CButton className={classNameContainer}>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+          inline-flex items-center justify-center
+          min-w-[8rem] h-11 px-6
+          bg-primary hover:bg-primary-hover active:bg-primary-active
+          text-white font-semibold text-sm
+          rounded-full shadow-btn
+          transition-all duration-200
+          focus:outline-none focus:ring-2 focus:ring-primary-light focus:ring-offset-2 focus:ring-offset-surface
+          disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary
+          ${className}
+        `}
+      >
+        {text}
+      </button>
+    </CButton>
+  );
 }
 
-export function XButton({ onClick, text, className="" }) {
-    return (
-        <CButton>
-            <button
-            onClick={onClick}
-            className={`bg-[#CC2936] hover:bg-[#ec3f4e] active:bg-[#8b1b24] text-white min-w-32 h-12 leading-none font-semibold flex items-center justify-center px-4 rounded-full transition-colors duration-200 ${className}`}
-            >
-                {text}
-            </button>
-        </CButton>
-    );
+// Danger/Cancel button (red)
+export function XButton({ onClick, text, className = "", disabled = false }) {
+  return (
+    <CButton>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+          inline-flex items-center justify-center
+          min-w-[8rem] h-11 px-6
+          bg-danger hover:bg-danger-hover active:bg-danger-active
+          text-white font-semibold text-sm
+          rounded-full shadow-btn
+          transition-all duration-200
+          focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-2 focus:ring-offset-surface
+          disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-danger
+          ${className}
+        `}
+      >
+        {text}
+      </button>
+    </CButton>
+  );
 }
 
-export function VolverButton({onClick, className=""}){
-    return (
-        <button
-            onClick={onClick}
-            className="px-2 h-10 flex rounded-2xl items-center justify-start hover:bg-[#393c6d] active:bg-[#1f2252] transition-colors gap-2"
-        >
-            <img
-                src={arrowLeftWhite}
-                alt="Continue button arrow"
-                className="w-6 h-6 object-contain"
-            />
-            <p className="text-white font-medium">Volver</p>
-            
-        </button>
-    );
+// Back navigation button
+export function VolverButton({ onClick, className = "" }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        inline-flex items-center gap-2
+        px-3 h-10
+        text-white/80 hover:text-white
+        rounded-lg
+        hover:bg-white/10 active:bg-white/15
+        transition-all duration-200
+        ${className}
+      `}
+    >
+      <img
+        src={arrowLeftWhite}
+        alt="Volver"
+        className="w-5 h-5 object-contain opacity-80"
+      />
+      <span className="font-medium text-sm">Volver</span>
+    </button>
+  );
 }
 
-export function TextButton({onClick, text="", className="", classNameText="", disabled}){
-    return (
-        <button
-            onClick={onClick}
-            className={`px-2 h-10 flex rounded-2xl items-center justify-start hover:bg-[#393c6d] active:bg-[#1f2252] transition-colors gap-2 disabled:bg-gray-400 ${className}`}
-            disabled={disabled}
-        >
-            <p className={`${classNameText}`}>{text}</p>
-        </button>
-    );
+// Text button (ghost style)
+export function TextButton({ onClick, text = "", className = "", classNameText = "", disabled = false }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+        inline-flex items-center justify-center
+        px-4 h-10
+        text-white font-medium text-sm
+        rounded-lg
+        bg-transparent hover:bg-white/10 active:bg-white/15
+        transition-all duration-200
+        focus:outline-none focus:ring-2 focus:ring-white/20
+        disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent
+        ${className}
+      `}
+    >
+      <span className={classNameText}>{text}</span>
+    </button>
+  );
 }
 
-export function ImgButton({onClick, className="", src, alt, classNameImg="", title}){
-    return(
-        <button
-            onClick={onClick}
-            title={title}
-            className={`h-fit w-fit p-1 rounded-2xl hover:bg-white/30 active:bg-white/50 transition-colors ${className}`}
-        >
-            <img src={src} alt={alt} className={classNameImg} />
-        </button>
-    )
+// Icon button
+export function ImgButton({ onClick, className = "", src, alt, classNameImg = "", title, disabled = false }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      disabled={disabled}
+      className={`
+        inline-flex items-center justify-center
+        w-9 h-9 p-1.5
+        rounded-lg
+        hover:bg-white/10 active:bg-white/15
+        transition-all duration-200
+        focus:outline-none focus:ring-2 focus:ring-white/20
+        disabled:opacity-50 disabled:cursor-not-allowed
+        ${className}
+      `}
+    >
+      <img src={src} alt={alt} className={`w-full h-full object-contain ${classNameImg}`} />
+    </button>
+  );
+}
+
+// Success button (green)
+export function SuccessButton({ onClick, text, className = "", disabled = false }) {
+  return (
+    <CButton>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        className={`
+          inline-flex items-center justify-center
+          min-w-[8rem] h-11 px-6
+          bg-success hover:bg-success-hover active:bg-success-active
+          text-white font-semibold text-sm
+          rounded-full shadow-btn
+          transition-all duration-200
+          focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 focus:ring-offset-surface
+          disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-success
+          ${className}
+        `}
+      >
+        {text}
+      </button>
+    </CButton>
+  );
 }

@@ -1,2 +1,31 @@
 {
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "editor.tabSize": 2,
+
+  "eslint.validate": ["javascript", "javascriptreact"],
+  "eslint.useFlatConfig": true,
+
+  "tailwindCSS.includeLanguages": {
+    "javascript": "javascript",
+    "javascriptreact": "javascript"
+  },
+  "tailwindCSS.emmetCompletions": true,
+
+  "files.associations": {
+    "*.jsx": "javascriptreact"
+  },
+
+  "emmet.includeLanguages": {
+    "javascript": "javascriptreact"
+  },
+
+  "files.exclude": {
+    "node_modules": true,
+    ".vite": true,
+    "out": true
+  }
 }

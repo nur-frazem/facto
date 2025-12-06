@@ -8,7 +8,9 @@ import CIndex from './pages/configuracion/CIndex';
 import RIngresar from './pages/recepcion/Ringresar';
 import RProcesar from './pages/recepcion/RProcesar';
 import RRevisionDocumentos from './pages/recepcion/RRevisionDocumentos';
+import RCalendario from './pages/recepcion/RCalendario';
 import CClientesProveedores from './pages/configuracion/CClientesProveedores';
+import ProtectedRoute from './components/ProtectedRoute';
 import Fondo from "./assets/background/FondoModernoAzul.png";
 
 function App() {
@@ -30,16 +32,20 @@ function App() {
       <div className="relative z-60">
         <HashRouter>
           <Routes>
-            <Route path="/home" element={<Home/>} />
+            {/* Ruta pública - Login */}
             <Route path="/" element={<IniciarSesion/>} />
-            <Route path="/recepcion-index" element={<RIndex/>} />
-            <Route path="/emision-index" element={<EIndex/>} />
-            <Route path="/informes-index" element={<IIndex/>} />
-            <Route path="/configuracion-index" element={<CIndex/>} />
-            <Route path="/configuracion-clientesProveedores" element={<CClientesProveedores/>} />
-            <Route path="/recepcion-index/ingresar" element={<RIngresar/>} />
-            <Route path="/recepcion-index/procesar" element={<RProcesar/>} />
-            <Route path="/recepcion-index/revision-documentos" element={<RRevisionDocumentos/>} />
+
+            {/* Rutas protegidas - requieren autenticación */}
+            <Route path="/home" element={<ProtectedRoute><Home/></ProtectedRoute>} />
+            <Route path="/recepcion-index" element={<ProtectedRoute><RIndex/></ProtectedRoute>} />
+            <Route path="/emision-index" element={<ProtectedRoute><EIndex/></ProtectedRoute>} />
+            <Route path="/informes-index" element={<ProtectedRoute><IIndex/></ProtectedRoute>} />
+            <Route path="/configuracion-index" element={<ProtectedRoute><CIndex/></ProtectedRoute>} />
+            <Route path="/configuracion-clientesProveedores" element={<ProtectedRoute><CClientesProveedores/></ProtectedRoute>} />
+            <Route path="/recepcion-index/ingresar" element={<ProtectedRoute><RIngresar/></ProtectedRoute>} />
+            <Route path="/recepcion-index/procesar" element={<ProtectedRoute><RProcesar/></ProtectedRoute>} />
+            <Route path="/recepcion-index/revision-documentos" element={<ProtectedRoute><RRevisionDocumentos/></ProtectedRoute>} />
+            <Route path="/recepcion-index/calendario" element={<ProtectedRoute><RCalendario/></ProtectedRoute>} />
           </Routes>
         </HashRouter>
       </div>
