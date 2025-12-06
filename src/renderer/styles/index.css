@@ -72,6 +72,29 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Remove default focus outline globally */
+*:focus {
+  outline: none;
+}
+
+/* Remove focus outline from interactive elements */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus,
+a:focus,
+[tabindex]:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Remove Recharts focus outline on SVG elements */
+.recharts-wrapper:focus,
+.recharts-surface:focus,
+svg:focus {
+  outline: none;
+}
+
 /* ==================== CUSTOM SCROLLBAR ==================== */
 .scrollbar-custom::-webkit-scrollbar {
   width: 6px;

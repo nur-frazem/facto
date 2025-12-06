@@ -108,6 +108,9 @@ const RRevisionDocumentos = () => {
   const [filtroRut, setFiltroRut] = useState("");
   const [filtroFolio, setFiltroFolio] = useState("");
 
+  // Lista de empresas para el dropdown
+  const [empresas, setEmpresas] = useState([]);
+
 
   const [rowTipoDoc, setRowTipoDoc] = useState([]);
   const [rowFormaPago, setRowFormaPago] = useState([]);
@@ -192,12 +195,11 @@ const RRevisionDocumentos = () => {
 
         // Mapear opción del filtro a subcolecciones
         const mapTipoDocToSubcol = {
-          "Todos": ["facturas", "facturasExentas", "boletas", "notasCredito", "guiasElectronicas"],
+          "Todos": ["facturas", "facturasExentas", "boletas", "notasCredito"],
           "Factura electrónica": ["facturas"],
           "Factura exenta": ["facturasExentas"],
           "Boleta": ["boletas"],
           "Nota de crédito": ["notasCredito"],
-          "Guía electrónica": ["guiasElectronicas"],
         };
 
         const subcolecciones = mapTipoDocToSubcol[selectedTipoDoc] || [];
@@ -259,11 +261,9 @@ const RRevisionDocumentos = () => {
             });
           }
 
-          // Filtro por RUT (id de empresa)
+          // Filtro por empresa (RUT exacto)
           if (filtroRut) {
-            // lo comparamos sin puntos ni guion para evitar problemas
-            const rutNormalizado = filtroRut.replace(/\./g, "").replace("-", "").toLowerCase();
-            if (!empresaDoc.id.replace(/\./g, "").replace("-", "").toLowerCase().includes(rutNormalizado)) {
+            if (empresaDoc.id !== filtroRut) {
               return null; // esta empresa se descarta
             }
           }
@@ -279,7 +279,6 @@ const RRevisionDocumentos = () => {
             facturasExentas: 2,
             boletas: 3,
             notasCredito: 4,
-            guiasElectronicas: 5,
           };
 
           documentos.sort((a, b) => {
@@ -337,6 +336,26 @@ const RRevisionDocumentos = () => {
       }
     };
     fetchValues();
+  }, []);
+
+  // Cargar lista de empresas para el dropdown
+  useEffect(() => {
+    const fetchEmpresas = async () => {
+      try {
+        const empresasRef = collection(db, "empresas");
+        const snapshot = await getDocs(empresasRef);
+        const listaEmpresas = snapshot.docs.map((doc) => ({
+          rut: doc.id,
+          razon: doc.data().razon || "",
+        }));
+        // Ordenar por razón social
+        listaEmpresas.sort((a, b) => a.razon.localeCompare(b.razon));
+        setEmpresas(listaEmpresas);
+      } catch (error) {
+        console.error("Error obteniendo empresas:", error);
+      }
+    };
+    fetchEmpresas();
   }, []);
 
   const handleGenerarPDF = async (rut, numeroDoc, docTipo) => {
@@ -1099,10 +1118,10 @@ const RRevisionDocumentos = () => {
       {/* Contenido principal */}
       <div className="flex flex-col flex-wrap justify-start gap-4 mt-2 ml-5 mr-5">
         <div className="grid gap-x-12 gap-y-2 grid-cols-4 grid-rows-2">
-          <DropdownMenu 
+          <DropdownMenu
             classNameMenu="w-[1/3]"
             tittle="Tipo documento"
-            items={rowTipoDoc.map((item) => item)}
+            items={rowTipoDoc.filter((item) => item !== "Guía electrónica")}
             value={selectedTipoDoc}
             onSelect={setSelectedTipoDoc}
           />
@@ -1131,12 +1150,27 @@ const RRevisionDocumentos = () => {
             onChange={(update) => setRangoFecha(update)}
           />
           
-          <Textfield 
-            classNameInput="w-[1/3]"
-            label="RUT"
-            type="rut"
-            value={filtroRut}
-            onChange={(e) => setFiltroRut(e.target.value)}
+          <DropdownMenu
+            classNameMenu="w-[1/3]"
+            tittle="Empresa"
+            searchable={true}
+            items={[
+              "Todas",
+              ...empresas.map((e) => `${formatRUT(e.rut)} ${e.razon}`)
+            ]}
+            value={filtroRut ? `${formatRUT(filtroRut)} ${empresas.find(e => e.rut === filtroRut)?.razon || ""}` : "Todas"}
+            onSelect={(val) => {
+              if (val === "Todas") {
+                setFiltroRut("");
+              } else {
+                // Extraer el RUT del string seleccionado
+                const rutMatch = val.match(/^[\d.]+-[\dkK]/);
+                if (rutMatch) {
+                  const rutLimpio = cleanRUT(rutMatch[0]);
+                  setFiltroRut(rutLimpio);
+                }
+              }
+            }}
           />
 
           <Textfield 
@@ -1195,9 +1229,7 @@ const RRevisionDocumentos = () => {
                             ? "Fact. exenta"
                             : doc.tipo === "boletas"
                             ? "Boleta"
-                            : doc.tipo === "notasCredito"
-                            ? "Nota crédito"
-                            : "Guía elect."}
+                            : "Nota crédito"}
                         </div>
                         <div className="w-[10%] text-center text-xs font-medium">
                           {doc.numeroDoc ?? "-"}

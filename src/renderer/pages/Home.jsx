@@ -42,7 +42,7 @@ const Home = () => {
           title="Recepción"
           onClick={() => navigate("/recepcion-index")}
           logo={inDocLogo}
-          description="Todo lo relacionado a ingreso de documentos, facturas, guías, entre otros.
+          description="Todo lo relacionado a ingreso de documentos, facturas, boletas, entre otros.
                       Dentro de esta sección podrá guardar, modificar, eliminar, revisar y hacer egreso
                       de los documentos."
           hidden={!puedeVerRecepcion}

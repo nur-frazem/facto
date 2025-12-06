@@ -489,7 +489,7 @@ const RIngresar = () => {
                   )}
                 </>
               }
-              items={rowTipoDoc.slice(1).map((item) => item)}
+              items={rowTipoDoc.slice(1).filter((item) => item !== "Guía electrónica")}
               value={selectedDoc}
               onSelect={(item) => {
                 setSelectedDoc(item);

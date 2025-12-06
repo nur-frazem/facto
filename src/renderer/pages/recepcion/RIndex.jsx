@@ -1,68 +1,637 @@
-import {SidebarWithContentSeparator} from "../../components/sidebar";
-import React from 'react';
-import Footer from "../../components/Footer";
-import { H1Tittle } from "../../components/Fonts";
-import { Card } from "../../components/Container";
-import { VolverButton } from "../../components/Button";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { SidebarWithContentSeparator } from '../../components/sidebar';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Footer from '../../components/Footer';
+import { H1Tittle } from '../../components/Fonts';
+import { VolverButton } from '../../components/Button';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../../firebaseConfig';
+import { formatCLP } from '../../utils/formatCurrency';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import {
+  DocumentTextIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DocumentPlusIcon,
+  CogIcon,
+  MagnifyingGlassIcon,
+  CalendarDaysIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/outline';
+
+// Helper to get month name in Spanish
+const getMonthName = (date) => {
+  return date.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+};
+
+// Helper to get short month name
+const getShortMonthName = (date) => {
+  return date.toLocaleDateString('es-CL', { month: 'short' });
+};
+
+// Stat Card Component (compact version)
+const StatCard = ({ icon: Icon, title, value, subvalue, color }) => {
+  const colorClasses = {
+    blue: 'from-blue-500/20 to-blue-600/5 border-blue-500/30',
+    yellow: 'from-yellow-500/20 to-yellow-600/5 border-yellow-500/30',
+    green: 'from-green-500/20 to-green-600/5 border-green-500/30',
+    red: 'from-red-500/20 to-red-600/5 border-red-500/30',
+  };
+
+  const iconColorClasses = {
+    blue: 'text-blue-400',
+    yellow: 'text-yellow-400',
+    green: 'text-green-400',
+    red: 'text-red-400',
+  };
+
+  return (
+    <div
+      className={`
+        bg-gradient-to-br ${colorClasses[color]}
+        border border-white/10
+        rounded-xl p-3
+        flex flex-col gap-1
+      `}
+    >
+      <div className="flex items-center justify-between">
+        <Icon className={`w-4 h-4 ${iconColorClasses[color]}`} />
+        <span className="text-xs text-slate-400 uppercase tracking-wide">{title}</span>
+      </div>
+      <div className="text-xl font-bold text-white">{value}</div>
+      {subvalue && <div className="text-xs text-slate-400">{subvalue}</div>}
+    </div>
+  );
+};
+
+// Quick Action Button Component (balanced version)
+const QuickActionButton = ({ icon: Icon, title, onClick, disabled }) => {
+  if (disabled) return null;
+
+  return (
+    <button
+      onClick={onClick}
+      className="
+        bg-gradient-card
+        border border-white/5
+        rounded-xl px-5 py-3
+        flex items-center gap-3
+        hover:bg-white/5 hover:border-white/10
+        transition-all duration-200
+        group
+      "
+    >
+      <Icon className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
+      <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+        {title}
+      </span>
+    </button>
+  );
+};
+
+// Custom Tooltip for Chart
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-800 border border-white/10 rounded-lg p-2 shadow-lg">
+        <p className="text-white text-sm font-medium capitalize">{label}</p>
+        <p className="text-sm text-green-400">Neto: {formatCLP(payload[0]?.value || 0)}</p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Custom Tooltip for Provider Chart
+const ProviderTooltip = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-800 border border-white/10 rounded-lg p-2 shadow-lg max-w-[200px]">
+        <p className="text-white text-xs font-medium truncate">{payload[0]?.payload?.name}</p>
+        <p className="text-sm text-blue-400">{formatCLP(payload[0]?.value || 0)}</p>
+        <p className="text-xs text-slate-400">{payload[0]?.payload?.docs} documentos</p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Document types configuration (outside component to avoid recreating on each render)
+const DOC_TYPES = [
+  { subcol: 'facturas', tipo: 'Factura', isAdditive: true },
+  { subcol: 'facturasExentas', tipo: 'Factura Exenta', isAdditive: true },
+  { subcol: 'boletas', tipo: 'Boleta', isAdditive: true },
+  { subcol: 'notasCredito', tipo: 'Nota de Crédito', isAdditive: false },
+];
 
 const RIndex = () => {
-    const navigate = useNavigate();
-    const { tienePermiso } = useAuth();
+  const navigate = useNavigate();
+  const { tienePermiso, isLoggingOut } = useAuth();
 
-    // Permisos
-    const puedeIngresar = tienePermiso("INGRESAR_DOCUMENTOS");
-    const puedeProcesar = tienePermiso("PROCESAR_PAGOS");
-    const puedeVerDocumentos = tienePermiso("VER_DOCUMENTOS");
-    const puedeVerCalendario = tienePermiso("VER_CALENDARIO");
+  // Permissions
+  const puedeIngresar = tienePermiso('INGRESAR_DOCUMENTOS');
+  const puedeProcesar = tienePermiso('PROCESAR_PAGOS');
+  const puedeVerDocumentos = tienePermiso('VER_DOCUMENTOS');
+  const puedeVerCalendario = tienePermiso('VER_CALENDARIO');
 
-    return(
-        <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
-            {/* Sidebar */}
-            <div className="row-span-2">
-                <SidebarWithContentSeparator className="h-full" />
-            </div>
+  // State for current month view
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [loading, setLoading] = useState(true);
 
-            {/* Título */}
-            <div className="p-4 relative flex items-center justify-center">
-                <div className="absolute left-5">
-                    <VolverButton onClick={() => navigate("/home")}/>
-                </div>
-                <H1Tittle text="Recepción de documentos" />
-            </div>
+  // Chart container refs and dimensions
+  const chartContainerRef = useRef(null);
+  const providerChartRef = useRef(null);
+  const [chartDimensions, setChartDimensions] = useState({ width: 0, height: 0 });
+  const [providerChartDimensions, setProviderChartDimensions] = useState({ width: 0, height: 0 });
 
-            {/* Contenido principal */}
-            <div className="flex flex-col flex-wrap justify-start content-center gap-6 mt-10">
-                <Card
-                    title="Ingreso de documentos"
-                    onClick={() => navigate("/recepcion-index/ingresar")}
-                    hidden={!puedeIngresar}
-                />
-                <Card
-                    title="Procesar documentos"
-                    onClick={() => navigate("/recepcion-index/procesar")}
-                    hidden={!puedeProcesar}
-                />
-                <Card
-                    title="Revisión de documentos"
-                    onClick={() => navigate("/recepcion-index/revision-documentos")}
-                    hidden={!puedeVerDocumentos}
-                />
-                <Card
-                    title="Calendario interactivo"
-                    onClick={() => navigate("/recepcion-index/calendario")}
-                    hidden={!puedeVerCalendario}
-                />
-            </div>
+  // State for document data
+  const [allDocuments, setAllDocuments] = useState([]);
 
-            {/* Footer fijo */}
-            <div className="absolute bottom-0 left-0 w-full z-10">
-                <Footer />
-            </div>
+  // Fetch all documents from all companies
+  const fetchAllDocuments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const empresasRef = collection(db, 'empresas');
+      const empresasSnapshot = await getDocs(empresasRef);
+
+      const allDocs = [];
+
+      for (const empresaDoc of empresasSnapshot.docs) {
+        const empresaData = empresaDoc.data();
+        if (!empresaData.proveedor) continue;
+
+        const rut = empresaDoc.id;
+
+        for (const docType of DOC_TYPES) {
+          const docsRef = collection(db, 'empresas', rut, docType.subcol);
+          const docsSnapshot = await getDocs(docsRef);
+
+          docsSnapshot.docs.forEach((doc) => {
+            const data = doc.data();
+            allDocs.push({
+              ...data,
+              rut,
+              razon: empresaData.razon,
+              tipoDoc: docType.tipo,
+              isAdditive: docType.isAdditive,
+              id: doc.id,
+            });
+          });
+        }
+      }
+
+      setAllDocuments(allDocs);
+    } catch (error) {
+      // Ignore permission errors during logout
+      if (error.code === 'permission-denied') return;
+      console.error('Error fetching documents:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAllDocuments();
+  }, [fetchAllDocuments]);
+
+  // Measure chart containers when available
+  useEffect(() => {
+    const measureContainers = () => {
+      if (chartContainerRef.current) {
+        const { width, height } = chartContainerRef.current.getBoundingClientRect();
+        if (width > 0 && height > 0) {
+          setChartDimensions({ width, height });
+        }
+      }
+      if (providerChartRef.current) {
+        const { width, height } = providerChartRef.current.getBoundingClientRect();
+        if (width > 0 && height > 0) {
+          setProviderChartDimensions({ width, height });
+        }
+      }
+    };
+
+    const timeoutId = setTimeout(measureContainers, 150);
+    window.addEventListener('resize', measureContainers);
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', measureContainers);
+    };
+  }, [loading]);
+
+  // Filter documents for a specific month
+  const getDocumentsForMonth = useCallback(
+    (date) => {
+      const year = date.getFullYear();
+      const month = date.getMonth();
+
+      return allDocuments.filter((doc) => {
+        if (!doc.fechaE) return false;
+        const docDate = new Date(doc.fechaE.seconds * 1000);
+        return docDate.getFullYear() === year && docDate.getMonth() === month;
+      });
+    },
+    [allDocuments]
+  );
+
+  // Calculate stats for current month
+  const currentMonthDocs = getDocumentsForMonth(currentDate);
+
+  const stats = {
+    total: currentMonthDocs.length,
+    pendiente: currentMonthDocs.filter((d) => d.estado === 'pendiente'),
+    pagado: currentMonthDocs.filter((d) => d.estado === 'pagado'),
+    vencido: currentMonthDocs.filter((d) => d.estado === 'vencido'),
+  };
+
+  // Calculate totals (facturas/boletas add, notas de crédito subtract)
+  const calculateTotal = (docs) => {
+    return docs.reduce((acc, doc) => {
+      const amount = doc.total || 0;
+      return acc + (doc.isAdditive ? amount : -amount);
+    }, 0);
+  };
+
+  const totalPendiente = calculateTotal(stats.pendiente);
+  const totalPagado = calculateTotal(stats.pagado);
+  const totalVencido = calculateTotal(stats.vencido);
+
+  // Get data for last 6 months chart - now only showing NET
+  const getMonthlyChartData = useCallback(() => {
+    const data = [];
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthDocs = getDocumentsForMonth(date);
+
+      const facturas = monthDocs.filter((d) => d.isAdditive);
+      const notasCredito = monthDocs.filter((d) => !d.isAdditive);
+
+      const totalFacturas = facturas.reduce((acc, d) => acc + (d.total || 0), 0);
+      const totalNC = notasCredito.reduce((acc, d) => acc + (d.total || 0), 0);
+
+      data.push({
+        name: getShortMonthName(date),
+        neto: totalFacturas - totalNC,
+      });
+    }
+    return data;
+  }, [currentDate, getDocumentsForMonth]);
+
+  // Get document type distribution for current month
+  const getTypeDistribution = useCallback(() => {
+    const typeCounts = {};
+    currentMonthDocs.forEach((doc) => {
+      if (!typeCounts[doc.tipoDoc]) {
+        typeCounts[doc.tipoDoc] = { count: 0, total: 0, isAdditive: doc.isAdditive };
+      }
+      typeCounts[doc.tipoDoc].count++;
+      typeCounts[doc.tipoDoc].total += doc.total || 0;
+    });
+
+    return Object.entries(typeCounts)
+      .map(([tipo, data]) => ({
+        name: tipo,
+        cantidad: data.count,
+        total: data.total,
+        isAdditive: data.isAdditive,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [currentMonthDocs]);
+
+  const monthlyData = getMonthlyChartData();
+  const typeDistribution = getTypeDistribution();
+
+  // Get provider spending data for current month (top 8)
+  const getProviderData = useCallback(() => {
+    const providerTotals = {};
+
+    currentMonthDocs.forEach((doc) => {
+      const providerName = doc.razon || doc.rut;
+      if (!providerTotals[providerName]) {
+        providerTotals[providerName] = { total: 0, docs: 0 };
+      }
+      const amount = doc.total || 0;
+      providerTotals[providerName].total += doc.isAdditive ? amount : -amount;
+      providerTotals[providerName].docs++;
+    });
+
+    return Object.entries(providerTotals)
+      .map(([name, data]) => ({
+        name: name.length > 25 ? name.substring(0, 25) + '...' : name,
+        fullName: name,
+        neto: data.total,
+        docs: data.docs,
+      }))
+      .sort((a, b) => b.neto - a.neto); // No limit - show all providers
+  }, [currentMonthDocs]);
+
+  const providerData = getProviderData();
+
+  // Month navigation
+  const goToPreviousMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const goToCurrentMonth = () => {
+    setCurrentDate(new Date());
+  };
+
+  const TYPE_COLORS = ['#3b82f6', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'];
+
+  return (
+    <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+      {/* Sidebar */}
+      <div className="row-span-2">
+        <SidebarWithContentSeparator className="h-full" />
+      </div>
+
+      {/* Title */}
+      <div className="p-3 relative flex items-center justify-center">
+        <div className="absolute left-5">
+          <VolverButton onClick={() => navigate('/home')} />
         </div>
+        <H1Tittle text="Recepción de documentos" />
+        <button
+          onClick={fetchAllDocuments}
+          disabled={loading}
+          className="absolute right-5 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
+          title="Actualizar datos"
+        >
+          <ArrowPathIcon className={`w-5 h-5 text-white ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
 
-    );
-}
+      {/* Main Content */}
+      <div className="overflow-y-auto pb-16 px-5">
+        <div className="max-w-6xl mx-auto space-y-4">
+          {/* Quick Actions + Month Navigation Row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 py-2">
+            {/* Quick Actions */}
+            <div className="flex flex-wrap gap-2">
+              <QuickActionButton
+                icon={DocumentPlusIcon}
+                title="Ingresar"
+                onClick={() => navigate('/recepcion-index/ingresar')}
+                disabled={!puedeIngresar}
+              />
+              <QuickActionButton
+                icon={CogIcon}
+                title="Procesar"
+                onClick={() => navigate('/recepcion-index/procesar')}
+                disabled={!puedeProcesar}
+              />
+              <QuickActionButton
+                icon={MagnifyingGlassIcon}
+                title="Revisar"
+                onClick={() => navigate('/recepcion-index/revision-documentos')}
+                disabled={!puedeVerDocumentos}
+              />
+              <QuickActionButton
+                icon={CalendarDaysIcon}
+                title="Calendario"
+                onClick={() => navigate('/recepcion-index/calendario')}
+                disabled={!puedeVerCalendario}
+              />
+            </div>
+
+            {/* Month Navigation */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={goToPreviousMonth}
+                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <ChevronLeftIcon className="w-4 h-4 text-white" />
+              </button>
+
+              <button
+                onClick={goToCurrentMonth}
+                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors min-w-[180px]"
+              >
+                <span className="text-white text-sm font-medium capitalize">
+                  {getMonthName(currentDate)}
+                </span>
+              </button>
+
+              <button
+                onClick={goToNextMonth}
+                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <ChevronRightIcon className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          </div>
+
+          {/* Stats Cards Row */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <StatCard
+              icon={DocumentTextIcon}
+              title="Documentos"
+              value={loading ? '...' : stats.total}
+              subvalue={
+                loading
+                  ? '...'
+                  : `${currentMonthDocs.filter((d) => d.isAdditive).length} fact. / ${currentMonthDocs.filter((d) => !d.isAdditive).length} NC`
+              }
+              color="blue"
+            />
+            <StatCard
+              icon={ClockIcon}
+              title="Pendiente"
+              value={loading ? '...' : formatCLP(totalPendiente)}
+              subvalue={loading ? '...' : `${stats.pendiente.length} docs`}
+              color="yellow"
+            />
+            <StatCard
+              icon={CheckCircleIcon}
+              title="Pagado"
+              value={loading ? '...' : formatCLP(totalPagado)}
+              subvalue={loading ? '...' : `${stats.pagado.length} docs`}
+              color="green"
+            />
+            <StatCard
+              icon={ExclamationTriangleIcon}
+              title="Vencido"
+              value={loading ? '...' : formatCLP(totalVencido)}
+              subvalue={loading ? '...' : `${stats.vencido.length} docs`}
+              color="red"
+            />
+            {/* Net Total Card - inline with stats */}
+            <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/5 border border-emerald-500/30 rounded-xl p-3 flex flex-col gap-1">
+              <span className="text-xs text-slate-400 uppercase tracking-wide">Total Neto</span>
+              <div className="text-xl font-bold text-white">
+                {loading ? '...' : formatCLP(calculateTotal(currentMonthDocs))}
+              </div>
+            </div>
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Monthly NET Chart */}
+            <div className="bg-gradient-card border border-white/5 rounded-xl p-4">
+              <h3 className="text-white text-sm font-semibold mb-3">
+                Neto Mensual (últimos 6 meses)
+              </h3>
+              <div ref={chartContainerRef} className="w-full" style={{ height: 180 }}>
+                {loading || chartDimensions.width === 0 ? (
+                  <div className="h-full flex items-center justify-center">
+                    <span className="text-slate-400 text-sm">Cargando...</span>
+                  </div>
+                ) : (
+                  <BarChart
+                    width={chartDimensions.width}
+                    height={180}
+                    data={monthlyData}
+                    margin={{ top: 5, right: 5, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: '#9ca3af', fontSize: 11 }}
+                      axisLine={{ stroke: '#374151' }}
+                    />
+                    <YAxis
+                      tick={{ fill: '#9ca3af', fontSize: 10 }}
+                      axisLine={{ stroke: '#374151' }}
+                      tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Bar dataKey="neto" name="Neto" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                )}
+              </div>
+            </div>
+
+            {/* Document Type Distribution */}
+            <div className="bg-gradient-card border border-white/5 rounded-xl p-4">
+              <h3 className="text-white text-sm font-semibold mb-3">Distribución por Tipo</h3>
+              <div className="space-y-2" style={{ minHeight: 180 }}>
+                {loading ? (
+                  <div className="h-full flex items-center justify-center">
+                    <span className="text-slate-400 text-sm">Cargando...</span>
+                  </div>
+                ) : typeDistribution.length === 0 ? (
+                  <div className="h-full flex items-center justify-center">
+                    <span className="text-slate-400 text-sm">Sin documentos</span>
+                  </div>
+                ) : (
+                  typeDistribution.map((item, index) => {
+                    const maxTotal = Math.max(...typeDistribution.map((t) => t.total));
+                    const percentage = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
+
+                    return (
+                      <div key={item.name} className="space-y-0.5">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-300 flex items-center gap-1">
+                            {item.name}
+                          </span>
+                          <span className="text-white font-medium">
+                            {formatCLP(item.total)} ({item.cantidad})
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${percentage}%`,
+                              backgroundColor: item.isAdditive
+                                ? TYPE_COLORS[index % TYPE_COLORS.length]
+                                : '#ef4444',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Provider Comparison Chart */}
+          {!loading && providerData.length > 0 && (() => {
+            // Calculate dynamic height: 32px per provider, min 250px, max before scroll 350px
+            const rowHeight = 32;
+            const chartHeight = Math.max(250, providerData.length * rowHeight + 40);
+            const maxContainerHeight = 350;
+            const needsScroll = chartHeight > maxContainerHeight;
+
+            return (
+              <div className="bg-gradient-card border border-white/5 rounded-xl p-4">
+                <h3 className="text-white text-sm font-semibold mb-3">
+                  Gasto por Proveedor ({providerData.length} {providerData.length === 1 ? 'proveedor' : 'proveedores'})
+                </h3>
+                <div
+                  ref={providerChartRef}
+                  className="w-full overflow-y-auto scrollbar-custom"
+                  style={{ maxHeight: maxContainerHeight }}
+                >
+                  {providerChartDimensions.width === 0 ? (
+                    <div className="h-64 flex items-center justify-center">
+                      <span className="text-slate-400 text-sm">Cargando...</span>
+                    </div>
+                  ) : (
+                    <BarChart
+                      width={providerChartDimensions.width - (needsScroll ? 10 : 0)}
+                      height={chartHeight}
+                      data={providerData}
+                      layout="vertical"
+                      margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        tick={{ fill: '#9ca3af', fontSize: 10 }}
+                        axisLine={{ stroke: '#374151' }}
+                        tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        tick={{ fill: '#9ca3af', fontSize: 11 }}
+                        axisLine={{ stroke: '#374151' }}
+                        width={120}
+                      />
+                      <Tooltip content={<ProviderTooltip />} />
+                      <Bar dataKey="neto" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  )}
+                </div>
+                {needsScroll && (
+                  <p className="text-xs text-slate-500 text-center mt-2">
+                    Desplaza para ver más proveedores
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Debug info */}
+          {!loading && allDocuments.length === 0 && (
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 text-center">
+              <p className="text-yellow-400 text-xs">
+                No se encontraron documentos. Verifique que existan empresas proveedoras con
+                documentos.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="absolute bottom-0 left-0 w-full z-10">
+        <Footer />
+      </div>
+    </div>
+  );
+};
 
 export default RIndex;

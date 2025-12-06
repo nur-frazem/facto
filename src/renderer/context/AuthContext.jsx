@@ -27,7 +27,7 @@ export const PERMISOS = {
   // Puede eliminar documentos
   ELIMINAR_DOCUMENTOS: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.GESTOR],
   // Puede procesar pagos
-  PROCESAR_PAGOS: [ROLES.SUPER_ADMIN, ROLES.ADMIN],
+  PROCESAR_PAGOS: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.GESTOR],
   // Puede ver calendario
   VER_CALENDARIO: [ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.GESTOR, ROLES.DIGITADOR, ROLES.VISOR],
   // Puede ver configuración
@@ -51,7 +51,7 @@ export const ROLES_LABELS = {
 export const ROLES_DESCRIPCION = {
   [ROLES.SUPER_ADMIN]: 'Acceso total al sistema. Puede asignar todos los roles incluyendo administrador.',
   [ROLES.ADMIN]: 'Acceso total a documentos y configuración. Puede asignar roles excepto administrador.',
-  [ROLES.GESTOR]: 'Puede ver, ingresar, editar y eliminar documentos. No puede procesar pagos.',
+  [ROLES.GESTOR]: 'Puede ver, ingresar, editar, eliminar y procesar pagos de documentos.',
   [ROLES.DIGITADOR]: 'Puede ver e ingresar documentos. No puede editar, eliminar ni procesar pagos.',
   [ROLES.VISOR]: 'Solo puede ver documentos y calendario. Sin permisos de modificación.'
 };
