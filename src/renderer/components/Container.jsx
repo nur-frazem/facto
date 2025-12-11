@@ -10,10 +10,7 @@ export function CButton({ children, className }) {
 
 export function CGrid({ children, rowSizes = "auto 1fr" }) {
   return (
-    <div
-      className="grid gap-4 min-h-screen p-4"
-      style={{ gridTemplateRows: rowSizes }}
-    >
+    <div className="flex flex-col min-h-screen p-4 gap-4">
       {children}
     </div>
   );
@@ -43,10 +40,10 @@ export function Card({
         border border-white/5
         shadow-card
         rounded-xl
-        p-5
+        p-4 sm:p-5
         flex
         ${hasDescription ? "flex-col gap-y-3 relative" : "items-center justify-between"}
-        ${content !== null ? "w-auto" : "w-96"}
+        ${content !== null ? "w-auto" : "w-full max-w-[calc(100vw-2rem)] sm:w-80 md:w-96"}
         ${disabled ? "opacity-50 cursor-not-allowed" : ""}
         ${className}
       `}

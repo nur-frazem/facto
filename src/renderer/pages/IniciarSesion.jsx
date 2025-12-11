@@ -55,36 +55,40 @@ const IniciarSesion = () => {
     };
 
     return(
-        <CGrid rowSizes='30% 10% 1fr'>
-            <div>
+        <CGrid>
+            {/* Header */}
+            <div className="pt-6 sm:pt-10">
                 <H1Tittle text="Inicio Sesión" subtittle="Ingrese sus datos para iniciar sesión" />
             </div>
-            <div className='justify-center items-center flex flex-col gap-4'>
-                <Textfield label="E-MAIL:" 
-                            type='email' 
-                            className='w-96' 
+
+            {/* Form - grows to fill space */}
+            <div className='flex-1 flex flex-col justify-center items-center gap-4 px-4'>
+                <Textfield label="E-MAIL:"
+                            type='email'
+                            className='w-full max-w-sm sm:max-w-md'
                             placeholder="Ejemplo@ejemplo.ej"
                             value={email}
                             onChange={e => setEmail(e.target.value)}
                             />
-                <Textfield label="Contraseña:" 
-                            type='password' 
-                            className='w-96'
+                <Textfield label="Contraseña:"
+                            type='password'
+                            className='w-full max-w-sm sm:max-w-md'
                             value={password}
                             onChange={e => setPassword(e.target.value)}
                             />
-            </div>
-            
-            <div className='justify-center items-start flex gap-32 mt-10'>
-                <YButton text="Iniciar" 
-                        className="text-2xl py-4 px-12"
-                        onClick={handleLogin}
-                        />
 
-                <XButton text="Salir" 
-                        className="text-2xl py-4 px-12 " 
-                        onClick={() => window.electronAPI.salirApp()}
-                        />
+                {/* Buttons */}
+                <div className='flex flex-col sm:flex-row gap-4 sm:gap-8 mt-6 w-full max-w-sm sm:max-w-md justify-center'>
+                    <YButton text="Iniciar"
+                            className="text-lg sm:text-2xl py-3 sm:py-4 px-8 sm:px-12"
+                            onClick={handleLogin}
+                            />
+
+                    <XButton text="Salir"
+                            className="text-lg sm:text-2xl py-3 sm:py-4 px-8 sm:px-12"
+                            onClick={() => window.electronAPI.salirApp()}
+                            />
+                </div>
             </div>
 
             {showErrorModal && (
@@ -106,8 +110,8 @@ const IniciarSesion = () => {
                       </Modal>
             )}
 
-            <Footer></Footer>
-            
+            <Footer />
+
         </CGrid>
     );
     

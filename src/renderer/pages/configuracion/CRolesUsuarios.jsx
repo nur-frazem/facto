@@ -355,22 +355,24 @@ const CRolesUsuarios = () => {
     };
 
     return (
-        <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+        <div className="min-h-screen flex">
             {/* Sidebar */}
-            <div className="row-span-2">
+            <div className="flex-shrink-0">
                 <SidebarWithContentSeparator className="h-full" />
             </div>
 
-            {/* Título */}
-            <div className="p-4 relative flex items-center justify-center">
-                <div className="absolute left-5">
-                    <VolverButton onClick={() => navigate("/configuracion-index")} />
+            {/* Content Area */}
+            <div className="flex-1 flex flex-col min-h-screen overflow-visible">
+                {/* Título */}
+                <div className="p-4 relative flex items-center justify-center flex-shrink-0">
+                    <div className="absolute left-5">
+                        <VolverButton onClick={() => navigate("/configuracion-index")} />
+                    </div>
+                    <H1Tittle text="Gestión de Usuarios y Roles" />
                 </div>
-                <H1Tittle text="Gestión de Usuarios y Roles" />
-            </div>
 
-            {/* Contenido principal */}
-            <div className="flex flex-col flex-wrap justify-start mt-6 ml-5 mr-5 pb-20">
+                {/* Contenido principal */}
+                <div className="flex-1 flex flex-col flex-wrap justify-start px-3 sm:px-5 py-4 overflow-x-auto">
                 {/* Barra de acciones */}
                 <div className="flex items-center justify-between mb-4 gap-4">
                     <Textfield
@@ -780,10 +782,9 @@ const CRolesUsuarios = () => {
 
                 {/* Loading Modal */}
                 <LoadingModal isOpen={loadingModal} message="Procesando..." />
-            </div>
+                </div>
 
-            {/* Footer */}
-            <div className="absolute bottom-0 left-0 w-full z-10">
+                {/* Footer */}
                 <Footer />
             </div>
         </div>

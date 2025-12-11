@@ -426,22 +426,24 @@ const RIngresar = () => {
 }
 
   return (
-    <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+    <div className="min-h-screen flex">
       {/* Sidebar */}
-      <div className="row-span-2">
+      <div className="flex-shrink-0">
         <SidebarWithContentSeparator className="h-full" />
       </div>
 
-      {/* Título */}
-      <div className="p-4 relative flex items-center justify-center">
-        <div className="absolute left-5">
-          <VolverButton onClick={() => navigate("/recepcion-index")} />
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col min-h-screen overflow-visible">
+        {/* Título */}
+        <div className="p-4 relative flex items-center justify-center flex-shrink-0">
+          <div className="absolute left-5">
+            <VolverButton onClick={() => navigate("/recepcion-index")} />
+          </div>
+          <H1Tittle text="Ingreso de documentos" />
         </div>
-        <H1Tittle text="Ingreso de documentos" />
-      </div>
 
-      {/* Contenido principal */}
-      <div className="flex flex-col flex-wrap justify-start gap-6 mt-10 ml-5 mr-5">
+        {/* Contenido principal */}
+        <div className="flex-1 flex flex-col flex-wrap justify-start gap-4 sm:gap-6 px-3 sm:px-5 py-4 overflow-x-auto">
         <div className="grid grid-cols-3 grid-rows-5 gap-y-3 gap-x-10">
           
           {/* Selección de empresa */}
@@ -850,10 +852,8 @@ const RIngresar = () => {
     />
 
     <LoadingModal isOpen={loadingModal} message="Procesando documento..." />
-          
 
-      {/* Footer fijo */}
-      <div className="absolute bottom-0 left-0 w-full z-10">
+        {/* Footer */}
         <Footer />
       </div>
     </div>

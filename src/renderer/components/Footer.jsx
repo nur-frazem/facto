@@ -5,8 +5,9 @@ export default function Footer() {
       border-t border-white/5
       text-center
       py-3
-      absolute bottom-0 left-0 w-full
-      z-10
+      w-full
+      mt-auto
+      flex-shrink-0
     ">
       <p className="text-xs text-slate-500">
         © {new Date().getFullYear()} Powered by Nur — Todos los derechos reservados.

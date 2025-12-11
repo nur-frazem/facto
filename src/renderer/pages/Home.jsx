@@ -31,13 +31,15 @@ const Home = () => {
   };
 
   return (
-    <div className="h-screen grid grid-rows-[20%_1fr_auto]">
+    <div className="min-h-screen flex flex-col">
 
-      <div>
+      {/* Header section */}
+      <div className="pt-6 pb-4 px-4">
         <H1Tittle text="Bienvenido a Facto!" subtittle={"Sistema de contabilidad para recepción y emisión de documentos!"} />
       </div>
 
-      <div className="flex flex-wrap justify-center content-start gap-6">
+      {/* Main content - grows to fill space */}
+      <div className="flex-1 flex flex-wrap justify-center content-start gap-4 sm:gap-6 px-4 py-6">
         <Card
           title="Recepción"
           onClick={() => navigate("/recepcion-index")}
@@ -77,11 +79,13 @@ const Home = () => {
         />
       </div>
 
-      <div className="justify-center items-center flex gap-48">
+      {/* Logout button section */}
+      <div className="flex justify-center py-6 px-4">
         <XButton text="Cerrar sesión"
-                className="text-2xl py-4 px-12 mb-20"
+                className="text-lg sm:text-2xl py-3 sm:py-4 px-8 sm:px-12"
                 onClick={handleLogout}/>
       </div>
+
       <Footer />
     </div>
     );

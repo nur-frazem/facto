@@ -327,22 +327,24 @@ const RCalendario = () => {
   }
 
   return (
-    <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+    <div className="min-h-screen flex">
       {/* Sidebar */}
-      <div className="row-span-2">
+      <div className="flex-shrink-0">
         <SidebarWithContentSeparator className="h-full" />
       </div>
 
-      {/* Header */}
-      <div className="p-4 relative flex items-center justify-center">
-        <div className="absolute left-5">
-          <VolverButton onClick={() => navigate("/recepcion-index")} />
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col min-h-screen overflow-visible">
+        {/* Header */}
+        <div className="p-4 relative flex items-center justify-center flex-shrink-0">
+          <div className="absolute left-5">
+            <VolverButton onClick={() => navigate("/recepcion-index")} />
+          </div>
+          <H1Tittle text="Calendario Interactivo" />
         </div>
-        <H1Tittle text="Calendario Interactivo" />
-      </div>
 
-      {/* Main Content */}
-      <div className="flex flex-col gap-4 p-4 pb-20 overflow-y-auto">
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col gap-4 p-3 sm:p-4 overflow-y-auto">
         {/* Navigation and Stats Bar */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           {/* Month/Year Navigation */}
@@ -545,7 +547,7 @@ const RCalendario = () => {
             <span>Hoy</span>
           </div>
         </div>
-      </div>
+        </div>
 
       {/* Day Details Modal */}
       {dayModalOpen && selectedDay && (
@@ -694,8 +696,7 @@ const RCalendario = () => {
 
       <LoadingModal isOpen={loadingModal} message="Cargando calendario..." />
 
-      {/* Footer */}
-      <div className="absolute bottom-0 left-0 w-full z-10">
+        {/* Footer */}
         <Footer />
       </div>
     </div>

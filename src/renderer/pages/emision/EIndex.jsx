@@ -10,32 +10,32 @@ const EIndex = () => {
     const navigate = useNavigate();
 
     return(
-        <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+        <div className="min-h-screen flex">
             {/* Sidebar */}
-            <div className="row-span-2">
+            <div className="flex-shrink-0">
                 <SidebarWithContentSeparator className="h-full" />
             </div>
 
-            {/* Título */}
-            <div className="p-4 relative flex items-center justify-center">
-                <div className="absolute left-5">
-                    <VolverButton onClick={() => navigate("/home")}/>
+            {/* Content Area */}
+            <div className="flex-1 flex flex-col min-h-screen overflow-visible">
+                {/* Título */}
+                <div className="p-4 relative flex items-center justify-center flex-shrink-0">
+                    <div className="absolute left-5">
+                        <VolverButton onClick={() => navigate("/home")}/>
+                    </div>
+                    <H1Tittle text="Documentos emitidos" />
                 </div>
-                <H1Tittle text="Documentos emitidos" />
-            </div>
 
-            {/* Contenido principal */}
-            <div className="flex flex-col flex-wrap justify-start content-center gap-6 mt-10">
-                <Card title="Revisión de documentos" />
-                <Card title="Modificar estados de pago" />
-            </div>
+                {/* Contenido principal */}
+                <div className="flex-1 flex flex-col flex-wrap justify-start content-center gap-4 sm:gap-6 px-4 py-6">
+                    <Card title="Revisión de documentos" />
+                    <Card title="Modificar estados de pago" />
+                </div>
 
-            {/* Footer fijo */}
-            <div className="absolute bottom-0 left-0 w-full z-10">
+                {/* Footer */}
                 <Footer />
             </div>
         </div>
-            
     );
 }
 

@@ -17,21 +17,19 @@ import Fondo from "./assets/background/FondoModernoAzul.png";
 
 function App() {
   return (
-    <div className="absolute inset-0">
+    <div className="min-h-screen flex flex-col relative">
 
-      {/* Capa gradiente encima */}
-      <div className="absolute inset-0 bg-gradient-to-tl from-sky-950 to-sky-900" />
+      {/* Capa gradiente - fixed para que cubra toda la ventana */}
+      <div className="fixed inset-0 bg-gradient-to-tl from-sky-950 to-sky-900 z-0" />
 
-      {/* Capa fondo con imagen */}
+      {/* Capa fondo con imagen - fixed para que cubra toda la ventana */}
       <div
-        className="absolute inset-0 bg-cover bg-center"
+        className="fixed inset-0 bg-cover bg-center z-0"
         style={{ backgroundImage: `url(${Fondo})`, opacity: 0.5 }}
       />
 
-
-
-      {/* Contenido principal */}
-      <div className="relative z-60">
+      {/* Contenido principal - flex-1 para ocupar el espacio disponible */}
+      <div className="relative z-10 flex-1 flex flex-col">
         <AuthProvider>
           <HashRouter>
             <Routes>

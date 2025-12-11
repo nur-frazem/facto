@@ -10,7 +10,7 @@ import { DropdownMenu, DatepickerRange, DatepickerField, Textfield } from "../..
 import { doc, getDoc, getDocs, setDoc, collection, onSnapshot, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { Card } from "../../components/Container";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth, ROLES } from "../../context/AuthContext";
 import { cleanRUT, formatRUT } from "../../utils/formatRUT";
 import { formatCLP } from "../../utils/formatCurrency";
 import { generarPDF } from "../../utils/generarPDF";
@@ -22,11 +22,12 @@ import configIcon from "../../assets/Logos/config.png";
 
 const RRevisionDocumentos = () => {
   const navigate = useNavigate();
-  const { tienePermiso } = useAuth();
+  const { tienePermiso, esAdmin } = useAuth();
 
   // Permisos del usuario
   const puedeEditar = tienePermiso("EDITAR_DOCUMENTOS");
   const puedeEliminar = tienePermiso("ELIMINAR_DOCUMENTOS");
+  const puedeReversarPago = esAdmin(); // Solo admin y super_admin pueden reversar pagos
 
   const [empresasConDocs, setEmpresasConDocs] = useState([]);
   const unsubscribeRef = useRef(null);
@@ -98,6 +99,14 @@ const RRevisionDocumentos = () => {
   // Estado para guardar info del documento actual en edición
   const [currentDocRut, setCurrentDocRut] = useState("");
   const [currentDocTipo, setCurrentDocTipo] = useState("");
+
+  // Estados para reversión de pago (solo admin/super_admin)
+  const [reversarPagoModal, setReversarPagoModal] = useState(false);
+  const [confirmReversarModal, setConfirmReversarModal] = useState(false);
+  const [egresoData, setEgresoData] = useState(null); // Datos del egreso encontrado
+  const [egresoDocumentos, setEgresoDocumentos] = useState([]); // Todos los documentos del egreso
+  const [documentosAEliminar, setDocumentosAEliminar] = useState([]); // IDs de documentos seleccionados para eliminar
+  const [accionReversar, setAccionReversar] = useState(""); // "revertir" | "eliminar" | "parcial"
 
   // Estados de filtros
   const [selectedTipoDoc, setSelectedTipoDoc] = useState("Todos");
@@ -363,23 +372,30 @@ const RRevisionDocumentos = () => {
       setLoadingModal(true);
       const pagoRef = collection(db, "pago_recepcion");
       const snapshot = await getDocs(pagoRef);
-  
+
       let egresoEncontrado = null;
-  
+
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-  
+
         if (Array.isArray(data.facturas)) {
           const match = data.facturas.find((empresa) => {
             if (empresa.rut !== rut || !Array.isArray(empresa.facturas)) return false;
-  
-            if (docTipo === "facturas") {
-              // Buscar en facturas directamente
+
+            if (docTipo === "facturas" || docTipo === "facturasExentas") {
+              // Buscar en facturas o facturas exentas
+              // Verificar tanto numeroDoc como tipoDoc para evitar conflictos
               return empresa.facturas.some(
-                (factura) => String(factura.numeroDoc) === String(numeroDoc)
+                (factura) => {
+                  const matchNumero = String(factura.numeroDoc) === String(numeroDoc);
+                  // Si el egreso tiene tipoDoc guardado, verificar que coincida
+                  // Si no tiene tipoDoc (egresos antiguos), asumir "facturas"
+                  const facturaTipo = factura.tipoDoc || "facturas";
+                  return matchNumero && facturaTipo === docTipo;
+                }
               );
             }
-  
+
             if (docTipo === "notasCredito") {
               // Buscar en las notas de crédito dentro de cada factura
               return empresa.facturas.some((factura) => {
@@ -389,10 +405,10 @@ const RRevisionDocumentos = () => {
                 );
               });
             }
-  
+
             return false;
           });
-  
+
           if (match) {
             egresoEncontrado = { id: docSnap.id, ...data };
           }
@@ -407,9 +423,12 @@ const RRevisionDocumentos = () => {
   
       const facturasPorEmpresa = egresoEncontrado.facturas.map((empresa) => ({
         rut: empresa.rut,
-        facturas: empresa.facturas.map((f) => f.numeroDoc),
+        facturas: empresa.facturas.map((f) => ({
+          numeroDoc: f.numeroDoc,
+          tipoDoc: f.tipoDoc || "facturas"
+        })),
       }));
-  
+
       await generarPDF(
         egresoEncontrado.numeroEgreso,
         facturasPorEmpresa,
@@ -564,19 +583,44 @@ const RRevisionDocumentos = () => {
       const docData = docSnap.data();
 
       // Solo permitir editar documentos no pagados (excepto boletas que siempre son pagadas)
-      const puedeEditar =
+      const puedeEditarDoc =
         (tipoDoc === "facturas" && docData.estado !== "pagado") ||
         (tipoDoc === "facturasExentas" && docData.estado !== "pagado") ||
         (tipoDoc === "notasCredito" && docData.estado !== "pagado") ||
         tipoDoc === "boletas";
 
-      if(puedeEditar){
+      if(puedeEditarDoc){
         handleSetParams(docData, tipoDoc);
         setCambioValoresEdit(true);
         setDeleteInfo({ rut, tipoDoc, numeroDoc });
         setCurrentDocRut(rut);
         setCurrentDocTipo(tipoDoc);
         setEditarModal(true);
+      } else if (puedeReversarPago && docData.estado === "pagado") {
+        // Si es admin/super_admin y el documento está pagado, buscar el egreso
+        const egreso = await findEgresoForDocument(rut, numeroDoc, tipoDoc);
+
+        if (egreso) {
+          // Preparar datos del documento actual
+          handleSetParams(docData, tipoDoc);
+          setDeleteInfo({ rut, tipoDoc, numeroDoc });
+          setCurrentDocRut(rut);
+          setCurrentDocTipo(tipoDoc);
+
+          // Guardar datos del egreso
+          setEgresoData(egreso);
+
+          // Preparar lista de todos los documentos del egreso
+          const todosDocumentos = prepararDocumentosEgreso(egreso);
+          setEgresoDocumentos(todosDocumentos);
+          setDocumentosAEliminar([]);
+          setAccionReversar("");
+
+          // Mostrar modal de reversión de pago
+          setReversarPagoModal(true);
+        } else {
+          setErrorModal("Error: No se encontró el egreso asociado a este documento.");
+        }
       } else {
         setErrorModal("El documento no se puede modificar ya que tiene egreso.");
       }
@@ -584,6 +628,248 @@ const RRevisionDocumentos = () => {
     } catch (error) {
       console.error("Error obteniendo información de documento:", error);
       setLoadingModal(false);
+    }
+  };
+
+  // Buscar el egreso que contiene un documento específico
+  const findEgresoForDocument = async (rut, numeroDoc, tipoDoc) => {
+    try {
+      const pagoRef = collection(db, "pago_recepcion");
+      const snapshot = await getDocs(pagoRef);
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+
+        if (Array.isArray(data.facturas)) {
+          for (const empresa of data.facturas) {
+            if (empresa.rut !== rut || !Array.isArray(empresa.facturas)) continue;
+
+            // Buscar en facturas/facturasExentas
+            if (tipoDoc === "facturas" || tipoDoc === "facturasExentas") {
+              const found = empresa.facturas.some(
+                (f) => {
+                  const matchNumero = String(f.numeroDoc) === String(numeroDoc);
+                  // Si el egreso tiene tipoDoc guardado, verificar que coincida
+                  // Si no tiene tipoDoc (egresos antiguos), asumir "facturas"
+                  const facturaTipo = f.tipoDoc || "facturas";
+                  return matchNumero && facturaTipo === tipoDoc;
+                }
+              );
+              if (found) return { id: docSnap.id, ...data };
+            }
+
+            // Buscar en notas de crédito dentro de cada factura
+            if (tipoDoc === "notasCredito") {
+              const found = empresa.facturas.some((f) => {
+                if (!Array.isArray(f.notasCredito)) return false;
+                return f.notasCredito.some(
+                  (nc) => String(nc.numeroDoc) === String(numeroDoc)
+                );
+              });
+              if (found) return { id: docSnap.id, ...data };
+            }
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error("Error buscando egreso:", error);
+      return null;
+    }
+  };
+
+  // Preparar lista plana de documentos del egreso para mostrar en el modal
+  const prepararDocumentosEgreso = (egreso) => {
+    const documentos = [];
+
+    if (!egreso || !Array.isArray(egreso.facturas)) return documentos;
+
+    egreso.facturas.forEach((empresa) => {
+      if (!Array.isArray(empresa.facturas)) return;
+
+      empresa.facturas.forEach((factura) => {
+        // Agregar factura
+        documentos.push({
+          id: `${empresa.rut}-${factura.tipoDoc}-${factura.numeroDoc}`,
+          rut: empresa.rut,
+          tipoDoc: factura.tipoDoc,
+          tipoDocLabel: factura.tipoDoc === "facturas" ? "Factura electrónica" :
+                        factura.tipoDoc === "facturasExentas" ? "Factura exenta" : "Factura",
+          numeroDoc: factura.numeroDoc,
+          total: factura.total,
+          totalDescontado: factura.totalDescontado,
+          esNotaCredito: false
+        });
+
+        // Agregar notas de crédito si existen
+        if (Array.isArray(factura.notasCredito)) {
+          factura.notasCredito.forEach((nc) => {
+            documentos.push({
+              id: `${empresa.rut}-notasCredito-${nc.numeroDoc}`,
+              rut: empresa.rut,
+              tipoDoc: "notasCredito",
+              tipoDocLabel: "Nota de crédito",
+              numeroDoc: nc.numeroDoc,
+              total: nc.total,
+              esNotaCredito: true,
+              facturaAsociada: factura.numeroDoc
+            });
+          });
+        }
+      });
+    });
+
+    return documentos;
+  };
+
+  // Calcular nuevo estado basado en fecha de vencimiento
+  const calcularNuevoEstado = (fechaV) => {
+    if (!fechaV) return "pendiente";
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    let fechaVencimiento;
+    if (fechaV?.toDate) {
+      fechaVencimiento = fechaV.toDate();
+    } else if (fechaV instanceof Date) {
+      fechaVencimiento = fechaV;
+    } else {
+      return "pendiente";
+    }
+
+    fechaVencimiento.setHours(0, 0, 0, 0);
+    return fechaVencimiento < hoy ? "vencido" : "pendiente";
+  };
+
+  // Reversar pago - cambiar estado de documentos y eliminar egreso
+  const handleReversarPago = async () => {
+    try {
+      setConfirmReversarModal(false);
+      setReversarPagoModal(false);
+      setLoadingModal(true);
+
+      const egresoId = egresoData.id;
+
+      if (accionReversar === "revertir") {
+        // Opción 1: Solo revertir el pago (cambiar estados, eliminar egreso)
+        await revertirDocumentosEgreso(egresoData, []);
+        await deleteDoc(doc(db, "pago_recepcion", egresoId));
+        setErrorModal("Egreso revertido correctamente. Los documentos ahora están pendientes de pago.");
+      }
+      else if (accionReversar === "eliminar") {
+        // Opción 2: Eliminar todo (documentos y egreso)
+        await eliminarDocumentosEgreso(egresoData);
+        await deleteDoc(doc(db, "pago_recepcion", egresoId));
+        setErrorModal("Egreso y documentos eliminados correctamente.");
+      }
+      else if (accionReversar === "parcial") {
+        // Opción 3: Eliminar algunos documentos, revertir otros
+        await revertirDocumentosEgreso(egresoData, documentosAEliminar);
+        await deleteDoc(doc(db, "pago_recepcion", egresoId));
+        setErrorModal("Egreso eliminado. Documentos seleccionados eliminados y resto revertidos a pendientes.");
+      }
+
+      setLoadingModal(false);
+      handleBuscar();
+    } catch (error) {
+      console.error("Error reversando pago:", error);
+      setLoadingModal(false);
+      setErrorModal("Error al reversar el pago: " + error.message);
+    }
+  };
+
+  // Revertir documentos del egreso (cambiar estado a pendiente/vencido)
+  const revertirDocumentosEgreso = async (egreso, idsAEliminar) => {
+    if (!egreso || !Array.isArray(egreso.facturas)) return;
+
+    for (const empresa of egreso.facturas) {
+      if (!Array.isArray(empresa.facturas)) continue;
+
+      for (const factura of empresa.facturas) {
+        const facturaId = `${empresa.rut}-${factura.tipoDoc}-${factura.numeroDoc}`;
+
+        // Si está en la lista de eliminar, eliminar el documento
+        if (idsAEliminar.includes(facturaId)) {
+          const facturaRef = doc(db, "empresas", empresa.rut, factura.tipoDoc, String(factura.numeroDoc));
+          await deleteDoc(facturaRef);
+
+          // Eliminar notas de crédito asociadas si las hay
+          if (Array.isArray(factura.notasCredito)) {
+            for (const nc of factura.notasCredito) {
+              const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", String(nc.numeroDoc));
+              await deleteDoc(ncRef);
+            }
+          }
+        } else {
+          // Revertir la factura a pendiente/vencido
+          const facturaRef = doc(db, "empresas", empresa.rut, factura.tipoDoc, String(factura.numeroDoc));
+          const facturaSnap = await getDoc(facturaRef);
+
+          if (facturaSnap.exists()) {
+            const facturaData = facturaSnap.data();
+            const nuevoEstado = calcularNuevoEstado(facturaData.fechaV);
+
+            await updateDoc(facturaRef, {
+              estado: nuevoEstado,
+              pagoUsuario: deleteField(),
+              fechaPago: deleteField(),
+              fechaProceso: deleteField()
+            });
+          }
+
+          // Revertir notas de crédito asociadas
+          if (Array.isArray(factura.notasCredito)) {
+            for (const nc of factura.notasCredito) {
+              const ncId = `${empresa.rut}-notasCredito-${nc.numeroDoc}`;
+
+              if (idsAEliminar.includes(ncId)) {
+                const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", String(nc.numeroDoc));
+                await deleteDoc(ncRef);
+              } else {
+                const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", String(nc.numeroDoc));
+                await updateDoc(ncRef, {
+                  estado: "pendiente",
+                  pagoUsuario: deleteField(),
+                  fechaPago: deleteField(),
+                  fechaProceso: deleteField()
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  // Eliminar todos los documentos del egreso
+  const eliminarDocumentosEgreso = async (egreso) => {
+    if (!egreso || !Array.isArray(egreso.facturas)) return;
+
+    for (const empresa of egreso.facturas) {
+      if (!Array.isArray(empresa.facturas)) continue;
+
+      for (const factura of empresa.facturas) {
+        // Eliminar notas de crédito primero
+        if (Array.isArray(factura.notasCredito)) {
+          for (const nc of factura.notasCredito) {
+            const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", String(nc.numeroDoc));
+            try {
+              await deleteDoc(ncRef);
+            } catch (err) {
+              console.warn(`No se pudo eliminar NC ${nc.numeroDoc}:`, err);
+            }
+          }
+        }
+
+        // Eliminar factura
+        const facturaRef = doc(db, "empresas", empresa.rut, factura.tipoDoc, String(factura.numeroDoc));
+        try {
+          await deleteDoc(facturaRef);
+        } catch (err) {
+          console.warn(`No se pudo eliminar factura ${factura.numeroDoc}:`, err);
+        }
+      }
     }
   };
 
@@ -1101,22 +1387,24 @@ const RRevisionDocumentos = () => {
   
 
   return (
-    <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+    <div className="min-h-screen flex">
       {/* Sidebar */}
-      <div className="row-span-2">
+      <div className="flex-shrink-0">
         <SidebarWithContentSeparator className="h-full" />
       </div>
 
-      {/* Título */}
-      <div className="p-4 relative flex items-center justify-center">
-        <div className="absolute left-5">
-          <VolverButton onClick={() => navigate("/recepcion-index")} />
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col min-h-screen overflow-visible">
+        {/* Título */}
+        <div className="p-4 relative flex items-center justify-center flex-shrink-0">
+          <div className="absolute left-5">
+            <VolverButton onClick={() => navigate("/recepcion-index")} />
+          </div>
+          <H1Tittle text="Revisión de documentos" />
         </div>
-        <H1Tittle text="Revisión de documentos" />
-      </div>
 
-      {/* Contenido principal */}
-      <div className="flex flex-col flex-wrap justify-start gap-4 mt-2 ml-5 mr-5">
+        {/* Contenido principal */}
+        <div className="flex-1 flex flex-col flex-wrap justify-start gap-4 px-3 sm:px-5 py-2 overflow-x-auto">
         <div className="grid gap-x-12 gap-y-2 grid-cols-4 grid-rows-2">
           <DropdownMenu
             classNameMenu="w-[1/3]"
@@ -1783,6 +2071,229 @@ const RRevisionDocumentos = () => {
       )}
 
 
+      {/* Modal de reversión de pago (solo admin/super_admin) */}
+      {reversarPagoModal && egresoData && (
+        <Modal
+          onClickOutside={() => setReversarPagoModal(false)}
+          className="!absolute !top-16 !max-w-3xl"
+        >
+          <div className="flex flex-col gap-4 p-4">
+            <p className="text-xl font-black text-center text-yellow-400">
+              Reversión de Egreso N° {egresoData.numeroEgreso}
+            </p>
+
+            {/* Información del egreso */}
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+              <p className="text-sm text-yellow-200 font-semibold mb-2">
+                Este documento está asociado a un egreso procesado.
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="text-slate-400">Total del egreso:</span>
+                <span className="font-semibold">{formatCLP(egresoData.totalEgreso)}</span>
+                <span className="text-slate-400">Fecha de pago:</span>
+                <span>{egresoData.fechaPago?.toDate ? egresoData.fechaPago.toDate().toLocaleDateString("es-CL") : "-"}</span>
+                <span className="text-slate-400">Documentos en egreso:</span>
+                <span className="font-semibold">{egresoDocumentos.filter(d => !d.esNotaCredito).length} factura(s)</span>
+              </div>
+            </div>
+
+            {/* Lista de documentos del egreso */}
+            <div className="bg-black/20 rounded-lg p-3 max-h-48 overflow-y-auto scrollbar-custom">
+              <p className="font-semibold text-sm mb-2 text-slate-300">Documentos en este egreso:</p>
+              <div className="space-y-1">
+                {egresoDocumentos.map((docEgreso) => (
+                  <div
+                    key={docEgreso.id}
+                    className={`flex items-center justify-between text-xs p-2 rounded ${
+                      docEgreso.esNotaCredito ? "bg-blue-500/10 ml-4" : "bg-white/5"
+                    } ${
+                      deleteInfo.numeroDoc === docEgreso.numeroDoc &&
+                      deleteInfo.tipoDoc === docEgreso.tipoDoc &&
+                      deleteInfo.rut === docEgreso.rut
+                        ? "ring-2 ring-accent-blue"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {accionReversar === "parcial" && (
+                        <input
+                          type="checkbox"
+                          checked={documentosAEliminar.includes(docEgreso.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setDocumentosAEliminar([...documentosAEliminar, docEgreso.id]);
+                            } else {
+                              setDocumentosAEliminar(documentosAEliminar.filter((id) => id !== docEgreso.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-white/20 bg-white/5 text-accent-blue focus:ring-accent-blue"
+                        />
+                      )}
+                      <span className="text-slate-400">{formatRUT(docEgreso.rut)}</span>
+                      <span className={docEgreso.esNotaCredito ? "text-blue-400" : "text-white"}>
+                        {docEgreso.tipoDocLabel} N° {docEgreso.numeroDoc}
+                      </span>
+                    </div>
+                    <span className={docEgreso.esNotaCredito ? "text-red-400" : "text-green-400"}>
+                      {docEgreso.esNotaCredito ? "-" : ""}{formatCLP(docEgreso.total)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Opciones según escenario */}
+            <div className="flex flex-col gap-2">
+              <p className="font-semibold text-sm text-slate-300">Seleccione una acción:</p>
+
+              {/* Opción 1: Solo revertir pago */}
+              <button
+                onClick={() => setAccionReversar("revertir")}
+                className={`p-3 rounded-lg text-left transition-all ${
+                  accionReversar === "revertir"
+                    ? "bg-accent-blue/20 border-2 border-accent-blue"
+                    : "bg-white/5 border border-white/10 hover:bg-white/10"
+                }`}
+              >
+                <p className="font-semibold text-sm">Revertir pago</p>
+                <p className="text-xs text-slate-400">
+                  Elimina el egreso y cambia el estado de todos los documentos a "pendiente" o "vencido" según corresponda.
+                </p>
+              </button>
+
+              {/* Opción 2: Eliminar todo */}
+              <button
+                onClick={() => setAccionReversar("eliminar")}
+                className={`p-3 rounded-lg text-left transition-all ${
+                  accionReversar === "eliminar"
+                    ? "bg-danger/20 border-2 border-danger"
+                    : "bg-white/5 border border-white/10 hover:bg-white/10"
+                }`}
+              >
+                <p className="font-semibold text-sm text-danger">Eliminar egreso y documentos</p>
+                <p className="text-xs text-slate-400">
+                  Elimina el egreso y todos los documentos asociados permanentemente.
+                </p>
+              </button>
+
+              {/* Opción 3: Eliminación parcial (solo si hay más de un documento) */}
+              {egresoDocumentos.filter(d => !d.esNotaCredito).length > 1 && (
+                <button
+                  onClick={() => setAccionReversar("parcial")}
+                  className={`p-3 rounded-lg text-left transition-all ${
+                    accionReversar === "parcial"
+                      ? "bg-yellow-500/20 border-2 border-yellow-500"
+                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  <p className="font-semibold text-sm text-yellow-400">Eliminación selectiva</p>
+                  <p className="text-xs text-slate-400">
+                    Selecciona qué documentos eliminar. Los no seleccionados serán revertidos a "pendiente".
+                  </p>
+                </button>
+              )}
+            </div>
+
+            {/* Info adicional para eliminación parcial */}
+            {accionReversar === "parcial" && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                <p className="text-xs text-yellow-200">
+                  Marque los documentos que desea eliminar en la lista de arriba.
+                  Los documentos no marcados serán revertidos a estado pendiente.
+                </p>
+                <p className="text-xs text-yellow-200 mt-1">
+                  Documentos a eliminar: {documentosAEliminar.length}
+                </p>
+              </div>
+            )}
+
+            {/* Botones de acción */}
+            <div className="flex gap-4 mt-2">
+              <TextButton
+                text="Cancelar"
+                className="bg-slate-600 text-white font-semibold hover:bg-slate-500 active:bg-slate-700 flex-1 justify-center py-3 rounded-lg"
+                onClick={() => {
+                  setReversarPagoModal(false);
+                  setAccionReversar("");
+                  setDocumentosAEliminar([]);
+                }}
+              />
+              <TextButton
+                text="Continuar"
+                disabled={!accionReversar || (accionReversar === "parcial" && documentosAEliminar.length === 0)}
+                className={`flex-1 justify-center py-3 rounded-lg font-semibold ${
+                  accionReversar && (accionReversar !== "parcial" || documentosAEliminar.length > 0)
+                    ? "bg-yellow-600 text-white hover:bg-yellow-500 active:bg-yellow-700"
+                    : "bg-slate-600 text-slate-400 cursor-not-allowed"
+                }`}
+                onClick={() => {
+                  if (accionReversar) {
+                    setConfirmReversarModal(true);
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal de confirmación de reversión */}
+      {confirmReversarModal && (
+        <Modal onClickOutside={() => setConfirmReversarModal(false)} className="!absolute !top-24">
+          <div className="flex flex-col items-center gap-6 p-6">
+            <div className="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center">
+              <svg className="w-8 h-8 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+
+            <p className="text-lg font-bold text-center text-yellow-400">
+              {accionReversar === "revertir" && "¿Confirmar reversión de pago?"}
+              {accionReversar === "eliminar" && "¿Confirmar eliminación de egreso y documentos?"}
+              {accionReversar === "parcial" && "¿Confirmar eliminación selectiva?"}
+            </p>
+
+            <div className="text-sm text-center text-slate-300">
+              {accionReversar === "revertir" && (
+                <p>
+                  Se eliminará el egreso N° {egresoData?.numeroEgreso} y todos los documentos
+                  cambiarán a estado "pendiente" o "vencido".
+                </p>
+              )}
+              {accionReversar === "eliminar" && (
+                <p className="text-danger">
+                  Se eliminarán permanentemente el egreso N° {egresoData?.numeroEgreso} y
+                  todos sus documentos asociados. Esta acción no se puede deshacer.
+                </p>
+              )}
+              {accionReversar === "parcial" && (
+                <p>
+                  Se eliminará el egreso N° {egresoData?.numeroEgreso}.
+                  {documentosAEliminar.length} documento(s) serán eliminados y el resto revertidos.
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-8 w-full">
+              <TextButton
+                text="Cancelar"
+                className="bg-slate-600 text-white font-black hover:bg-slate-500 active:bg-slate-700 flex-1 justify-center py-3 rounded-xl"
+                onClick={() => setConfirmReversarModal(false)}
+              />
+              <TextButton
+                text="Confirmar"
+                className={`font-black flex-1 justify-center py-3 rounded-xl ${
+                  accionReversar === "eliminar"
+                    ? "bg-danger text-white hover:bg-danger-hover active:bg-danger-active"
+                    : "bg-yellow-600 text-white hover:bg-yellow-500 active:bg-yellow-700"
+                }`}
+                onClick={handleReversarPago}
+              />
+            </div>
+          </div>
+        </Modal>
+      )}
+
       <AlertModal
         isOpen={!!errorModal}
         onClose={() => setErrorModal("")}
@@ -1793,8 +2304,7 @@ const RRevisionDocumentos = () => {
 
       <LoadingModal isOpen={loadingModal} message="Cargando..." />
 
-      {/* Footer fijo */}
-      <div className="absolute bottom-0 left-0 w-full z-10">
+        {/* Footer */}
         <Footer />
       </div>
     </div>

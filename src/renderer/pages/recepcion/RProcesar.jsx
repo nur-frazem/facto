@@ -255,12 +255,15 @@ const RProcesar = () => {
             ),
           });
 
-          // 5. Generar PDF (usando solo números de documento para compatibilidad)
+          // 5. Generar PDF (incluyendo tipoDoc para mostrar correctamente el tipo de documento)
           generarPDF(
             numeroEgreso,
             Object.entries(docsPorEmpresa).map(([rut, docs]) => ({
               rut,
-              facturas: docs.map(d => d.numeroDoc),
+              facturas: docs.map(d => ({
+                numeroDoc: d.numeroDoc,
+                tipoDoc: d.tipoDoc || "facturas"
+              })),
             })),
             totalDocumentos,
             fechaPago
@@ -297,22 +300,24 @@ const RProcesar = () => {
       };
 
     return (
-        <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+        <div className="min-h-screen flex">
             {/* Sidebar */}
-            <div className="row-span-2">
+            <div className="flex-shrink-0">
                 <SidebarWithContentSeparator className="h-full" />
             </div>
 
-            {/* Título */}
-            <div className="p-4 relative flex items-center justify-center">
-                <div className="absolute left-5">
-                    <VolverButton onClick={() => navigate("/recepcion-index")} />
+            {/* Content Area */}
+            <div className="flex-1 flex flex-col min-h-screen overflow-visible">
+                {/* Título */}
+                <div className="p-4 relative flex items-center justify-center flex-shrink-0">
+                    <div className="absolute left-5">
+                        <VolverButton onClick={() => navigate("/recepcion-index")} />
+                    </div>
+                    <H1Tittle text="Procesar documentos" />
                 </div>
-                <H1Tittle text="Procesar documentos" />
-            </div>
 
-            {/* Contenido principal */}
-            <div className="flex flex-col flex-wrap justify-start mt-2 ml-5 mr-5">
+                {/* Contenido principal */}
+                <div className="flex-1 flex flex-col flex-wrap justify-start px-3 sm:px-5 py-2 overflow-x-auto">
                 <div className="grid grid-cols-3 grid-rows-1 gap-x-10 mb-2">
 
                     {/* Selección de giro */}
@@ -598,10 +603,9 @@ const RProcesar = () => {
                 )}
 
                 <LoadingModal isOpen={loadingModal} message="Procesando documentos..." />
-            </div>
+                </div>
 
-            {/* Footer fijo */}
-            <div className="absolute bottom-0 left-0 w-full z-10">
+                {/* Footer */}
                 <Footer />
             </div>
         </div>

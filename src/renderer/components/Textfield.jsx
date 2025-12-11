@@ -251,95 +251,103 @@ export function DropdownMenu({
   }, [items, searchTerm, searchable]);
 
   return (
-    <Menu open={open} handler={handleOpenChange} dismiss={{ outsidePress: true }}>
-      <div className="flex flex-col">
-        <span className={labelStyles}>{tittle}</span>
-        <MenuHandler
-          ref={handlerRef}
-          className={`
-            w-full py-2.5 px-4
-            bg-white/5 border border-white/10
-            rounded-lg
-            hover:border-white/20
-            focus:outline-none focus:ring-2 focus:ring-accent-blue/50
-            transition-all duration-200
-            ${classNameMenu}
-          `}
-        >
-          <Button
-            ref={buttonRef}
-            className="p-0 bg-transparent text-white w-full shadow-none hover:shadow-none"
+    <div className="flex flex-col">
+      <span className={labelStyles}>{tittle}</span>
+      <Menu
+        open={open}
+        handler={handleOpenChange}
+        dismiss={{ outsidePress: true }}
+        placement="bottom-start"
+        allowHover={false}
+      >
+        <MenuHandler>
+          <button
+            ref={(el) => {
+              buttonRef.current = el;
+              handlerRef.current = el;
+            }}
+            type="button"
+            className={`
+              w-full py-2.5 px-4
+              bg-white/5 border border-white/10
+              rounded-lg
+              hover:border-white/20
+              focus:outline-none focus:ring-2 focus:ring-accent-blue/50
+              transition-all duration-200
+              ${classNameMenu}
+            `}
           >
             <div className="flex items-center justify-between w-full">
-              <span className="text-sm font-normal truncate">{internalSelected || tittle}</span>
+              <span className="text-sm font-normal truncate text-white">{internalSelected || tittle}</span>
               <ChevronDownIcon
                 className={`w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0 ml-2 ${
                   open ? "rotate-180" : "rotate-0"
                 }`}
               />
             </div>
-          </Button>
+          </button>
         </MenuHandler>
-      </div>
 
-      <MenuList
-        style={{ width: menuWidth }}
-        className={`
-          px-0 py-1 max-w-96 min-w-52
-          overflow-hidden rounded-lg
-          bg-gradient-to-br from-surface-light to-surface
-          border border-white/10
-          shadow-modal
-          ${classNameList}
-        `}
-      >
-        {/* Search input for searchable dropdowns */}
-        {searchable && (
-          <div className="px-2 pb-2 pt-1 border-b border-white/10">
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={searchPlaceholder}
-              className="w-full px-3 py-2 bg-white/5 text-white text-sm placeholder-slate-400 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50"
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                // Prevent menu from closing on Enter if there are filtered items
-                if (e.key === "Enter" && filteredItems.length > 0) {
-                  e.preventDefault();
-                  handleSelect(filteredItems[0]);
-                }
-                // Prevent menu from closing on Escape, just clear search
-                if (e.key === "Escape") {
-                  e.stopPropagation();
-                  setSearchTerm("");
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {/* Items list */}
-        <div className={`${searchable ? 'max-h-48 overflow-y-auto scrollbar-custom' : ''}`}>
-          {filteredItems.length > 0 ? (
-            filteredItems.map((item, index) => (
-              <MenuItem
-                key={index}
-                onClick={() => handleSelect(item)}
-                className="w-full px-4 py-2 text-white text-sm font-normal hover:bg-white/10 transition-colors"
-              >
-                {item}
-              </MenuItem>
-            ))
-          ) : (
-            <div className="px-4 py-3 text-sm text-slate-400 text-center">
-              No se encontraron resultados
+        <MenuList
+          className={`
+            px-0 py-1 max-w-96 min-w-52
+            overflow-hidden rounded-lg
+            bg-gradient-to-br from-surface-light to-surface
+            border border-white/10
+            shadow-modal
+            !z-[9999]
+            ${classNameList}
+          `}
+          style={{ width: menuWidth }}
+        >
+          {/* Search input for searchable dropdowns */}
+          {searchable && (
+            <div className="px-2 pb-2 pt-1 border-b border-white/10">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full px-3 py-2 bg-white/5 text-white text-sm placeholder-slate-400 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  // Prevent menu from closing on Enter if there are filtered items
+                  if (e.key === "Enter" && filteredItems.length > 0) {
+                    e.preventDefault();
+                    handleSelect(filteredItems[0]);
+                  }
+                  // Prevent menu from closing on Escape, just clear search
+                  if (e.key === "Escape") {
+                    e.stopPropagation();
+                    setSearchTerm("");
+                  }
+                }}
+              />
             </div>
           )}
-        </div>
-      </MenuList>
-    </Menu>
+
+          {/* Items list */}
+          <div className={`${searchable ? 'max-h-48 overflow-y-auto scrollbar-custom' : ''}`}>
+            {filteredItems.length > 0 ? (
+              filteredItems.map((item, index) => (
+                <MenuItem
+                  key={index}
+                  onClick={() => handleSelect(item)}
+                  className="w-full px-4 py-2 text-white text-sm font-normal hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  {item}
+                </MenuItem>
+              ))
+            ) : (
+              <div className="px-4 py-3 text-sm text-slate-400 text-center">
+                No se encontraron resultados
+              </div>
+            )}
+          </div>
+        </MenuList>
+      </Menu>
+    </div>
   );
 }
 
@@ -409,7 +417,7 @@ export function DropdownMenuList({
 
       {open && (
         <div className="
-          absolute mt-2 w-full z-50
+          absolute mt-2 w-full z-[9999]
           bg-gradient-to-br from-surface-light to-surface
           border border-white/10
           rounded-lg shadow-modal

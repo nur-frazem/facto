@@ -348,30 +348,32 @@ const RIndex = () => {
   const TYPE_COLORS = ['#3b82f6', '#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899'];
 
   return (
-    <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+    <div className="min-h-screen flex">
       {/* Sidebar */}
-      <div className="row-span-2">
+      <div className="flex-shrink-0">
         <SidebarWithContentSeparator className="h-full" />
       </div>
 
-      {/* Title */}
-      <div className="p-3 relative flex items-center justify-center">
-        <div className="absolute left-5">
-          <VolverButton onClick={() => navigate('/home')} />
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col min-h-screen overflow-visible">
+        {/* Title */}
+        <div className="p-3 relative flex items-center justify-center flex-shrink-0">
+          <div className="absolute left-5">
+            <VolverButton onClick={() => navigate('/home')} />
+          </div>
+          <H1Tittle text="Recepción de documentos" />
+          <button
+            onClick={fetchAllDocuments}
+            disabled={loading}
+            className="absolute right-5 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
+            title="Actualizar datos"
+          >
+            <ArrowPathIcon className={`w-5 h-5 text-white ${loading ? 'animate-spin' : ''}`} />
+          </button>
         </div>
-        <H1Tittle text="Recepción de documentos" />
-        <button
-          onClick={fetchAllDocuments}
-          disabled={loading}
-          className="absolute right-5 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
-          title="Actualizar datos"
-        >
-          <ArrowPathIcon className={`w-5 h-5 text-white ${loading ? 'animate-spin' : ''}`} />
-        </button>
-      </div>
 
-      {/* Main Content */}
-      <div className="overflow-y-auto pb-16 px-5">
+        {/* Main Content */}
+        <div className="flex-1 overflow-y-auto px-3 sm:px-5 pb-4">
         <div className="max-w-6xl mx-auto space-y-4">
           {/* Quick Actions + Month Navigation Row */}
           <div className="flex flex-wrap items-center justify-between gap-3 py-2">
@@ -624,10 +626,9 @@ const RIndex = () => {
             </div>
           )}
         </div>
-      </div>
+        </div>
 
-      {/* Footer */}
-      <div className="absolute bottom-0 left-0 w-full z-10">
+        {/* Footer */}
         <Footer />
       </div>
     </div>

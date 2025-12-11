@@ -190,8 +190,13 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
     // Table rows
     let subtotalEmpresa = 0;
 
-    for (const facturaNum of empresa.facturas) {
-      const facturaRef = doc(db, "empresas", empresa.rut, "facturas", facturaNum);
+    for (const facturaItem of empresa.facturas) {
+      // Support both old format (just numeroDoc string) and new format (object with numeroDoc and tipoDoc)
+      const facturaNum = typeof facturaItem === "object" ? facturaItem.numeroDoc : facturaItem;
+      const tipoDoc = typeof facturaItem === "object" ? (facturaItem.tipoDoc || "facturas") : "facturas";
+
+      // Determine the collection to fetch from
+      const facturaRef = doc(db, "empresas", empresa.rut, tipoDoc, String(facturaNum));
       const facturaSnap = await getDoc(facturaRef);
       if (!facturaSnap.exists()) continue;
       const factura = facturaSnap.data();
@@ -206,15 +211,18 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
         y = 20;
       }
 
+      // Determine the label based on document type
+      const tipoLabel = tipoDoc === "facturasExentas" ? "Fact. Exenta" : "Factura";
+
       // Invoice row
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
       pdf.setTextColor(...COLORS.black);
 
       colX = marginLeft + 3;
-      pdf.text("Factura", colX, y + 5);
+      pdf.text(tipoLabel, colX, y + 5);
       colX += colWidths.tipo;
-      pdf.text(factura.numeroDoc || facturaNum, colX, y + 5);
+      pdf.text(String(factura.numeroDoc || facturaNum), colX, y + 5);
       colX += colWidths.numero;
       pdf.text(fechaE, colX, y + 5);
       pdf.text(formatCLP(factura.total), marginRight - 5, y + 5, { align: "right" });
@@ -230,7 +238,7 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
       // Credit notes associated
       if (factura.notasCredito && factura.notasCredito.length > 0) {
         for (const ncNum of factura.notasCredito) {
-          const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", ncNum);
+          const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", String(ncNum));
           const ncSnap = await getDoc(ncRef);
           if (!ncSnap.exists()) continue;
           const ncData = ncSnap.data();
@@ -247,7 +255,7 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
           colX = marginLeft + 6; // Indented
           pdf.text("- N.C.", colX, y + 4);
           colX = marginLeft + 3 + colWidths.tipo; // Align with document number column
-          pdf.text(ncData.numeroDoc || ncNum, colX, y + 4);
+          pdf.text(String(ncData.numeroDoc || ncNum), colX, y + 4);
           colX += colWidths.numero;
           pdf.text(fechaNC, colX, y + 4);
           pdf.text(`-${formatCLP(ncData.total || 0)}`, marginRight - 5, y + 4, { align: "right" });

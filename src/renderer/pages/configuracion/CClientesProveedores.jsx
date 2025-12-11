@@ -224,22 +224,24 @@ const RProcesar = () => {
     }
 
     return (
-        <div className="h-screen grid grid-cols-[auto_1fr] grid-rows-[auto_1fr] relative">
+        <div className="min-h-screen flex">
             {/* Sidebar */}
-            <div className="row-span-2">
+            <div className="flex-shrink-0">
                 <SidebarWithContentSeparator className="h-full" />
             </div>
 
-            {/* Título */}
-            <div className="p-4 relative flex items-center justify-center">
-                <div className="absolute left-5">
-                    <VolverButton onClick={() => navigate("/configuracion-index")} />
+            {/* Content Area */}
+            <div className="flex-1 flex flex-col min-h-screen overflow-visible">
+                {/* Título */}
+                <div className="p-4 relative flex items-center justify-center flex-shrink-0">
+                    <div className="absolute left-5">
+                        <VolverButton onClick={() => navigate("/configuracion-index")} />
+                    </div>
+                    <H1Tittle text="Configurar clientes y proveedores" />
                 </div>
-                <H1Tittle text="Configurar clientes y proveedores" />
-            </div>
 
-            {/* Contenido principal */}
-            <div className="flex flex-col flex-wrap justify-start mt-10 ml-5 mr-5">
+                {/* Contenido principal */}
+                <div className="flex-1 flex flex-col flex-wrap justify-start px-3 sm:px-5 py-4 overflow-x-auto">
             <TextButton text="Agregar empresa"
                         className="h-10 px-5 bg-success hover:bg-success-hover active:bg-success-active transition-colors duration-200 mr-auto mb-4 rounded-lg"
                         classNameText="font-semibold text-base text-white"
@@ -756,10 +758,9 @@ const RProcesar = () => {
                 />
 
                 <LoadingModal isOpen={loadingModal} message="Procesando..." />
-            </div>
-                {/* giro - comuna - direccion - telefono - correo */}
-            {/* Footer fijo */}
-            <div className="absolute bottom-0 left-0 w-full z-10">
+                </div>
+
+                {/* Footer */}
                 <Footer />
             </div>
         </div>
