@@ -17,9 +17,9 @@ export default {
         },
         // Danger/Cancel colors
         danger: {
-          DEFAULT: '#dc2626',
-          hover: '#ef4444',
-          active: '#b91c1c',
+          DEFAULT: '#f87171',
+          hover: '#fca5a5',
+          active: '#ef4444',
         },
         // Success colors
         success: {

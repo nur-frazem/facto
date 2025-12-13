@@ -12,6 +12,8 @@ import RRevisionDocumentos from './pages/recepcion/RRevisionDocumentos';
 import RCalendario from './pages/recepcion/RCalendario';
 import CClientesProveedores from './pages/configuracion/CClientesProveedores';
 import CRolesUsuarios from './pages/configuracion/CRolesUsuarios';
+import CAuditoria from './pages/configuracion/CAuditoria';
+import CCuenta from './pages/configuracion/CCuenta';
 import ProtectedRoute from './components/ProtectedRoute';
 import Fondo from "./assets/background/FondoModernoAzul.png";
 
@@ -58,6 +60,16 @@ function App() {
               <Route path="/configuracion-roles" element={
                 <ProtectedRoute requiredPermission="ASIGNAR_ROLES">
                   <CRolesUsuarios/>
+                </ProtectedRoute>
+              } />
+              <Route path="/configuracion-auditoria" element={
+                <ProtectedRoute requiredPermission="VER_CONFIGURACION">
+                  <CAuditoria/>
+                </ProtectedRoute>
+              } />
+              <Route path="/configuracion-cuenta" element={
+                <ProtectedRoute>
+                  <CCuenta/>
                 </ProtectedRoute>
               } />
               <Route path="/recepcion-index/ingresar" element={

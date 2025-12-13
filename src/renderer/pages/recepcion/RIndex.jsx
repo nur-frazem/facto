@@ -130,7 +130,7 @@ const DOC_TYPES = [
 
 const RIndex = () => {
   const navigate = useNavigate();
-  const { tienePermiso, isLoggingOut } = useAuth();
+  const { tienePermiso } = useAuth();
 
   // Permissions
   const puedeIngresar = tienePermiso('INGRESAR_DOCUMENTOS');

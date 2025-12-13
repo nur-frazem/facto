@@ -1,6 +1,6 @@
-export function Modal({ children, onClickOutside, className = "", classNameContainer = "" }) {
+export function Modal({ children, onClickOutside, className = "", classNameContainer = "", alignTop = false }) {
   return (
-    <div className={`fixed inset-0 flex items-center justify-center z-50 animate-fade-in overflow-y-auto py-4 ${classNameContainer}`}>
+    <div className={`fixed inset-0 flex ${alignTop ? 'items-start pt-16' : 'items-center'} justify-center z-50 animate-fade-in overflow-y-auto py-4 ${classNameContainer}`}>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/60 backdrop-blur-sm"
@@ -12,7 +12,7 @@ export function Modal({ children, onClickOutside, className = "", classNameConta
         className={`
           relative
           w-auto max-w-4xl
-          mx-4 my-auto
+          mx-4 ${alignTop ? 'mt-0' : 'my-auto'}
           p-6
           bg-gradient-to-br from-surface-light to-surface
           border border-white/10

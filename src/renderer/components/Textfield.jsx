@@ -3,7 +3,6 @@ import {
   MenuHandler,
   MenuList,
   MenuItem,
-  Button,
 } from "@material-tailwind/react";
 
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
@@ -35,6 +34,8 @@ export function Textfield({
   type = "text",
   value,
   onChange,
+  onKeyDown,
+  onKeyPress,
   placeholder,
   readOnly,
   className = "w-full",
@@ -59,10 +60,9 @@ export function Textfield({
 
   const formatRut = (val) => {
     if (!val) return "";
-    let clean = val.replace(/[^0-9kK]/g, "").toUpperCase();
-    let body = clean.slice(0, -1);
-    let dv = clean.slice(-1);
-    body = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    const clean = val.replace(/[^0-9kK]/g, "").toUpperCase();
+    const body = clean.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    const dv = clean.slice(-1);
     return body + (dv ? "-" + dv : "");
   };
 
@@ -134,6 +134,8 @@ export function Textfield({
             type="tel"
             value={displayValue}
             onChange={handleChange}
+            onKeyDown={onKeyDown}
+            onKeyPress={onKeyPress}
             placeholder={placeholder || "987654321"}
             readOnly={isReadOnly}
             className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm placeholder-slate-400 focus:outline-none"
@@ -144,6 +146,8 @@ export function Textfield({
           type={type === "rut" ? "text" : type}
           value={displayValue}
           onChange={handleChange}
+          onKeyDown={onKeyDown}
+          onKeyPress={onKeyPress}
           placeholder={placeholder}
           readOnly={isReadOnly}
           className={`${inputBaseStyles} ${isReadOnly ? 'opacity-60 cursor-not-allowed' : ''} ${classNameInput}`}
@@ -470,7 +474,8 @@ export function DatepickerField({
   className = "w-full",
   classNameDatePicker = "",
   classNameLabel = "",
-  minDate
+  minDate,
+  maxDate
 }) {
   return (
     <div className={`flex flex-col ${className}`}>
@@ -482,6 +487,8 @@ export function DatepickerField({
         className={`${inputBaseStyles} ${classNameDatePicker}`}
         dateFormat="dd/MM/yyyy"
         minDate={minDate}
+        maxDate={maxDate}
+        portalId="datepicker-portal"
       />
     </div>
   );
@@ -506,6 +513,8 @@ export function DatepickerRange({
         dateFormat="dd/MM/yyyy"
         className={inputBaseStyles}
         isClearable
+        portalId="datepicker-portal"
+        onChangeRaw={(e) => e.preventDefault()}
       />
     </div>
   );

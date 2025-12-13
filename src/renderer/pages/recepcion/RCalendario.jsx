@@ -7,7 +7,7 @@ import { DropdownMenu } from "../../components/Textfield";
 import { useNavigate } from "react-router-dom";
 import { Modal, LoadingModal } from "../../components/modal";
 
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 
 import { formatRUT } from "../../utils/formatRUT";
@@ -18,17 +18,6 @@ const formatCLP = (value) => {
     style: "currency",
     currency: "CLP",
   }).format(value);
-};
-
-// Helper to get document type label
-const getDocTypeLabel = (tipo) => {
-  const labels = {
-    facturas: "Factura electrónica",
-    facturasExentas: "Factura exenta",
-    notasCredito: "Nota de crédito",
-    boletas: "Boleta",
-  };
-  return labels[tipo] || tipo;
 };
 
 // Helper to get short document type label
@@ -54,13 +43,16 @@ const MONTHS = [
 const RCalendario = () => {
   const navigate = useNavigate();
 
-  // Current date for reference
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Current date for reference (memoized to avoid recreating on every render)
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
   // State for the currently viewed month/year
-  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-  const [currentYear, setCurrentYear] = useState(today.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
 
   // State for all documents
   const [allDocuments, setAllDocuments] = useState([]);
@@ -100,10 +92,29 @@ const RCalendario = () => {
           // Document types to fetch
           const tiposDoc = ["facturas", "facturasExentas", "notasCredito", "boletas"];
 
+          // Today's date for overdue check
+          const hoy = new Date();
+          hoy.setHours(0, 0, 0, 0);
+
           for (const tipo of tiposDoc) {
             const docsSnap = await getDocs(
               collection(db, "empresas", rut, tipo)
             );
+
+            // Check and update overdue documents
+            const updatePromises = [];
+            for (const docSnap of docsSnap.docs) {
+              const docData = docSnap.data();
+              if (docData.estado === "pendiente" && docData.fechaV?.toDate && docData.fechaV.toDate() < hoy) {
+                const docRef = doc(db, "empresas", rut, tipo, docSnap.id);
+                updatePromises.push(updateDoc(docRef, { estado: "vencido" }));
+              }
+            }
+
+            // Execute updates in parallel
+            if (updatePromises.length > 0) {
+              await Promise.all(updatePromises);
+            }
 
             docsSnap.docs.forEach((docSnap) => {
               const docData = docSnap.data();
@@ -112,6 +123,10 @@ const RCalendario = () => {
               const fechaPagoDate = docData.fechaPago?.toDate ? docData.fechaPago.toDate() : null;
               const fechaProcesoDate = docData.fechaProceso?.toDate ? docData.fechaProceso.toDate() : null;
 
+              // Apply local status update if it was overdue
+              const fechaV = docData.fechaV?.toDate ? docData.fechaV.toDate() : null;
+              const isOverdue = fechaV && fechaV < hoy && docData.estado === "pendiente";
+
               allDocs.push({
                 id: docSnap.id,
                 tipo,
@@ -119,7 +134,7 @@ const RCalendario = () => {
                 razon,
                 numeroDoc: docData.numeroDoc,
                 total: docData.totalDescontado ?? docData.total,
-                estado: docData.estado,
+                estado: isOverdue ? "vencido" : docData.estado,
                 fechaE: docData.fechaE?.toDate ? docData.fechaE.toDate() : null,
                 fechaV: docData.fechaV?.toDate ? docData.fechaV.toDate() : null,
                 // Use fechaPago for calendar display (the actual payment date)
@@ -239,8 +254,8 @@ const RCalendario = () => {
         const docMonth = doc.fechaV.getMonth();
         const docYear = doc.fechaV.getFullYear();
         if (docMonth === currentMonth && docYear === currentYear) {
-          // Check if overdue (past due date)
-          if (doc.fechaV < today) {
+          // Check if overdue (today or past due date)
+          if (doc.fechaV <= today) {
             overdueCount++;
             overdueTotal += doc.total || 0;
           } else {
@@ -472,8 +487,8 @@ const RCalendario = () => {
               const isTodayDate = isToday(date);
               const isWeekendDate = isWeekend(date);
 
-              // Check if date is in the past (overdue) - all docs in expiring are unpaid
-              const isOverdue = date && date < today;
+              // Check if date is today or in the past (overdue) - all docs in expiring are unpaid
+              const isOverdue = date && date <= today;
 
               return (
                 <div
@@ -591,7 +606,7 @@ const RCalendario = () => {
             {selectedDayDocuments.expiring.length > 0 && (
               <div>
                 {(() => {
-                  const isOverdueDate = selectedDay < today;
+                  const isOverdueDate = selectedDay <= today;
                   return (
                     <>
                       <div className="flex items-center gap-2 mb-3">

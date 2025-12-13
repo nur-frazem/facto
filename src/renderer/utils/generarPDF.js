@@ -201,9 +201,17 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
       if (!facturaSnap.exists()) continue;
       const factura = facturaSnap.data();
 
-      const fechaE = factura.fechaE
-        ? new Date(factura.fechaE.seconds * 1000).toLocaleDateString("es-CL")
-        : "";
+      // Parse date safely (handles Firestore Timestamp, Date, or {seconds} format)
+      let fechaE = "";
+      if (factura.fechaE) {
+        if (factura.fechaE.toDate) {
+          fechaE = factura.fechaE.toDate().toLocaleDateString("es-CL");
+        } else if (factura.fechaE.seconds) {
+          fechaE = new Date(factura.fechaE.seconds * 1000).toLocaleDateString("es-CL");
+        } else if (factura.fechaE instanceof Date) {
+          fechaE = factura.fechaE.toLocaleDateString("es-CL");
+        }
+      }
 
       // Check if we need a new page
       if (y > 265) {
@@ -212,7 +220,12 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
       }
 
       // Determine the label based on document type
-      const tipoLabel = tipoDoc === "facturasExentas" ? "Fact. Exenta" : "Factura";
+      let tipoLabel = "Factura";
+      if (tipoDoc === "facturasExentas") {
+        tipoLabel = "Fact. Exenta";
+      } else if (tipoDoc === "notasCredito") {
+        tipoLabel = "N. Crédito";
+      }
 
       // Invoice row
       pdf.setFont("helvetica", "normal");
@@ -238,14 +251,24 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
       // Credit notes associated
       if (factura.notasCredito && factura.notasCredito.length > 0) {
         for (const ncNum of factura.notasCredito) {
-          const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", String(ncNum));
+          // Handle both object format ({numeroDoc: "123"}) and string/number format
+          const ncNumero = typeof ncNum === "object" ? ncNum.numeroDoc : ncNum;
+          const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", String(ncNumero));
           const ncSnap = await getDoc(ncRef);
           if (!ncSnap.exists()) continue;
           const ncData = ncSnap.data();
 
-          const fechaNC = ncData.fechaE
-            ? new Date(ncData.fechaE.seconds * 1000).toLocaleDateString("es-CL")
-            : "";
+          // Parse credit note date safely
+          let fechaNC = "";
+          if (ncData.fechaE) {
+            if (ncData.fechaE.toDate) {
+              fechaNC = ncData.fechaE.toDate().toLocaleDateString("es-CL");
+            } else if (ncData.fechaE.seconds) {
+              fechaNC = new Date(ncData.fechaE.seconds * 1000).toLocaleDateString("es-CL");
+            } else if (ncData.fechaE instanceof Date) {
+              fechaNC = ncData.fechaE.toLocaleDateString("es-CL");
+            }
+          }
 
           // Credit note row (indented and in gray)
           pdf.setFont("helvetica", "italic");
@@ -255,7 +278,7 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
           colX = marginLeft + 6; // Indented
           pdf.text("- N.C.", colX, y + 4);
           colX = marginLeft + 3 + colWidths.tipo; // Align with document number column
-          pdf.text(String(ncData.numeroDoc || ncNum), colX, y + 4);
+          pdf.text(String(ncData.numeroDoc || ncNumero), colX, y + 4);
           colX += colWidths.numero;
           pdf.text(fechaNC, colX, y + 4);
           pdf.text(`-${formatCLP(ncData.total || 0)}`, marginRight - 5, y + 4, { align: "right" });
@@ -349,7 +372,7 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
     pdf.text(`Documento generado por FACTO - Página ${i} de ${pageCount}`, pageWidth / 2, 290, { align: "center" });
   }
 
-  // Open in new tab
-  const blobUrl = pdf.output("bloburl");
-  window.open(`${blobUrl}#zoom=100`, "_blank");
+  // Download PDF - most reliable cross-platform solution for Electron
+  const fechaStr = new Date().toISOString().split('T')[0];
+  pdf.save(`Egreso_${numeroEgreso}_${fechaStr}.pdf`);
 };

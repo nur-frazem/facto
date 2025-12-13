@@ -8,7 +8,7 @@ export function CButton({ children, className }) {
   );
 }
 
-export function CGrid({ children, rowSizes = "auto 1fr" }) {
+export function CGrid({ children, rowSizes: _rowSizes = "auto 1fr" }) {
   return (
     <div className="flex flex-col min-h-screen p-4 gap-4">
       {children}

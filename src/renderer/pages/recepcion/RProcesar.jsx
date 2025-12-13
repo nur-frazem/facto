@@ -4,12 +4,11 @@ import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
 import { useNavigate } from "react-router-dom";
 import { VolverButton, YButton, TextButton, XButton } from "../../components/Button";
-import { DropdownMenu, DropdownMenuList, DatepickerField } from "../../components/Textfield";
+import { DropdownMenu, DatepickerField } from "../../components/Textfield";
 import { Card } from "../../components/Container";
-import { SearchBar } from "../../components/Textfield";
 import { Modal, LoadingModal } from "../../components/modal";
 
-import { doc, updateDoc, setDoc, getDoc, getDocs, where, query, collection, onSnapshot, deleteDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc, getDoc, getDocs, where, query, collection, onSnapshot, runTransaction, addDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 
 import { formatRUT, cleanRUT } from "../../utils/formatRUT";
@@ -57,23 +56,100 @@ const RProcesar = () => {
 
     //DOCUMENTOS
     const [facturas, setFacturas] = useState([]);
-    const [facturasEx, setFacturasEx] = useState([]);
-    const [notasCredito, setNotasCredito] = useState([]);
 
     const [documentosAgregados, setDocumentosAgregados] = useState([]);
 
     //VALORES LOCALES
+    // Total real a pagar (con descuentos aplicados)
     const totalDocumentos = documentosAgregados.reduce(
         (acc, doc) => acc + (doc.total || 0),
         0
       );
 
+    // Totales por tipo de documento (valores originales sin descuento)
+    const totalFacturasElectronicas = documentosAgregados
+      .filter((doc) => doc.tipoDoc === "facturas")
+      .reduce((acc, doc) => acc + (doc.totalOriginal || doc.total || 0), 0);
+
+    const totalFacturasExentas = documentosAgregados
+      .filter((doc) => doc.tipoDoc === "facturasExentas")
+      .reduce((acc, doc) => acc + (doc.totalOriginal || doc.total || 0), 0);
+
+    // Total de notas de crédito aplicadas a los documentos
+    const totalNotasCreditoAplicadas = documentosAgregados.reduce(
+      (acc, doc) => acc + (doc.abonoNc || 0), 0
+    );
+
     //MODAL
     const[loadingModal, setLoadingModal] = useState(false);
     const[procesarModal, setProcesarModal] = useState(false);
+    const[isProcessing, setIsProcessing] = useState(false);
 
     // Fecha de pago (por defecto hoy)
     const [fechaPagoSeleccionada, setFechaPagoSeleccionada] = useState(new Date());
+
+    // Sorting state
+    const [sortColumn, setSortColumn] = useState(null);
+    const [sortDirection, setSortDirection] = useState('asc');
+
+    // Handle column sort
+    const handleSort = (column) => {
+        if (sortColumn === column) {
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortColumn(column);
+            setSortDirection('asc');
+        }
+    };
+
+    // Get date value for sorting
+    const getDateValue = (fechaV) => {
+        if (!fechaV) return 0;
+        if (fechaV.toDate) return fechaV.toDate().getTime();
+        if (fechaV.seconds) return fechaV.seconds * 1000;
+        return 0;
+    };
+
+    // Sorted facturas
+    const sortedFacturas = React.useMemo(() => {
+        if (!sortColumn) return facturas;
+
+        return [...facturas].sort((a, b) => {
+            let aValue, bValue;
+
+            switch (sortColumn) {
+                case 'tipo':
+                    aValue = a.tipoDocLabel || '';
+                    bValue = b.tipoDocLabel || '';
+                    break;
+                case 'numeroDoc':
+                    aValue = Number(a.numeroDoc) || 0;
+                    bValue = Number(b.numeroDoc) || 0;
+                    break;
+                case 'fechaV':
+                    aValue = getDateValue(a.fechaV);
+                    bValue = getDateValue(b.fechaV);
+                    break;
+                case 'estado':
+                    aValue = a.estado || '';
+                    bValue = b.estado || '';
+                    break;
+                case 'monto':
+                    aValue = a.totalDescontado ?? a.total ?? 0;
+                    bValue = b.totalDescontado ?? b.total ?? 0;
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (typeof aValue === 'string') {
+                const comparison = aValue.localeCompare(bValue);
+                return sortDirection === 'asc' ? comparison : -comparison;
+            }
+
+            return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+        });
+    }, [facturas, sortColumn, sortDirection]);
 
     // OBTENCIÓN DE DOCUMENTOS PARA EMPRESA SELECCIONADA
     useEffect(() => {
@@ -101,46 +177,74 @@ const RProcesar = () => {
             );
             const facturasExentasSnap = await getDocs(facturasExentasQuery);
 
-            // Notas de crédito
-            const notasCreditoRef = collection(db, "empresas", String(giroRut), "notasCredito");
-            const notasCreditoSnap = await getDocs(notasCreditoRef);
+            // Check and update overdue status for pending documents
+            const hoy = new Date();
+            hoy.setHours(0, 0, 0, 0);
 
-            // Mapear facturas electrónicas
-            let factElec = facturasSnap.docs.map((docSnap) => ({
-              id: docSnap.id,
-              giroRut: giroRut,
-              tipoDoc: "facturas",
-              tipoDocLabel: "Factura electrónica",
-              ...docSnap.data(),
-            }));
+            // Update overdue documents in batch
+            const updateOverduePromises = [];
 
-            // Mapear facturas exentas
-            let factExentas = facturasExentasSnap.docs.map((docSnap) => ({
-              id: docSnap.id,
-              giroRut: giroRut,
-              tipoDoc: "facturasExentas",
-              tipoDocLabel: "Factura exenta",
-              ...docSnap.data(),
-            }));
+            for (const docSnap of facturasSnap.docs) {
+              const data = docSnap.data();
+              if (data.estado === "pendiente" && data.fechaV?.toDate && data.fechaV.toDate() < hoy) {
+                const docRef = doc(db, "empresas", String(giroRut), "facturas", String(docSnap.id));
+                updateOverduePromises.push(updateDoc(docRef, { estado: "vencido" }));
+              }
+            }
 
-            // Combinar todas las facturas
-            let todasFacturas = [...factElec, ...factExentas];
+            for (const docSnap of facturasExentasSnap.docs) {
+              const data = docSnap.data();
+              if (data.estado === "pendiente" && data.fechaV?.toDate && data.fechaV.toDate() < hoy) {
+                const docRef = doc(db, "empresas", String(giroRut), "facturasExentas", String(docSnap.id));
+                updateOverduePromises.push(updateDoc(docRef, { estado: "vencido" }));
+              }
+            }
 
-            // Filtrar las que ya están en documentosAgregados
-            todasFacturas = todasFacturas.filter(
+            // Execute all updates in parallel
+            if (updateOverduePromises.length > 0) {
+              await Promise.all(updateOverduePromises);
+            }
+
+            // Mapear facturas electrónicas (with potentially updated status)
+            const factElec = facturasSnap.docs.map((docSnap) => {
+              const data = docSnap.data();
+              // Apply local status update if it was overdue
+              const fechaV = data.fechaV?.toDate ? data.fechaV.toDate() : null;
+              const isOverdue = fechaV && fechaV < hoy && data.estado === "pendiente";
+              return {
+                id: docSnap.id,
+                giroRut: giroRut,
+                tipoDoc: "facturas",
+                tipoDocLabel: "Factura electrónica",
+                ...data,
+                estado: isOverdue ? "vencido" : data.estado,
+              };
+            });
+
+            // Mapear facturas exentas (with potentially updated status)
+            const factExentas = facturasExentasSnap.docs.map((docSnap) => {
+              const data = docSnap.data();
+              const fechaV = data.fechaV?.toDate ? data.fechaV.toDate() : null;
+              const isOverdue = fechaV && fechaV < hoy && data.estado === "pendiente";
+              return {
+                id: docSnap.id,
+                giroRut: giroRut,
+                tipoDoc: "facturasExentas",
+                tipoDocLabel: "Factura exenta",
+                ...data,
+                estado: isOverdue ? "vencido" : data.estado,
+              };
+            });
+
+            // Combinar todas las facturas y filtrar las que ya están en documentosAgregados
+            const todasFacturas = [...factElec, ...factExentas].filter(
               (f) =>
                 !documentosAgregados.some(
                   (d) => d.numeroDoc === f.numeroDoc && d.giroRut === f.giroRut && d.tipoDoc === f.tipoDoc
                 )
             );
 
-            const NC = notasCreditoSnap.docs.map((docSnap) => ({
-              id: docSnap.id,
-              ...docSnap.data(),
-            }));
-
             setFacturas(todasFacturas);
-            setNotasCredito(NC);
             setLoadingModal(false);
           } catch (error) {
             console.error("Error al traer documentos:", error);
@@ -152,7 +256,11 @@ const RProcesar = () => {
       }, [giroRut]);
 
       const handleProcesarDocs = async () => {
+        // Prevent double-click
+        if (isProcessing) return;
+
         try {
+          setIsProcessing(true);
           setLoadingModal(true);
           const fechaProceso = new Date(); // Fecha en que se procesa (hoy)
           const fechaPago = fechaPagoSeleccionada; // Fecha de pago seleccionada por el usuario
@@ -170,92 +278,131 @@ const RProcesar = () => {
             });
           });
 
-          // 2. Actualizar estado de documentos a "pagado" y sus notas de crédito
-          await Promise.all(
-            documentosAgregados.map(async (docAgregado) => {
-              const { giroRut, numeroDoc, tipoDoc = "facturas" } = docAgregado;
+          // 2. Get the next egreso number before transaction
+          const numeroEgreso = await generarNumeroEgreso();
 
+          // 3. Execute all database operations in a single atomic transaction
+          const facturasData = await runTransaction(db, async (transaction) => {
+            // Phase 1: READ all documents first (required by Firestore transactions)
+            const docReads = [];
+            const ncReads = [];
+
+            // Read all invoice documents
+            for (const docAgregado of documentosAgregados) {
+              const { giroRut, numeroDoc, tipoDoc = "facturas" } = docAgregado;
               const docRef = doc(db, "empresas", String(giroRut), tipoDoc, String(numeroDoc));
-              await updateDoc(docRef, {
+              const docSnap = await transaction.get(docRef);
+              docReads.push({ docRef, docSnap, giroRut, numeroDoc, tipoDoc });
+
+              // If document has notas de crédito, queue them for reading
+              if (docSnap.exists()) {
+                const docData = docSnap.data();
+                if (docData.notasCredito && docData.notasCredito.length > 0) {
+                  for (const ncNum of docData.notasCredito) {
+                    const ncNumero = typeof ncNum === "object" ? ncNum.numeroDoc : ncNum;
+                    const ncRef = doc(db, "empresas", String(giroRut), "notasCredito", String(ncNumero));
+                    const ncSnap = await transaction.get(ncRef);
+                    ncReads.push({ ncRef, ncSnap, giroRut, ncNumero });
+                  }
+                }
+              }
+            }
+
+            // Phase 2: WRITE all updates atomically
+            // Update all invoice documents
+            for (const { docRef } of docReads) {
+              transaction.update(docRef, {
                 estado: "pagado",
                 pagoUsuario: userId,
                 fechaPago: fechaPago,
                 fechaProceso: fechaProceso
               });
+            }
 
-              // Leer el documento para ver si tiene notas de crédito asociadas
-              const docSnap = await getDoc(docRef);
-              if (docSnap.exists()) {
-                const docData = docSnap.data();
-                if (docData.notasCredito && docData.notasCredito.length > 0) {
-                  await Promise.all(
-                    docData.notasCredito.map(async (ncNum) => {
-                      const ncNumero = typeof ncNum === "object" ? ncNum.numeroDoc : ncNum;
-                      const ncRef = doc(db, "empresas", String(giroRut), "notasCredito", String(ncNumero));
-                      await updateDoc(ncRef, {
-                        estado: "pagado",
-                        pagoUsuario: userId,
-                        fechaPago: fechaPago,
-                        fechaProceso: fechaProceso
-                      });
-                    })
-                  );
-                }
+            // Update all notas de crédito
+            for (const { ncRef, ncSnap } of ncReads) {
+              if (ncSnap.exists()) {
+                transaction.update(ncRef, {
+                  estado: "pagado",
+                  pagoUsuario: userId,
+                  fechaPago: fechaPago,
+                  fechaProceso: fechaProceso
+                });
               }
-            })
-          );
+            }
 
-          // 3. Obtener el nuevo número de egreso
-          const numeroEgreso = await generarNumeroEgreso();
-
-          // 4. Crear documento en pago_recepcion
-          const pagoRef = doc(db, "pago_recepcion", String(numeroEgreso));
-          await setDoc(pagoRef, {
-            numeroEgreso,
-            fecha: fechaProceso,
-            fechaPago: fechaPago,
-            totalEgreso: totalDocumentos,
-            facturas: await Promise.all(
-              Object.entries(docsPorEmpresa).map(async ([rut, docs]) => {
-                const facturasConNotas = await Promise.all(
-                  docs.map(async ({ numeroDoc, tipoDoc }) => {
-                    const docRef = doc(db, "empresas", rut, tipoDoc, numeroDoc);
-                    const docSnap = await getDoc(docRef);
-                    if (!docSnap.exists()) return null;
-                    const docData = docSnap.data();
-
-                    let notasCreditoDetalle = [];
-                    if (docData.notasCredito && docData.notasCredito.length > 0) {
-                      notasCreditoDetalle = await Promise.all(
-                        docData.notasCredito.map(async (ncNum) => {
-                          const ncNumero = typeof ncNum === "object" ? ncNum.numeroDoc : ncNum;
-                          const ncRef = doc(db, "empresas", rut, "notasCredito", ncNumero);
-                          const ncSnap = await getDoc(ncRef);
-                          return ncSnap.exists() ? ncSnap.data() : null;
-                        })
-                      );
-                    }
-
-                    return {
-                      numeroDoc: docData.numeroDoc,
-                      tipoDoc,
-                      total: docData.total,
-                      totalDescontado: docData.totalDescontado ?? docData.total,
-                      abonoNc: docData.abonoNc ?? 0,
-                      notasCredito: notasCreditoDetalle.filter(Boolean),
-                    };
-                  })
+            // Build facturas data for pago_recepcion (using data already read)
+            const facturasResult = Object.entries(docsPorEmpresa).map(([rut, docs]) => {
+              const facturasConNotas = docs.map(({ numeroDoc, tipoDoc }) => {
+                const readData = docReads.find(
+                  r => r.giroRut === rut && r.numeroDoc === numeroDoc && r.tipoDoc === tipoDoc
                 );
+                if (!readData || !readData.docSnap.exists()) return null;
+                const docData = readData.docSnap.data();
+
+                // Get NC details from already-read data
+                const notasCreditoDetalle = ncReads
+                  .filter(nc => nc.giroRut === rut && nc.ncSnap.exists())
+                  .filter(nc => {
+                    const docNcs = docData.notasCredito || [];
+                    return docNcs.some(ncNum => {
+                      const ncNumero = typeof ncNum === "object" ? ncNum.numeroDoc : ncNum;
+                      return String(ncNumero) === String(nc.ncNumero);
+                    });
+                  })
+                  .map(nc => nc.ncSnap.data());
 
                 return {
-                  rut,
-                  facturas: facturasConNotas.filter(Boolean),
+                  numeroDoc: docData.numeroDoc,
+                  tipoDoc,
+                  total: docData.total,
+                  totalDescontado: docData.totalDescontado ?? docData.total,
+                  abonoNc: docData.abonoNc ?? 0,
+                  notasCredito: notasCreditoDetalle,
                 };
-              })
-            ),
+              });
+
+              return {
+                rut,
+                facturas: facturasConNotas.filter(Boolean),
+              };
+            });
+
+            // Create pago_recepcion document
+            const pagoRef = doc(db, "pago_recepcion", String(numeroEgreso));
+            transaction.set(pagoRef, {
+              numeroEgreso,
+              fecha: fechaProceso,
+              fechaPago: fechaPago,
+              totalEgreso: totalDocumentos,
+              facturas: facturasResult,
+            });
+
+            return facturasResult;
           });
 
-          // 5. Generar PDF (incluyendo tipoDoc para mostrar correctamente el tipo de documento)
+          // 4. Registrar en auditoría (fuera de la transacción)
+          try {
+            const auditoriaRef = collection(db, "auditoria");
+            // Log each processed document
+            for (const docAgregado of documentosAgregados) {
+              await addDoc(auditoriaRef, {
+                tipo: 'pago',
+                tipoDocumento: docAgregado.tipoDoc || 'facturas',
+                numeroDocumento: docAgregado.numeroDoc,
+                empresaRut: docAgregado.giroRut,
+                procesadoPor: userId,
+                fechaProceso: fechaProceso.toISOString(),
+                fechaPago: fechaPago.toISOString(),
+                numeroEgreso: numeroEgreso,
+                total: docAgregado.totalDescontado ?? docAgregado.total
+              });
+            }
+          } catch (auditError) {
+            console.warn("No se pudo registrar pago en auditoría:", auditError);
+          }
+
+          // 5. Generate PDF (outside transaction - side effect)
           generarPDF(
             numeroEgreso,
             Object.entries(docsPorEmpresa).map(([rut, docs]) => ({
@@ -274,9 +421,11 @@ const RProcesar = () => {
           setFacturas([]);
           setFechaPagoSeleccionada(new Date()); // Reset to today
           setLoadingModal(false);
+          setIsProcessing(false);
         } catch (error) {
           console.error("Error al procesar documentos", error);
           setLoadingModal(false);
+          setIsProcessing(false);
         }
       };
 
@@ -345,19 +494,59 @@ const RProcesar = () => {
                     contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
                     content={
                         <div>
-                            {/* Encabezados */}
+                            {/* Encabezados - Clickable for sorting */}
                             <div className="flex justify-between font-bold mb-2">
-                                <div className="w-[20%] text-center text-sm">Tipo</div>
-                                <div className="w-[15%] text-center text-sm">N° Doc</div>
-                                <div className="w-[20%] text-center text-sm">F. Vencimiento</div>
-                                <div className="w-[15%] text-center text-sm">Estado</div>
-                                <div className="w-[20%] text-center text-sm">Monto</div>
+                                <button
+                                    onClick={() => handleSort('tipo')}
+                                    className="w-[20%] text-center text-sm hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                                >
+                                    Tipo
+                                    {sortColumn === 'tipo' && (
+                                        <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => handleSort('numeroDoc')}
+                                    className="w-[15%] text-center text-sm hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                                >
+                                    N° Doc
+                                    {sortColumn === 'numeroDoc' && (
+                                        <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => handleSort('fechaV')}
+                                    className="w-[20%] text-center text-sm hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                                >
+                                    F. Vencimiento
+                                    {sortColumn === 'fechaV' && (
+                                        <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => handleSort('estado')}
+                                    className="w-[15%] text-center text-sm hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                                >
+                                    Estado
+                                    {sortColumn === 'estado' && (
+                                        <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => handleSort('monto')}
+                                    className="w-[20%] text-center text-sm hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                                >
+                                    Monto
+                                    {sortColumn === 'monto' && (
+                                        <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                                    )}
+                                </button>
                                 <div className="w-[10%]"></div>
                             </div>
                             <hr className="mb-4" />
 
                             {/* Filas dinámicas */}
-                            {facturas.map((row, index) => (
+                            {sortedFacturas.map((row, index) => (
                                 <div key={`${row.tipoDoc}-${row.numeroDoc}-${index}`} className="flex justify-between mb-2 items-center">
                                     <div className="w-[20%] text-center text-xs">
                                         {row.tipoDocLabel || "Factura"}
@@ -389,6 +578,8 @@ const RProcesar = () => {
                                                         tipoDoc: row.tipoDoc || "facturas",
                                                         tipoDocLabel: row.tipoDocLabel || "Factura electrónica",
                                                         total: row.totalDescontado ?? row.total,
+                                                        totalOriginal: row.total,
+                                                        abonoNc: row.abonoNc || 0,
                                                     }
                                                 ]);
                                                 setFacturas((prev) =>
@@ -403,7 +594,7 @@ const RProcesar = () => {
                             ))}
 
                             {/* Si no hay facturas */}
-                            {facturas.length === 0 && giroRut && (
+                            {sortedFacturas.length === 0 && giroRut && (
                                 <div className="text-center text-gray-400 mt-4">
                                     No hay documentos pendientes de pago
                                 </div>
@@ -501,7 +692,7 @@ const RProcesar = () => {
                     />
                     <div className="flex flex-col w-[39%]">
                         <Card
-                            hasButton={false} 
+                            hasButton={false}
                             contentClassName="w-96 h-44 overflow-y-auto scrollbar-custom flex flex-col w-full"
                             className="w-[100%]"
                             content={
@@ -510,13 +701,30 @@ const RProcesar = () => {
                                         Monto a cancelar
                                     </div>
                                     <hr className="mb-4" />
-                                    <div className="grid grid-cols-2 grid-rows-3 gap-y-4 gap-x-4">
-                                        <div>Facturas electrónicas: </div>
-                                        <div>{formatCLP(totalDocumentos)}</div>
-                                        <div></div>
-                                        <div></div>
-                                        <div>Monto total:</div>
-                                        <div>{formatCLP(totalDocumentos)}</div>
+                                    <div className="space-y-2">
+                                        {totalFacturasElectronicas > 0 && (
+                                            <div className="flex justify-between">
+                                                <span>Facturas electrónicas:</span>
+                                                <span>{formatCLP(totalFacturasElectronicas)}</span>
+                                            </div>
+                                        )}
+                                        {totalFacturasExentas > 0 && (
+                                            <div className="flex justify-between">
+                                                <span>Facturas exentas:</span>
+                                                <span>{formatCLP(totalFacturasExentas)}</span>
+                                            </div>
+                                        )}
+                                        {totalNotasCreditoAplicadas > 0 && (
+                                            <div className="flex justify-between text-red-400">
+                                                <span>Notas de crédito:</span>
+                                                <span>-{formatCLP(totalNotasCreditoAplicadas)}</span>
+                                            </div>
+                                        )}
+                                        <hr className="my-2 border-white/20" />
+                                        <div className="flex justify-between font-bold text-lg">
+                                            <span>Monto total:</span>
+                                            <span className="text-green-400">{formatCLP(totalDocumentos)}</span>
+                                        </div>
                                     </div>
                                 </div>
                             }
@@ -539,7 +747,7 @@ const RProcesar = () => {
                     </div>
                 </div>
                 {procesarModal && (
-                    <Modal className="-translate-y-48 w-[75%] min-w-[70%]" onClickOutside={() => setProcesarModal(false)}>
+                    <Modal className="w-[75%] min-w-[70%]" alignTop onClickOutside={() => setProcesarModal(false)}>
                         <p className="text-2xl font-black mb-4 text-center">DOCUMENTOS A PROCESAR</p>
 
                         <Card
@@ -577,6 +785,7 @@ const RProcesar = () => {
                                             selectedDate={fechaPagoSeleccionada}
                                             onChange={(date) => setFechaPagoSeleccionada(date)}
                                             placeholder="Seleccione fecha"
+                                            maxDate={new Date()}
                                             className="w-48"
                                         />
                                     </div>
@@ -590,11 +799,13 @@ const RProcesar = () => {
                                         className="ml-2"
                                         text="Cancelar"
                                         onClick={() => setProcesarModal(false)}
+                                        disabled={isProcessing}
                                     />
                                     <YButton
                                         className="mr-2"
-                                        text="Confirmar y Generar Egreso"
+                                        text={isProcessing ? "Procesando..." : "Confirmar y Generar Egreso"}
                                         onClick={() => handleProcesarDocs()}
+                                        disabled={isProcessing}
                                     />
                                 </div>
                             </div>

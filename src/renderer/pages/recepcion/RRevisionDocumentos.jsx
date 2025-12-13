@@ -4,16 +4,17 @@ import { useNavigate } from "react-router-dom";
 import Footer from "../../components/Footer";
 import { Modal, LoadingModal, AlertModal } from "../../components/modal";
 import { H1Tittle } from "../../components/Fonts";
-import { VolverButton, TextButton, ImgButton, YButton } from "../../components/Button";
+import { VolverButton, TextButton, ImgButton } from "../../components/Button";
 import { DropdownMenu, DatepickerRange, DatepickerField, Textfield } from "../../components/Textfield";
 
-import { doc, getDoc, getDocs, setDoc, collection, onSnapshot, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
+import { doc, getDoc, getDocs, setDoc, collection, onSnapshot, deleteDoc, updateDoc, deleteField, arrayUnion, addDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 import { Card } from "../../components/Container";
-import { useAuth, ROLES } from "../../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import { cleanRUT, formatRUT } from "../../utils/formatRUT";
 import { formatCLP } from "../../utils/formatCurrency";
 import { generarPDF } from "../../utils/generarPDF";
+import { validateNeto } from "../../utils/validation";
 
 //Imagenes
 import searchIcon from "../../assets/Logos/search.png";
@@ -22,7 +23,7 @@ import configIcon from "../../assets/Logos/config.png";
 
 const RRevisionDocumentos = () => {
   const navigate = useNavigate();
-  const { tienePermiso, esAdmin } = useAuth();
+  const { tienePermiso, esAdmin, user } = useAuth();
 
   // Permisos del usuario
   const puedeEditar = tienePermiso("EDITAR_DOCUMENTOS");
@@ -61,23 +62,12 @@ const RRevisionDocumentos = () => {
   const [iNumeroDocNuevo, setINumeroDocNuevo] = useState("");
   const [iFechaENuevo, setIFechaENuevo] = useState("");
   const [iFechaVNuevo, setIFechaVNuevo] = useState("");
-  const [iEstadoNuevo, setIEstadoNuevo] = useState("");
-  const [iFormaPagoNuevo, setIFormaPagoNuevo] = useState("");
-  const [iTipoDocNuevo, setITipoDocNuevo] = useState("");
   const [iNetoNuevo, setINetoNuevo] = useState("");
   const [iIvaNuevo, setIIvaNuevo] = useState("");
   const [iFleteNuevo, setIFleteNuevo] = useState("");
   const [iRetencionNuevo, setIRetencionNuevo] = useState("");
   const [iTotalNuevo, setITotalNuevo] = useState("");
   const [iOtrosNuevo, setIOtrosNuevo] = useState("");
-  const [iNotasCreditoNuevo, setINotasCreditoNuevo] = useState([]);
-  const [iAbonoNcNuevo, setIAbonoNcNuevo] = useState("");
-  const [iTotalDescontadoNuevo, setITotalDescontadoNuevo] = useState("");
-  const [iNumeroDocNcNuevo, setINumeroDocNcNuevo] = useState("");
-  const [iUsuarioIngresoNuevo, setIUsuarioIngresoNuevo] = useState("");
-  const [iFechaIngresoNuevo, setIFechaIngresoNuevo] = useState("");
-  const [iUsuarioPagoNuevo, setIUsuarioPagoNuevo] = useState("");
-  const [iFechaPagoNuevo, setIFechaPagoNuevo] = useState("");
 
   //Modal
   const [pdfModal, setPdfModal] = useState(false);
@@ -96,9 +86,9 @@ const RRevisionDocumentos = () => {
 
   const [vincularSinEliminar, setVincularSinEliminar] = useState(false);
 
-  // Estado para guardar info del documento actual en edición
-  const [currentDocRut, setCurrentDocRut] = useState("");
-  const [currentDocTipo, setCurrentDocTipo] = useState("");
+  // Estado para guardar info del documento actual en edición (solo se usa el setter)
+  const [, setCurrentDocRut] = useState("");
+  const [, setCurrentDocTipo] = useState("");
 
   // Estados para reversión de pago (solo admin/super_admin)
   const [reversarPagoModal, setReversarPagoModal] = useState(false);
@@ -116,10 +106,144 @@ const RRevisionDocumentos = () => {
   const [fechaInicio, fechaFin] = rangoFecha;
   const [filtroRut, setFiltroRut] = useState("");
   const [filtroFolio, setFiltroFolio] = useState("");
+  const [dateRangeError, setDateRangeError] = useState(false);
 
   // Lista de empresas para el dropdown
   const [empresas, setEmpresas] = useState([]);
 
+  // Sorting state for documents table
+  const [sortColumn, setSortColumn] = useState(null);
+  const [sortDirection, setSortDirection] = useState('asc');
+
+  // Collapsed providers state - all collapsed by default
+  const [collapsedProviders, setCollapsedProviders] = useState({});
+
+  // Quick search filter within results
+  const [busquedaRapida, setBusquedaRapida] = useState("");
+
+  // Toggle provider collapse state
+  const toggleProviderCollapse = (rut) => {
+    setCollapsedProviders(prev => ({
+      ...prev,
+      [rut]: !prev[rut]
+    }));
+  };
+
+  // Check if provider is expanded (default is collapsed, so undefined = collapsed)
+  const isProviderExpanded = (rut) => collapsedProviders[rut] === true;
+
+  // Handle column sort
+  const handleSort = (column) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Get date value for sorting
+  const getDateValue = (fecha) => {
+    if (!fecha) return 0;
+    if (fecha.toDate) return fecha.toDate().getTime();
+    if (fecha.seconds) return fecha.seconds * 1000;
+    return 0;
+  };
+
+  // Sort documents within each empresa
+  const sortDocuments = (docs) => {
+    if (!sortColumn) return docs;
+
+    return [...docs].sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortColumn) {
+        case 'tipo':
+          aValue = a.tipo || '';
+          bValue = b.tipo || '';
+          break;
+        case 'folio':
+          aValue = Number(a.numeroDoc) || 0;
+          bValue = Number(b.numeroDoc) || 0;
+          break;
+        case 'fechaE':
+          aValue = getDateValue(a.fechaE);
+          bValue = getDateValue(b.fechaE);
+          break;
+        case 'fechaV':
+          aValue = getDateValue(a.fechaV);
+          bValue = getDateValue(b.fechaV);
+          break;
+        case 'monto':
+          aValue = a.total ?? 0;
+          bValue = b.total ?? 0;
+          break;
+        case 'estado':
+          aValue = a.estado || '';
+          bValue = b.estado || '';
+          break;
+        default:
+          return 0;
+      }
+
+      if (typeof aValue === 'string') {
+        const comparison = aValue.localeCompare(bValue);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      }
+
+      return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+  };
+
+  // Filter empresas and documents based on quick search
+  const filtrarResultados = (empresas) => {
+    if (!busquedaRapida.trim()) return empresas;
+
+    const searchLower = busquedaRapida.toLowerCase().trim();
+    // Remove $ and . for number searches (e.g., "$1.500.000" -> "1500000")
+    const searchNumber = searchLower.replace(/[$.,]/g, "");
+
+    return empresas
+      .map((empresa) => {
+        // Check if empresa matches (RUT or razón social)
+        const empresaMatches =
+          empresa.rut?.toLowerCase().includes(searchLower) ||
+          formatRUT(empresa.rut)?.toLowerCase().includes(searchLower) ||
+          empresa.razon?.toLowerCase().includes(searchLower);
+
+        // Filter documents that match the search
+        const docsFiltered = empresa.documentos.filter((doc) => {
+          const tipoLabel =
+            doc.tipo === "facturas" ? "factura electrónica" :
+            doc.tipo === "facturasExentas" ? "factura exenta" :
+            doc.tipo === "boletas" ? "boleta" : "nota de crédito";
+
+          // Format total for comparison (both raw and formatted)
+          const totalStr = String(doc.total || "");
+          const totalFormatted = doc.total != null ? doc.total.toLocaleString("es-CL") : "";
+
+          return (
+            String(doc.numeroDoc || "").includes(searchLower) ||
+            tipoLabel.includes(searchLower) ||
+            (doc.estado || "").toLowerCase().includes(searchLower) ||
+            (searchNumber && totalStr.includes(searchNumber)) ||
+            totalFormatted.includes(searchLower.replace(/\$/g, ""))
+          );
+        });
+
+        // If empresa matches, show all its documents; otherwise show filtered docs
+        if (empresaMatches) {
+          return empresa;
+        } else if (docsFiltered.length > 0) {
+          return { ...empresa, documentos: docsFiltered };
+        }
+
+        return null;
+      })
+      .filter((e) => e !== null && e.documentos.length > 0);
+  };
+
+  const empresasFiltradas = filtrarResultados(empresasConDocs);
 
   const [rowTipoDoc, setRowTipoDoc] = useState([]);
   const [rowFormaPago, setRowFormaPago] = useState([]);
@@ -217,12 +341,36 @@ const RRevisionDocumentos = () => {
           return new Promise((resolve) => {
             const subRef = collection(db, "empresas", rut, sub);
 
-            onSnapshot(subRef, (snapshotDocs) => {
-              const docsData = snapshotDocs.docs.map((d) => ({
-                id: d.id,
-                ...d.data(),
-                tipo: sub,
-              }));
+            onSnapshot(subRef, async (snapshotDocs) => {
+              const hoy = new Date();
+              hoy.setHours(0, 0, 0, 0);
+
+              // Check and update overdue documents
+              const updatePromises = [];
+              for (const d of snapshotDocs.docs) {
+                const data = d.data();
+                if (data.estado === "pendiente" && data.fechaV?.toDate && data.fechaV.toDate() < hoy) {
+                  const docRef = doc(db, "empresas", rut, sub, d.id);
+                  updatePromises.push(updateDoc(docRef, { estado: "vencido" }));
+                }
+              }
+
+              // Execute updates in parallel (fire and forget for UI responsiveness)
+              if (updatePromises.length > 0) {
+                Promise.all(updatePromises).catch(err => console.error("Error updating overdue status:", err));
+              }
+
+              const docsData = snapshotDocs.docs.map((d) => {
+                const data = d.data();
+                const fechaV = data.fechaV?.toDate ? data.fechaV.toDate() : null;
+                const isOverdue = fechaV && fechaV < hoy && data.estado === "pendiente";
+                return {
+                  id: d.id,
+                  ...data,
+                  tipo: sub,
+                  estado: isOverdue ? "vencido" : data.estado,
+                };
+              });
               resolve(docsData);
             }, (error) => {
               // Ignorar errores de permisos durante el logout
@@ -751,22 +899,124 @@ const RRevisionDocumentos = () => {
 
       const egresoId = egresoData.id;
 
+      // Preparar datos para auditoría
+      const documentosAfectados = [];
+      if (egresoData && Array.isArray(egresoData.facturas)) {
+        for (const empresa of egresoData.facturas) {
+          if (Array.isArray(empresa.facturas)) {
+            for (const factura of empresa.facturas) {
+              // Agregar la factura
+              documentosAfectados.push({
+                rut: empresa.rut,
+                tipoDoc: factura.tipoDoc,
+                numeroDoc: factura.numeroDoc,
+                total: factura.total || factura.totalDescontado
+              });
+              // Agregar las notas de crédito asociadas
+              if (Array.isArray(factura.notasCredito)) {
+                for (const nc of factura.notasCredito) {
+                  documentosAfectados.push({
+                    rut: empresa.rut,
+                    tipoDoc: "notasCredito",
+                    numeroDoc: nc.numeroDoc,
+                    total: nc.total || 0
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
       if (accionReversar === "revertir") {
         // Opción 1: Solo revertir el pago (cambiar estados, eliminar egreso)
         await revertirDocumentosEgreso(egresoData, []);
         await deleteDoc(doc(db, "pago_recepcion", egresoId));
+
+        // Registrar en auditoría
+        try {
+          const auditoriaRef = collection(db, "auditoria");
+          await addDoc(auditoriaRef, {
+            tipo: 'reversion_pago',
+            accion: 'revertir',
+            egresoId: egresoId,
+            numeroEgreso: egresoData.numeroEgreso,
+            totalEgreso: egresoData.totalEgreso,
+            documentosAfectados: documentosAfectados,
+            documentosRevertidos: documentosAfectados.length,
+            documentosEliminados: 0,
+            reversadoPor: user?.email || 'desconocido',
+            fechaReversion: new Date().toISOString(),
+            descripcion: "Pago revertido - documentos restaurados a pendiente"
+          });
+        } catch (auditError) {
+          console.warn("No se pudo registrar reversión en auditoría:", auditError);
+        }
+
         setErrorModal("Egreso revertido correctamente. Los documentos ahora están pendientes de pago.");
       }
       else if (accionReversar === "eliminar") {
         // Opción 2: Eliminar todo (documentos y egreso)
         await eliminarDocumentosEgreso(egresoData);
         await deleteDoc(doc(db, "pago_recepcion", egresoId));
+
+        // Registrar en auditoría
+        try {
+          const auditoriaRef = collection(db, "auditoria");
+          await addDoc(auditoriaRef, {
+            tipo: 'reversion_pago',
+            accion: 'eliminar_todo',
+            egresoId: egresoId,
+            numeroEgreso: egresoData.numeroEgreso,
+            totalEgreso: egresoData.totalEgreso,
+            documentosAfectados: documentosAfectados,
+            documentosRevertidos: 0,
+            documentosEliminados: documentosAfectados.length,
+            reversadoPor: user?.email || 'desconocido',
+            fechaReversion: new Date().toISOString(),
+            descripcion: "Pago y documentos eliminados completamente"
+          });
+        } catch (auditError) {
+          console.warn("No se pudo registrar eliminación en auditoría:", auditError);
+        }
+
         setErrorModal("Egreso y documentos eliminados correctamente.");
       }
       else if (accionReversar === "parcial") {
         // Opción 3: Eliminar algunos documentos, revertir otros
         await revertirDocumentosEgreso(egresoData, documentosAEliminar);
         await deleteDoc(doc(db, "pago_recepcion", egresoId));
+
+        // Separar documentos eliminados y revertidos para auditoría
+        const docsEliminados = documentosAfectados.filter(doc =>
+          documentosAEliminar.includes(`${doc.rut}-${doc.tipoDoc}-${doc.numeroDoc}`)
+        );
+        const docsRevertidos = documentosAfectados.filter(doc =>
+          !documentosAEliminar.includes(`${doc.rut}-${doc.tipoDoc}-${doc.numeroDoc}`)
+        );
+
+        // Registrar en auditoría
+        try {
+          const auditoriaRef = collection(db, "auditoria");
+          await addDoc(auditoriaRef, {
+            tipo: 'reversion_pago',
+            accion: 'parcial',
+            egresoId: egresoId,
+            numeroEgreso: egresoData.numeroEgreso,
+            totalEgreso: egresoData.totalEgreso,
+            documentosAfectados: documentosAfectados,
+            documentosEliminadosDetalle: docsEliminados,
+            documentosRevertidosDetalle: docsRevertidos,
+            documentosRevertidos: docsRevertidos.length,
+            documentosEliminados: docsEliminados.length,
+            reversadoPor: user?.email || 'desconocido',
+            fechaReversion: new Date().toISOString(),
+            descripcion: `Reversión parcial - ${docsEliminados.length} eliminados, ${docsRevertidos.length} revertidos`
+          });
+        } catch (auditError) {
+          console.warn("No se pudo registrar reversión parcial en auditoría:", auditError);
+        }
+
         setErrorModal("Egreso eliminado. Documentos seleccionados eliminados y resto revertidos a pendientes.");
       }
 
@@ -903,6 +1153,13 @@ const RRevisionDocumentos = () => {
   const handleConfirmarEdicion = async () => {
     const { rut, tipoDoc, numeroDoc } = deleteInfo;
 
+    // Validar neto antes de procesar
+    const netoValidation = validateNeto(iNetoNuevo);
+    if (!netoValidation.valid) {
+      setErrorModal(netoValidation.error);
+      return;
+    }
+
     try {
       setLoadingModal(true);
 
@@ -921,7 +1178,39 @@ const RRevisionDocumentos = () => {
         }
       }
 
-      // Preparar datos actualizados
+      // Si es una nota de crédito y cambió el total, validar que no exceda el saldo de la factura
+      if (tipoDoc === "notasCredito" && Number(iTotalNuevo) !== Number(iTotal)) {
+        // Obtener la nota de crédito actual para saber la factura asociada
+        const ncRef = doc(db, "empresas", String(rut), "notasCredito", String(numeroDoc));
+        const ncSnap = await getDoc(ncRef);
+
+        if (ncSnap.exists()) {
+          const ncData = ncSnap.data();
+          const tipoFactura = ncData.tipoFacturaAsociada || "facturas";
+          const facturaRef = doc(db, "empresas", String(rut), tipoFactura, String(ncData.numeroDocNc));
+          const facturaSnap = await getDoc(facturaRef);
+
+          if (facturaSnap.exists()) {
+            const facturaData = facturaSnap.data();
+            const totalFactura = Number(facturaData.total || 0);
+            const abonoActual = Number(facturaData.abonoNc || 0);
+            const totalNcAnterior = Number(iTotal || 0);
+            const totalNcNuevo = Number(iTotalNuevo || 0);
+
+            // Calcular el nuevo abono: restar el anterior y sumar el nuevo
+            const nuevoAbono = abonoActual - totalNcAnterior + totalNcNuevo;
+
+            if (nuevoAbono > totalFactura) {
+              setLoadingModal(false);
+              setErrorModal(`Error - El nuevo monto de la nota de crédito (${formatCLP(totalNcNuevo)}) excede el saldo disponible de la factura`);
+              return;
+            }
+          }
+        }
+      }
+
+      // Preparar datos actualizados con campos de auditoría
+      const fechaEdicionActual = new Date().toISOString();
       const datosActualizados = {
         numeroDoc: iNumeroDocNuevo,
         fechaE: iFechaENuevo,
@@ -929,7 +1218,10 @@ const RRevisionDocumentos = () => {
         flete: Number(iFleteNuevo) || 0,
         retencion: Number(iRetencionNuevo) || 0,
         otros: Number(iOtrosNuevo) || 0,
-        total: Number(iTotalNuevo) || 0
+        total: Number(iTotalNuevo) || 0,
+        // Campos de auditoría
+        editadoPor: user?.email || 'desconocido',
+        fechaEdicion: fechaEdicionActual
       };
 
       // Solo agregar IVA si no es factura exenta
@@ -951,8 +1243,30 @@ const RRevisionDocumentos = () => {
           const datosOriginales = docSnapAntiguo.data();
           const nuevoDocRef = doc(db, "empresas", String(rut), String(tipoDoc), String(iNumeroDocNuevo));
 
-          // Combinar datos originales con actualizados
-          await setDoc(nuevoDocRef, { ...datosOriginales, ...datosActualizados });
+          // Crear entrada de historial con valores anteriores
+          const historialEdicion = {
+            fecha: fechaEdicionActual,
+            usuario: user?.email || 'desconocido',
+            valoresAnteriores: {
+              numeroDoc: datosOriginales.numeroDoc,
+              fechaE: datosOriginales.fechaE,
+              fechaV: datosOriginales.fechaV,
+              neto: datosOriginales.neto,
+              iva: datosOriginales.iva,
+              flete: datosOriginales.flete,
+              retencion: datosOriginales.retencion,
+              otros: datosOriginales.otros,
+              total: datosOriginales.total
+            }
+          };
+
+          // Combinar datos originales con actualizados, incluyendo historial
+          const historialExistente = datosOriginales.historialEdiciones || [];
+          await setDoc(nuevoDocRef, {
+            ...datosOriginales,
+            ...datosActualizados,
+            historialEdiciones: [...historialExistente, historialEdicion]
+          });
           await deleteDoc(docRefAntiguo);
 
           // Si es una nota de crédito, actualizar la referencia en la factura asociada
@@ -996,9 +1310,94 @@ const RRevisionDocumentos = () => {
           }
         }
       } else {
-        // Si no cambió el número, solo actualizar
+        // Si no cambió el número, obtener datos actuales para historial y actualizar
         const docRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
-        await updateDoc(docRef, datosActualizados);
+        const docSnapActual = await getDoc(docRef);
+
+        if (docSnapActual.exists()) {
+          const datosActuales = docSnapActual.data();
+
+          // Crear entrada de historial con valores anteriores
+          const historialEdicion = {
+            fecha: fechaEdicionActual,
+            usuario: user?.email || 'desconocido',
+            valoresAnteriores: {
+              numeroDoc: datosActuales.numeroDoc,
+              fechaE: datosActuales.fechaE,
+              fechaV: datosActuales.fechaV,
+              neto: datosActuales.neto,
+              iva: datosActuales.iva,
+              flete: datosActuales.flete,
+              retencion: datosActuales.retencion,
+              otros: datosActuales.otros,
+              total: datosActuales.total
+            }
+          };
+
+          await updateDoc(docRef, {
+            ...datosActualizados,
+            historialEdiciones: arrayUnion(historialEdicion)
+          });
+        } else {
+          // Si el documento no existe, solo actualizar sin historial
+          await updateDoc(docRef, datosActualizados);
+        }
+      }
+
+      // Si es una nota de crédito y cambió el total, actualizar la factura asociada
+      if (tipoDoc === "notasCredito" && Number(iTotalNuevo) !== Number(iTotal)) {
+        try {
+          const ncRef = doc(db, "empresas", String(rut), "notasCredito", String(iNumeroDocNuevo));
+          const ncSnap = await getDoc(ncRef);
+
+          if (ncSnap.exists()) {
+            const ncData = ncSnap.data();
+            const tipoFactura = ncData.tipoFacturaAsociada || "facturas";
+            const facturaRef = doc(db, "empresas", String(rut), tipoFactura, String(ncData.numeroDocNc));
+            const facturaSnap = await getDoc(facturaRef);
+
+            if (facturaSnap.exists()) {
+              const facturaData = facturaSnap.data();
+              const totalFactura = Number(facturaData.total || 0);
+              const abonoActual = Number(facturaData.abonoNc || 0);
+              const totalNcAnterior = Number(iTotal || 0);
+              const totalNcNuevo = Number(iTotalNuevo || 0);
+
+              // Calcular el nuevo abono
+              const nuevoAbono = abonoActual - totalNcAnterior + totalNcNuevo;
+              const nuevoTotalDescontado = totalFactura - nuevoAbono;
+
+              await updateDoc(facturaRef, {
+                abonoNc: nuevoAbono,
+                totalDescontado: nuevoTotalDescontado
+              });
+            }
+          }
+        } catch (err) {
+          console.warn("No se pudo actualizar la factura asociada:", err);
+        }
+      }
+
+      // Registrar edición en auditoría (con fallback si falla)
+      try {
+        const auditoriaRef = collection(db, "auditoria");
+        await addDoc(auditoriaRef, {
+          tipo: 'edicion',
+          tipoDocumento: tipoDoc,
+          numeroDocumento: iNumeroDocNuevo,
+          numeroDocumentoAnterior: numeroDocCambio ? numeroDoc : null,
+          empresaRut: rut,
+          editadoPor: user?.email || 'desconocido',
+          fechaEdicion: fechaEdicionActual,
+          cambios: {
+            numeroDoc: { anterior: numeroDoc, nuevo: iNumeroDocNuevo },
+            fechaE: { anterior: iFechaE, nuevo: iFechaENuevo },
+            neto: { anterior: iNeto, nuevo: iNetoNuevo },
+            total: { anterior: iTotal, nuevo: iTotalNuevo }
+          }
+        });
+      } catch (auditError) {
+        console.warn("No se pudo registrar edición en auditoría:", auditError);
       }
 
       setLoadingModal(false);
@@ -1090,9 +1489,28 @@ const RRevisionDocumentos = () => {
         }
       }
   
+      // Registrar en auditoría antes de eliminar (con fallback si falla)
+      try {
+        const auditoriaRef = collection(db, "auditoria");
+        // Sanitizar datos para evitar problemas con Timestamps
+        const datosParaAuditoria = JSON.parse(JSON.stringify(docData));
+        await addDoc(auditoriaRef, {
+          tipo: 'eliminacion',
+          tipoDocumento: tipoDoc,
+          numeroDocumento: numeroDoc,
+          empresaRut: rut,
+          datosEliminados: datosParaAuditoria,
+          eliminadoPor: user?.email || 'desconocido',
+          fechaEliminacion: new Date().toISOString()
+        });
+      } catch (auditError) {
+        console.warn("No se pudo registrar en auditoría (puede que las reglas no estén desplegadas):", auditError);
+        // Continuar con la eliminación aunque falle el registro de auditoría
+      }
+
       // Eliminar documento normalmente
       await deleteDoc(docRef);
-  
+
       setLoadingModal(false);
       setEditarModal(false);
       setErrorModal("Documento eliminado correctamente");
@@ -1107,31 +1525,74 @@ const RRevisionDocumentos = () => {
 
   const handleEliminarConNotasCredito = async () => {
     const { rut, tipoDoc, numeroDoc } = deleteInfo;
-  
+    const fechaEliminacion = new Date().toISOString();
+    const auditoriaRef = collection(db, "auditoria");
+
+    // Helper para registrar en auditoría con fallback
+    const registrarAuditoria = async (datos) => {
+      try {
+        const datosParaAuditoria = JSON.parse(JSON.stringify(datos));
+        await addDoc(auditoriaRef, datosParaAuditoria);
+      } catch (auditError) {
+        console.warn("No se pudo registrar en auditoría:", auditError);
+      }
+    };
+
     try {
       setHasNotasCreditoModal(false);
       setLoadingModal(true);
-  
-      // 1) Eliminar cada nota de crédito referenciada (asumo que iNotasCredito tiene elementos que contienen numeroDoc o son strings)
+
+      // 1) Eliminar cada nota de crédito referenciada con registro de auditoría
       if (Array.isArray(iNotasCredito) && iNotasCredito.length > 0) {
         for (const nc of iNotasCredito) {
-          // nc puede ser objeto o string/number; extraemos el número
           const ncNumero = (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc);
           if (!ncNumero) continue;
           const ncRef = doc(db, "empresas", String(rut), "notasCredito", ncNumero);
-          // Intentamos borrar, si no existe seguir con el resto
           try {
-            await deleteDoc(ncRef);
+            const ncSnap = await getDoc(ncRef);
+            if (ncSnap.exists()) {
+              // Registrar en auditoría (no bloquea si falla)
+              await registrarAuditoria({
+                tipo: 'eliminacion',
+                tipoDocumento: 'notasCredito',
+                numeroDocumento: ncNumero,
+                empresaRut: rut,
+                datosEliminados: ncSnap.data(),
+                eliminadoPor: user?.email || 'desconocido',
+                fechaEliminacion: fechaEliminacion,
+                motivoEliminacion: `Eliminación en cascada con factura ${numeroDoc}`
+              });
+              await deleteDoc(ncRef);
+            }
           } catch (err) {
             console.warn(`No se pudo eliminar nota de crédito ${ncNumero}:`, err);
           }
         }
       }
-  
-      // 2) Eliminar la factura original
+
+      // 2) Obtener datos de la factura para auditoría
       const facturaRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+      const facturaSnap = await getDoc(facturaRef);
+
+      if (facturaSnap.exists()) {
+        // Registrar eliminación de factura en auditoría (no bloquea si falla)
+        await registrarAuditoria({
+          tipo: 'eliminacion',
+          tipoDocumento: tipoDoc,
+          numeroDocumento: numeroDoc,
+          empresaRut: rut,
+          datosEliminados: facturaSnap.data(),
+          eliminadoPor: user?.email || 'desconocido',
+          fechaEliminacion: fechaEliminacion,
+          notasCreditoEliminadas: iNotasCredito.map(nc =>
+            (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc)
+          )
+        });
+      }
+
+      // Eliminar la factura
       await deleteDoc(facturaRef);
-  
+
       setLoadingModal(false);
       setEditarModal(false);
       setErrorModal("Factura y notas de crédito eliminadas correctamente");
@@ -1216,8 +1677,16 @@ const RRevisionDocumentos = () => {
   
       // 4) Calcular totalDescontado (totalFactura - abonoNc)
       const totalFactura = Number(destinoData.total || 0);
+
+      // Validar que el total de notas de crédito no exceda el total de la factura
+      if (abonoNc > totalFactura) {
+        setLoadingModal(false);
+        setErrorModal(`Error - El total de notas de crédito (${formatCLP(abonoNc)}) excede el monto de la factura destino (${formatCLP(totalFactura)})`);
+        return;
+      }
+
       const totalDescontado = Math.max(totalFactura - abonoNc, 0);
-  
+
       // 5) Actualizar documento destino
       await updateDoc(destinoRef, {
         notasCredito: nuevasNotasConcatenadas,
@@ -1238,16 +1707,41 @@ const RRevisionDocumentos = () => {
         }
       }
   
-      // 7) Eliminar factura original
+      // 7) Obtener datos de la factura antes de eliminar para auditoría
       const facturaRef = doc(db, "empresas", String(rut), String(tipoDoc), String(numeroDoc));
+      const facturaSnap = await getDoc(facturaRef);
+      const facturaData = facturaSnap.exists() ? facturaSnap.data() : null;
+
+      // 8) Registrar en auditoría antes de eliminar
+      try {
+        const auditoriaRef = collection(db, "auditoria");
+        const datosParaAuditoria = facturaData ? JSON.parse(JSON.stringify(facturaData)) : {};
+        await addDoc(auditoriaRef, {
+          tipo: 'eliminacion',
+          tipoDocumento: tipoDoc,
+          numeroDocumento: numeroDoc,
+          empresaRut: rut,
+          datosEliminados: datosParaAuditoria,
+          eliminadoPor: user?.email || 'desconocido',
+          fechaEliminacion: new Date().toISOString(),
+          motivoEliminacion: `Notas de crédito revinculadas a ${destinoTipo === "facturas" ? "Factura" : "Factura Exenta"} #${destinoNumero}`,
+          notasCreditoRevinculadas: notasAtrasladar.map(nc =>
+            (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc)
+          )
+        });
+      } catch (auditError) {
+        console.warn("No se pudo registrar en auditoría:", auditError);
+      }
+
+      // 9) Eliminar factura original
       await deleteDoc(facturaRef);
-  
+
       setLoadingModal(false);
       setVincularModal(false);
       setEditarModal(false);
       setErrorModal("Notas vinculadas y factura actualizada correctamente");
       handleBuscar();
-  
+
     } catch (error) {
       console.error("Error vinculando notas de crédito:", error);
       setLoadingModal(false);
@@ -1346,8 +1840,16 @@ const RRevisionDocumentos = () => {
       }
   
       const totalFacturaDestino = Number(destinoData.total || 0);
+
+      // Validar que el total de notas de crédito no exceda el total de la factura
+      if (abonoNcDestino > totalFacturaDestino) {
+        setLoadingModal(false);
+        setErrorModal(`Error - El total de notas de crédito (${formatCLP(abonoNcDestino)}) excede el monto de la factura destino (${formatCLP(totalFacturaDestino)})`);
+        return;
+      }
+
       const totalDescontadoDestino = Math.max(totalFacturaDestino - abonoNcDestino, 0);
-  
+
       // 7) Actualizar destino
       await updateDoc(destinoRef, {
         notasCredito: nuevasNotasDestino,
@@ -1370,14 +1872,36 @@ const RRevisionDocumentos = () => {
         abonoNc: deleteField(),
         totalDescontado: deleteField(),
       });
-  
+
+      // 10) Registrar revinculación en auditoría
+      try {
+        const auditoriaRef = collection(db, "auditoria");
+        await addDoc(auditoriaRef, {
+          tipo: 'revinculacion',
+          tipoDocumento: tipoDoc,
+          numeroDocumento: numeroDoc,
+          empresaRut: rut,
+          revinculadoPor: user?.email || 'desconocido',
+          fechaRevinculacion: new Date().toISOString(),
+          documentoDestino: {
+            tipo: destinoTipo,
+            numero: destinoNumero
+          },
+          notasCreditoRevinculadas: notasAtrasladar.map(nc =>
+            (typeof nc === "object" && nc.numeroDoc) ? String(nc.numeroDoc) : String(nc)
+          )
+        });
+      } catch (auditError) {
+        console.warn("No se pudo registrar revinculación en auditoría:", auditError);
+      }
+
       handleBuscar();
       setLoadingModal(false);
       setVincularModal(false);
       setEditarModal(false);
       setErrorModal("Notas de crédito desvinculadas y asociadas al nuevo documento correctamente");
       handleBuscar();
-  
+
     } catch (error) {
       console.error("Error al desvincular notas de crédito:", error);
       setLoadingModal(false);
@@ -1406,6 +1930,27 @@ const RRevisionDocumentos = () => {
         {/* Contenido principal */}
         <div className="flex-1 flex flex-col flex-wrap justify-start gap-4 px-3 sm:px-5 py-2 overflow-x-auto">
         <div className="grid gap-x-12 gap-y-2 grid-cols-4 grid-rows-2">
+          <div className="relative">
+            <DatepickerRange
+              classNameField="w-full"
+              label={
+                <>
+                  Rango de fechas *
+                  {dateRangeError && (
+                    <span className="text-red-400 font-normal ml-2">- Requerido</span>
+                  )}
+                </>
+              }
+              startDate={fechaInicio}
+              endDate={fechaFin}
+              onChange={(update) => {
+                setRangoFecha(update);
+                if (update[0] && update[1]) {
+                  setDateRangeError(false);
+                }
+              }}
+            />
+          </div>
           <DropdownMenu
             classNameMenu="w-[1/3]"
             tittle="Tipo documento"
@@ -1413,14 +1958,14 @@ const RRevisionDocumentos = () => {
             value={selectedTipoDoc}
             onSelect={setSelectedTipoDoc}
           />
-          <DropdownMenu 
+          <DropdownMenu
             classNameMenu="w-[1/3]"
             tittle="Estado de documentos"
             items={rowEstadoDoc.map((item) => item)}
             value={selectedEstadoDoc}
             onSelect={setSelectedEstadoDoc}
           />
-          <DropdownMenu 
+          <DropdownMenu
             classNameMenu="w-[1/3]"
             tittle="Forma de pago"
             items={rowFormaPago.map((item) => item)}
@@ -1428,16 +1973,6 @@ const RRevisionDocumentos = () => {
             onSelect={setSelectedFormaPago}
           />
 
-          <div></div>
-
-          <DatepickerRange
-            classNameField="w-[1/3]"
-            label="Rango de fechas"
-            startDate={fechaInicio}
-            endDate={fechaFin}
-            onChange={(update) => setRangoFecha(update)}
-          />
-          
           <DropdownMenu
             classNameMenu="w-[1/3]"
             tittle="Empresa"
@@ -1461,7 +1996,7 @@ const RRevisionDocumentos = () => {
             }}
           />
 
-          <Textfield 
+          <Textfield
             classNameInput="w-[1/3]"
             label="N° Folio"
             type="number"
@@ -1469,11 +2004,18 @@ const RRevisionDocumentos = () => {
             onChange={(e) => setFiltroFolio(e.target.value)}
           />
 
+          <div></div>
+
           <TextButton
             text="Buscar"
             className="bg-accent-blue text-white self-end hover:bg-blue-600 active:bg-blue-700 h-7 w-fit place-self-center px-5 py-5"
             classNameText="font-black"
             onClick={() => {
+              if (!fechaInicio || !fechaFin) {
+                setDateRangeError(true);
+                return;
+              }
+              setDateRangeError(false);
               handleBuscar();
               setLoadingModal(true);
             }}
@@ -1482,94 +2024,205 @@ const RRevisionDocumentos = () => {
 
         <Card
           hasButton={false}
-          contentClassName="max-h-[calc(100vh-25rem)] overflow-y-auto scrollbar-custom flex flex-col w-full"
+          contentClassName="max-h-[calc(100vh-22rem)] overflow-y-auto scrollbar-custom flex flex-col w-full"
           content={
             <div>
-              {/* Encabezado */}
+              {/* Search input for quick filtering */}
+              <div className="mb-3 relative">
+                <input
+                  type="text"
+                  placeholder="Buscar por RUT, razón social, folio, tipo, estado o monto..."
+                  value={busquedaRapida}
+                  onChange={(e) => setBusquedaRapida(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 pl-10 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50 transition-all"
+                />
+                <svg
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {busquedaRapida && (
+                  <button
+                    onClick={() => setBusquedaRapida("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Encabezado - Clickable for sorting */}
               <div className="flex items-center font-semibold text-xs text-slate-300 mb-2 bg-white/5 rounded-lg py-2">
-                <div className="w-[17%] text-center">Tipo</div>
-                <div className="w-[10%] text-center">Folio</div>
-                <div className="w-[14%] text-center">Emisión</div>
-                <div className="w-[14%] text-center">Vencimiento</div>
-                <div className="w-[15%] text-center">Monto</div>
-                <div className="w-[12%] text-center">Estado</div>
+                <button
+                  onClick={() => handleSort('tipo')}
+                  className="w-[17%] text-center hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                >
+                  Tipo
+                  {sortColumn === 'tipo' && (
+                    <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('folio')}
+                  className="w-[10%] text-center hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                >
+                  Folio
+                  {sortColumn === 'folio' && (
+                    <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('fechaE')}
+                  className="w-[14%] text-center hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                >
+                  Emisión
+                  {sortColumn === 'fechaE' && (
+                    <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('fechaV')}
+                  className="w-[14%] text-center hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                >
+                  Vencimiento
+                  {sortColumn === 'fechaV' && (
+                    <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('monto')}
+                  className="w-[15%] text-center hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                >
+                  Monto
+                  {sortColumn === 'monto' && (
+                    <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => handleSort('estado')}
+                  className="w-[12%] text-center hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
+                >
+                  Estado
+                  {sortColumn === 'estado' && (
+                    <span className="text-accent-blue">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                  )}
+                </button>
                 <div className="w-[18%] text-center">Acciones</div>
               </div>
 
+              {/* Results count */}
+              {empresasConDocs.length > 0 && (
+                <div className="text-xs text-slate-400 mb-2 flex justify-between items-center">
+                  <span>
+                    {busquedaRapida
+                      ? `${empresasFiltradas.reduce((acc, e) => acc + e.documentos.length, 0)} de ${empresasConDocs.reduce((acc, e) => acc + e.documentos.length, 0)} documentos`
+                      : `${empresasConDocs.reduce((acc, e) => acc + e.documentos.length, 0)} documentos en ${empresasConDocs.length} empresa${empresasConDocs.length !== 1 ? 's' : ''}`
+                    }
+                  </span>
+                </div>
+              )}
+
               {/* Contenido dinámico */}
               <div className="flex flex-col">
-                {empresasConDocs.map((empresa) => (
+                {empresasFiltradas.length === 0 && empresasConDocs.length > 0 ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <p className="text-sm">No se encontraron resultados para "{busquedaRapida}"</p>
+                  </div>
+                ) : empresasFiltradas.map((empresa) => (
                   <div key={empresa.rut} className="mb-4">
-                    <div className="flex gap-6 items-center p-2 bg-black/10 border border-black mb-2">
+                    <button
+                      onClick={() => toggleProviderCollapse(empresa.rut)}
+                      className="w-full flex gap-6 items-center p-3 bg-white/5 border border-white/10 rounded-lg mb-2 hover:bg-white/10 hover:border-accent-blue/30 transition-all duration-200 cursor-pointer"
+                    >
+                      <span className={`text-accent-blue transition-transform duration-300 ${isProviderExpanded(empresa.rut) ? 'rotate-90' : ''}`}>
+                        ▶
+                      </span>
                       <p className="font-semibold">RUT: {formatRUT(empresa.rut)}</p>
                       <p className="font-semibold">NOMBRE: {empresa.razon}</p>
-                    </div>
+                      <p className="text-slate-400 text-sm ml-auto">{empresa.documentos.length} documento{empresa.documentos.length !== 1 ? 's' : ''}</p>
+                    </button>
 
-                    {empresa.documentos.map((doc) => (
-                      <div
-                        key={`${empresa.rut}-${doc.tipo}-${doc.id}`}
-                        className="flex items-center py-2 hover:bg-white/5 rounded-lg border-b border-white/5"
-                      >
-                        <div className="w-[17%] text-center text-xs px-1">
-                          {doc.tipo === "facturas"
-                            ? "Fact. electrónica"
-                            : doc.tipo === "facturasExentas"
-                            ? "Fact. exenta"
-                            : doc.tipo === "boletas"
-                            ? "Boleta"
-                            : "Nota crédito"}
-                        </div>
-                        <div className="w-[10%] text-center text-xs font-medium">
-                          {doc.numeroDoc ?? "-"}
-                        </div>
-                        <div className="w-[14%] text-center text-xs">
-                          {doc.fechaE?.toDate ? doc.fechaE.toDate().toLocaleDateString("es-CL") : "-"}
-                        </div>
-                        <div className="w-[14%] text-center text-xs">
-                          {doc.fechaV?.toDate ? doc.fechaV.toDate().toLocaleDateString("es-CL") : "-"}
-                        </div>
-                        <div className="w-[15%] text-center text-xs font-medium">
-                          {doc.total != null ? `$${doc.total.toLocaleString("es-CL")}` : "-"}
-                        </div>
-                        <div className="w-[12%] flex justify-center">
-                          <span className={`
-                            inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize
-                            ${doc.estado === "pagado"
-                              ? "bg-success/20 text-success"
-                              : doc.estado === "vencido"
-                              ? "bg-yellow-500/20 text-yellow-400"
-                              : "bg-slate-500/20 text-slate-400"}
-                          `}>
-                            {doc.estado ?? "-"}
-                          </span>
-                        </div>
-                        <div className="w-[18%] flex justify-center gap-1">
-                          <ImgButton
-                            src={searchIcon}
-                            classNameImg="w-4"
-                            className="flex-none p-1"
-                            onClick={() => handleRevisionDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
-                            title="Detalles"
-                          />
-                          <ImgButton
-                            src={reportIcon}
-                            classNameImg="w-4"
-                            className="flex-none p-1"
-                            onClick={() => handleGenerarPDF(empresa.rut, doc.numeroDoc, doc.tipo)}
-                            title="Egreso"
-                          />
-                          {puedeEditar && (
-                            <ImgButton
-                              src={configIcon}
-                              classNameImg="w-4"
-                              className="flex-none p-1"
-                              title="Editar"
-                              onClick={() => handleEditarDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
-                            />
-                          )}
-                        </div>
+                    <div
+                      className={`grid transition-all duration-300 ease-in-out ${
+                        isProviderExpanded(empresa.rut) ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        {sortDocuments(empresa.documentos).map((doc) => (
+                          <div
+                            key={`${empresa.rut}-${doc.tipo}-${doc.id}`}
+                            className="flex items-center py-2 hover:bg-white/5 rounded-lg border-b border-white/5"
+                          >
+                            <div className="w-[17%] text-center text-xs px-1">
+                              {doc.tipo === "facturas"
+                                ? "Fact. electrónica"
+                                : doc.tipo === "facturasExentas"
+                                ? "Fact. exenta"
+                                : doc.tipo === "boletas"
+                                ? "Boleta"
+                                : "Nota crédito"}
+                            </div>
+                            <div className="w-[10%] text-center text-xs font-medium">
+                              {doc.numeroDoc ?? "-"}
+                            </div>
+                            <div className="w-[14%] text-center text-xs">
+                              {doc.fechaE?.toDate ? doc.fechaE.toDate().toLocaleDateString("es-CL") : "-"}
+                            </div>
+                            <div className="w-[14%] text-center text-xs">
+                              {doc.fechaV?.toDate ? doc.fechaV.toDate().toLocaleDateString("es-CL") : "-"}
+                            </div>
+                            <div className="w-[15%] text-center text-xs font-medium">
+                              {doc.total != null ? `$${doc.total.toLocaleString("es-CL")}` : "-"}
+                            </div>
+                            <div className="w-[12%] flex justify-center">
+                              <span className={`
+                                inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize
+                                ${doc.estado === "pagado"
+                                  ? "bg-success/20 text-success"
+                                  : doc.estado === "vencido"
+                                  ? "bg-yellow-500/20 text-yellow-400"
+                                  : "bg-slate-500/20 text-slate-400"}
+                              `}>
+                                {doc.estado ?? "-"}
+                              </span>
+                            </div>
+                            <div className="w-[18%] flex justify-center gap-1">
+                              <ImgButton
+                                src={searchIcon}
+                                classNameImg="w-4"
+                                className="flex-none p-1"
+                                onClick={() => handleRevisionDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
+                                title="Detalles"
+                              />
+                              <ImgButton
+                                src={reportIcon}
+                                classNameImg="w-4"
+                                className="flex-none p-1"
+                                onClick={() => handleGenerarPDF(empresa.rut, doc.numeroDoc, doc.tipo)}
+                                title="Egreso"
+                              />
+                              {puedeEditar && (
+                                <ImgButton
+                                  src={configIcon}
+                                  classNameImg="w-4"
+                                  className="flex-none p-1"
+                                  title="Editar"
+                                  onClick={() => handleEditarDoc(empresa.rut, doc.numeroDoc, doc.tipo)}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2121,7 +2774,18 @@ const RRevisionDocumentos = () => {
                           checked={documentosAEliminar.includes(docEgreso.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setDocumentosAEliminar([...documentosAEliminar, docEgreso.id]);
+                              // If this is an invoice (not credit note), also check its associated credit notes
+                              if (!docEgreso.esNotaCredito) {
+                                const associatedNCs = egresoDocumentos.filter(
+                                  (d) => d.esNotaCredito && d.facturaAsociada === docEgreso.numeroDoc && d.rut === docEgreso.rut
+                                );
+                                const idsToAdd = [docEgreso.id, ...associatedNCs.map((nc) => nc.id)];
+                                const newIds = idsToAdd.filter(id => !documentosAEliminar.includes(id));
+                                setDocumentosAEliminar([...documentosAEliminar, ...newIds]);
+                              } else {
+                                // If this is a credit note, just add it (don't auto-check parent invoice)
+                                setDocumentosAEliminar([...documentosAEliminar, docEgreso.id]);
+                              }
                             } else {
                               setDocumentosAEliminar(documentosAEliminar.filter((id) => id !== docEgreso.id));
                             }

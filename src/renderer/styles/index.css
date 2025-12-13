@@ -286,15 +286,38 @@ svg:focus {
   color: white !important;
 }
 
-.react-datepicker__day--selected,
-.react-datepicker__day--keyboard-selected {
-  background: #3b82f6 !important;
-  color: white !important;
+/* Remove default keyboard-selected highlight to avoid highlighting same day in other months */
+.react-datepicker__day--keyboard-selected:not(.react-datepicker__day--selected):not(.react-datepicker__day--range-start):not(.react-datepicker__day--in-range):not(.react-datepicker__day--in-selecting-range) {
+  background: transparent !important;
+  color: #94a3b8 !important;
 }
 
-.react-datepicker__day--today {
+/* Today's date - subtle highlight */
+.react-datepicker__day--today:not(.react-datepicker__day--selected):not(.react-datepicker__day--range-start):not(.react-datepicker__day--range-end):not(.react-datepicker__day--in-range):not(.react-datepicker__day--in-selecting-range) {
   border: 1px solid #3b82f6 !important;
   font-weight: 600 !important;
+  background: rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Days in the middle of a range (lighter blue) */
+.react-datepicker__day--in-range:not(.react-datepicker__day--range-start):not(.react-datepicker__day--range-end),
+.react-datepicker__day--in-selecting-range:not(.react-datepicker__day--selecting-range-start):not(.react-datepicker__day--selecting-range-end) {
+  background: rgba(59, 130, 246, 0.4) !important;
+  color: white !important;
+  border-radius: 0.375rem !important;
+}
+
+/* Selected date, range start/end - solid blue (highest priority) */
+.react-datepicker__day--selected,
+.react-datepicker__day--range-start,
+.react-datepicker__day--range-end,
+.react-datepicker__day--selecting-range-start,
+.react-datepicker__day--selecting-range-end,
+.react-datepicker__day--in-selecting-range.react-datepicker__day--selecting-range-start {
+  background: #3b82f6 !important;
+  color: white !important;
+  border-radius: 0.375rem !important;
+  border: none !important;
 }
 
 .react-datepicker__navigation-icon::before {
@@ -307,6 +330,18 @@ svg:focus {
 
 .react-datepicker__triangle {
   display: none !important;
+}
+
+/* Datepicker portal - ensure it appears above all content */
+#datepicker-portal {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  z-index: 99999 !important;
+}
+
+#datepicker-portal .react-datepicker-popper {
+  z-index: 99999 !important;
 }
 
 /* ==================== ANIMATIONS ==================== */

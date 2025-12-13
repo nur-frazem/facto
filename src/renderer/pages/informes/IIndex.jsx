@@ -1,7 +1,7 @@
 import {SidebarWithContentSeparator} from "../../components/sidebar";
 import React from 'react';
 import Footer from "../../components/Footer";
-import { H1Tittle, PSubtitle } from "../../components/Fonts";
+import { H1Tittle } from "../../components/Fonts";
 import { Card } from "../../components/Container";
 import { VolverButton } from "../../components/Button";
 import { useNavigate } from "react-router-dom";

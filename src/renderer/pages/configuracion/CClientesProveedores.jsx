@@ -1,10 +1,10 @@
 import {SidebarWithContentSeparator} from "../../components/sidebar";
 import React, { useState, useEffect } from 'react';
 import Footer from "../../components/Footer";
-import { H1Tittle, PSubtitle } from "../../components/Fonts";
+import { H1Tittle } from "../../components/Fonts";
 import { useNavigate } from "react-router-dom";
-import { VolverButton, TextButton, YButton, XButton } from "../../components/Button";
-import { DropdownMenu, DropdownMenuList, SearchBar, Textfield, CheckboxDropdown } from "../../components/Textfield";
+import { VolverButton, TextButton } from "../../components/Button";
+import { SearchBar, Textfield, CheckboxDropdown } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { Modal, LoadingModal, AlertModal } from "../../components/modal";
 
@@ -12,6 +12,7 @@ import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from "firebase
 import { db } from "../../../firebaseConfig"; // ajusta la ruta a tu config
 
 import { formatRUT } from "../../utils/formatRUT";
+import { validateRUT } from "../../utils/validation";
 
 
 const RProcesar = () => {
@@ -57,15 +58,24 @@ const RProcesar = () => {
     const [errors, setErrors] = useState({});
     const ECampo = "!";
     const handleNewEmpresa = async () => {
-        let newErrors = {};
-        
+        const newErrors = {};
+
         // rut obligatorio
         if (!rut) newErrors.rut = ECampo;
         if (!razon) newErrors.razon = ECampo;
         if (!giro) newErrors.giro = ECampo;
         if (!comuna) newErrors.comuna = ECampo;
         if (!direccion) newErrors.direccion = ECampo;
-        
+
+        // Validar formato y dígito verificador del RUT
+        if (rut) {
+            const rutValidation = validateRUT(rut);
+            if (!rutValidation.valid) {
+                setErrorRut(rutValidation.error);
+                return;
+            }
+        }
+
         setErrors(newErrors);
 
         if (Object.keys(newErrors).length === 0) {
@@ -108,7 +118,7 @@ const RProcesar = () => {
     };
 
     const handleEditEmpresa = async () => {
-        let newErrors = {};
+        const newErrors = {};
         
         // rut obligatorio
         if (!rut) newErrors.rut = ECampo;
@@ -201,10 +211,6 @@ const RProcesar = () => {
         setEliminarModal(true);
     }
 
-    const handleLoadingModal = () => {
-        setLoadingModal(true)
-    }
-
     const handleResetParams = () => {
         setRut("");
         setRazon("");
@@ -217,10 +223,6 @@ const RProcesar = () => {
         setEsProveedor(false);
         setCreditoCliente(0);
         setCreditoProveedor(0);
-    }
-
-    const handleEmpresaPrint = () => {
-        // Debug function removed for security
     }
 
     return (

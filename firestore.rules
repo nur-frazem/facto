@@ -1,0 +1,123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════════════════════════════
+    // HELPER FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.token.email)).data;
+    }
+
+    function userExists() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/usuarios/$(request.auth.token.email));
+    }
+
+    function isActive() {
+      return userExists() &&
+             (getUserData().activo == true || getUserData().activo == "true");
+    }
+
+    function getUserRole() {
+      return getUserData().rol;
+    }
+
+    // Role checks
+    function isSuperAdmin() {
+      return isActive() && getUserRole() == 'super_admin';
+    }
+
+    function isAdmin() {
+      return isActive() && (getUserRole() == 'admin' || getUserRole() == 'super_admin');
+    }
+
+    function isGestor() {
+      return isActive() && (getUserRole() == 'gestor' || isAdmin());
+    }
+
+    function isDigitador() {
+      return isActive() && (getUserRole() == 'digitador' || isGestor());
+    }
+
+    function isVisor() {
+      return isActive(); // All active users can at least view
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // USUARIOS - User management
+    // ═══════════════════════════════════════════════════════════════
+    match /usuarios/{email} {
+      // Users can read their own document
+      allow read: if isAuthenticated() && request.auth.token.email == email;
+      // Admins can read all users
+      allow read: if isAdmin();
+      // Only super_admin and admin can manage users
+      allow write: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // EMPRESAS - Companies and documents
+    // ═══════════════════════════════════════════════════════════════
+    match /empresas/{rut} {
+      // Visor+ can read companies
+      allow read: if isVisor();
+      // Gestor+ can write companies
+      allow write: if isGestor();
+
+      // Subcollections (facturas, facturasExentas, notasCredito, boletas)
+      match /{subcollection}/{docId} {
+        // Visor+ can read
+        allow read: if isVisor();
+        // Digitador+ can create
+        allow create: if isDigitador();
+        // Gestor+ can update/delete
+        allow update, delete: if isGestor();
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PAGO_RECEPCION - Payment records
+    // ═══════════════════════════════════════════════════════════════
+    match /pago_recepcion/{pagoId} {
+      // Visor+ can read
+      allow read: if isVisor();
+      // Gestor+ can create/update/delete (process payments)
+      allow write: if isGestor();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // AUDITORIA - Audit trail for document changes/deletions
+    // ═══════════════════════════════════════════════════════════════
+    match /auditoria/{logId} {
+      // Only admins can read audit logs
+      allow read: if isAdmin();
+      // Gestor+ can create audit entries (logged when editing/deleting documents)
+      allow create: if isGestor();
+      // No one can update or delete audit logs (immutable)
+      allow update, delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // VALUES - Configuration values
+    // ═══════════════════════════════════════════════════════════════
+    match /values/{valueId} {
+      // All active users can read
+      allow read: if isVisor();
+      // Only admins can modify
+      allow write: if isAdmin();
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DENY ALL OTHER ACCESS
+    // ═══════════════════════════════════════════════════════════════
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

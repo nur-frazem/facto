@@ -5,16 +5,18 @@
  *
  * Opción 1 - Desde la consola del navegador (después de iniciar sesión):
  * 1. Inicia la aplicación normalmente
- * 2. Inicia sesión con tu cuenta (francozanetti@live.cl)
+ * 2. Inicia sesión con tu cuenta
  * 3. Abre las herramientas de desarrollo (F12)
  * 4. En la consola, ejecuta:
- *    await window.initSuperAdmin()
+ *    await window.initSuperAdmin("tu-email@ejemplo.com", "Tu Nombre")
  *
  * Opción 2 - Manualmente en Firebase Console:
  * 1. Ve a Firebase Console -> Firestore Database
  * 2. Crea la colección "usuarios" si no existe
- * 3. Añade un documento con ID: francozanetti@live.cl
+ * 3. Añade un documento con ID igual a tu email
  * 4. Añade los campos según la estructura de abajo
+ *
+ * SEGURIDAD: No incluir credenciales hardcodeadas en este archivo
  */
 
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
@@ -22,14 +24,25 @@ import { db, auth } from "../../firebaseConfig";
 
 /**
  * Inicializa el usuario como Super Admin
- * @param {string} email - Email del usuario (por defecto francozanetti@live.cl)
- * @param {string} nombre - Nombre del usuario
+ * @param {string} email - Email del usuario (REQUERIDO)
+ * @param {string} nombre - Nombre del usuario (REQUERIDO)
  * @returns {Promise<{success: boolean, message: string}>}
  */
-export async function initSuperAdmin(
-  email = "francozanetti@live.cl",
-  nombre = "Franco Zanetti"
-) {
+export async function initSuperAdmin(email, nombre) {
+  // Validar parámetros requeridos
+  if (!email || typeof email !== "string" || !email.includes("@")) {
+    return {
+      success: false,
+      message: "Error: Se requiere un email válido como primer parámetro"
+    };
+  }
+
+  if (!nombre || typeof nombre !== "string" || nombre.trim().length < 2) {
+    return {
+      success: false,
+      message: "Error: Se requiere un nombre válido como segundo parámetro"
+    };
+  }
   try {
     const userDocRef = doc(db, "usuarios", email.toLowerCase());
 
@@ -91,7 +104,7 @@ export async function checkUserSetup() {
   const user = auth.currentUser;
 
   if (!user) {
-    console.log("No hay usuario autenticado");
+    console.warn("No hay usuario autenticado");
     return null;
   }
 
@@ -101,7 +114,7 @@ export async function checkUserSetup() {
 
     if (docSnap.exists()) {
       const data = docSnap.data();
-      console.log("Usuario encontrado:", {
+      console.warn("Usuario encontrado:", {
         email: data.email,
         nombre: data.nombre,
         rol: data.rol,
@@ -109,10 +122,10 @@ export async function checkUserSetup() {
       });
       return data;
     } else {
-      console.log("Usuario autenticado pero sin registro en Firestore");
-      console.log("Email:", user.email);
-      console.log("\nPara crear el registro de Super Admin, ejecuta:");
-      console.log(`await window.initSuperAdmin("${user.email}", "Tu Nombre")`);
+      console.warn("Usuario autenticado pero sin registro en Firestore");
+      console.warn("Email:", user.email);
+      console.warn("\nPara crear el registro de Super Admin, ejecuta:");
+      console.warn(`await window.initSuperAdmin("${user.email}", "Tu Nombre")`);
       return null;
     }
   } catch (error) {

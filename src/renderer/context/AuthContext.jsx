@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 
 // Definición de roles y sus permisos
@@ -58,6 +58,10 @@ export const ROLES_DESCRIPCION = {
 
 const AuthContext = createContext(null);
 
+// Tiempo máximo de sesión: 8 horas en milisegundos
+const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000;
+const SESSION_START_KEY = 'facto_session_start';
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -65,13 +69,41 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const isLoggingOutRef = useRef(false);
+  const sessionCheckIntervalRef = useRef(null);
+
+  // Función para verificar si la sesión ha expirado
+  const checkSessionExpiration = () => {
+    const sessionStart = localStorage.getItem(SESSION_START_KEY);
+    if (sessionStart) {
+      const elapsed = Date.now() - parseInt(sessionStart, 10);
+      if (elapsed >= SESSION_TIMEOUT_MS) {
+        console.log('Sesión expirada por timeout de 8 horas');
+        localStorage.removeItem(SESSION_START_KEY);
+        signOut(auth).catch(err => console.error('Error cerrando sesión:', err));
+        return true;
+      }
+    }
+    return false;
+  };
 
   useEffect(() => {
     let unsubscribeUserData = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Verificar si la sesión ha expirado antes de continuar
+        if (checkSessionExpiration()) {
+          return;
+        }
+
+        // Si no hay timestamp de inicio de sesión, establecerlo ahora
+        if (!localStorage.getItem(SESSION_START_KEY)) {
+          localStorage.setItem(SESSION_START_KEY, Date.now().toString());
+        }
+
         setUser(firebaseUser);
+        setLoading(true); // Set loading while we fetch user data from Firestore
+        setError(null); // Clear any previous error
 
         // Suscribirse a cambios en el documento del usuario
         const userDocRef = doc(db, 'usuarios', firebaseUser.email);
@@ -93,7 +125,20 @@ export function AuthProvider({ children }) {
           setError('Error al obtener permisos del usuario');
           setLoading(false);
         });
+        // Iniciar verificación periódica de expiración de sesión (cada minuto)
+        sessionCheckIntervalRef.current = setInterval(() => {
+          checkSessionExpiration();
+        }, 60000);
       } else {
+        // Limpiar timestamp de sesión al cerrar sesión
+        localStorage.removeItem(SESSION_START_KEY);
+
+        // Limpiar intervalo de verificación
+        if (sessionCheckIntervalRef.current) {
+          clearInterval(sessionCheckIntervalRef.current);
+          sessionCheckIntervalRef.current = null;
+        }
+
         setUser(null);
         setUserData(null);
         setError(null);
@@ -111,6 +156,9 @@ export function AuthProvider({ children }) {
       unsubscribeAuth();
       if (unsubscribeUserData) {
         unsubscribeUserData();
+      }
+      if (sessionCheckIntervalRef.current) {
+        clearInterval(sessionCheckIntervalRef.current);
       }
     };
   }, []);

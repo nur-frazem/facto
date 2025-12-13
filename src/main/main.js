@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -22,6 +22,7 @@ const createWindow = () => {
       contextIsolation: true,
       nodeIntegration: false,
       webviewTag: false, // Disabled for security - enable only if needed
+      plugins: true, // Enable PDF viewer plugin
     },
   });
 
@@ -36,6 +37,26 @@ const createWindow = () => {
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.webContents.openDevTools();
   }
+
+  // Handle new windows (like PDF viewer) - ensure they have PDF plugin enabled
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Allow blob URLs for PDFs to open in a new window with proper settings
+    if (url.startsWith('blob:')) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: 800,
+          height: 600,
+          webPreferences: {
+            plugins: true, // Enable PDF viewer plugin
+            contextIsolation: true,
+            nodeIntegration: false,
+          }
+        }
+      };
+    }
+    return { action: 'allow' };
+  });
 };
 
 
@@ -43,6 +64,38 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // Check if running in development mode
+  const isDev = !!MAIN_WINDOW_VITE_DEV_SERVER_URL;
+
+  // Set Content Security Policy
+  // In development: Allow unsafe-inline/eval for Vite HMR
+  // In production: Strict CSP without unsafe-inline/eval
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const scriptSrc = isDev
+      ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+      : "script-src 'self'; ";
+
+    // Note: 'unsafe-inline' kept for style-src because React's style prop creates inline styles
+    // This is a lower security risk than script unsafe-inline
+    const styleSrc = "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; ";
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          scriptSrc +
+          styleSrc +
+          "font-src 'self' https://fonts.gstatic.com data:; " +
+          "img-src 'self' data: blob: https:; " +
+          "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; " +
+          "frame-src 'self' blob: data:; " +
+          "object-src 'self' blob: data:;"
+        ]
+      }
+    });
+  });
+
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the

@@ -1,16 +1,12 @@
-import React, {useState, useEffect} from 'react';
-import { H1Tittle } from "../components/Fonts";
+import { useState } from 'react';
 import { YButton, XButton } from "../components/Button";
-import { CGrid } from "../components/Container";
 import { useNavigate } from "react-router-dom";
 import { Textfield } from '../components/Textfield';
 import { Modal } from '../components/modal';
 import Footer from '../components/Footer';
 
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../../firebaseConfig';
-
-import { collection, getDocs, updateDoc, doc, query, where } from "firebase/firestore";
+import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { auth } from '../../firebaseConfig';
 
 const IniciarSesion = () => {
     const navigate = useNavigate();
@@ -18,32 +14,20 @@ const IniciarSesion = () => {
     const [password, setPassword] = useState("");
     const [showErrorModal, setShowErrorModal] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
-    const[loadingModal, setLoadingModal] = useState(false);
+    const [loadingModal, setLoadingModal] = useState(false);
+
+    // Password reset states
+    const [showResetModal, setShowResetModal] = useState(false);
+    const [resetEmail, setResetEmail] = useState("");
+    const [resetLoading, setResetLoading] = useState(false);
+    const [resetSuccess, setResetSuccess] = useState(false);
+    const [resetError, setResetError] = useState("");
 
     const handleLogin = async () => {
         try {
             setLoadingModal(true);
             await signInWithEmailAndPassword(auth, email, password);
-            const empresasSnap = await getDocs(collection(db, "empresas"));
-    
-            for (const empresa of empresasSnap.docs) {
-                const facturasRef = collection(db, "empresas", empresa.id, "facturas");
-                const facturasSnap = await getDocs(query(facturasRef, where("estado", "==", "pendiente")));
-    
-                const hoy = new Date();
-    
-                for (const factura of facturasSnap.docs) {
-                const data = factura.data();
-    
-                // Solo actualizar si está pendiente y ya pasó la fecha
-                if (data.estado === "pendiente" && data.fechaV.toDate() < hoy) {
-                    const facturaRef = doc(db, "empresas", empresa.id, "facturas", factura.id);
-                    await updateDoc(facturaRef, {
-                    estado: "vencido",
-                    });
-                }
-                }
-            }
+            // Status updates (pendiente -> vencido) are now handled per-page when documents are loaded
             setLoadingModal(false);
             navigate("/home");
         } catch (error) {
@@ -54,68 +38,260 @@ const IniciarSesion = () => {
         }
     };
 
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            handleLogin();
+        }
+    };
+
+    const handlePasswordReset = async () => {
+        if (!resetEmail) {
+            setResetError("Ingrese su correo electrónico");
+            return;
+        }
+
+        setResetLoading(true);
+        setResetError("");
+
+        try {
+            await sendPasswordResetEmail(auth, resetEmail);
+            setResetSuccess(true);
+        } catch (error) {
+            console.error("Error en reset:", error.code);
+            if (error.code === "auth/user-not-found") {
+                setResetError("No existe una cuenta con este correo");
+            } else if (error.code === "auth/invalid-email") {
+                setResetError("Correo electrónico inválido");
+            } else {
+                setResetError("Error al enviar el correo. Intente nuevamente.");
+            }
+        } finally {
+            setResetLoading(false);
+        }
+    };
+
+    const handleOpenResetModal = () => {
+        setResetEmail(email); // Pre-fill with login email if available
+        setResetError("");
+        setResetSuccess(false);
+        setShowResetModal(true);
+    };
+
+    const handleCloseResetModal = () => {
+        setShowResetModal(false);
+        setResetEmail("");
+        setResetError("");
+        setResetSuccess(false);
+    };
+
     return(
-        <CGrid>
-            {/* Header */}
-            <div className="pt-6 sm:pt-10">
-                <H1Tittle text="Inicio Sesión" subtittle="Ingrese sus datos para iniciar sesión" />
-            </div>
+        <div className="min-h-screen flex flex-col">
+            {/* Main content - centered */}
+            <div className="flex-1 flex items-center justify-center p-4">
+                {/* Login Card */}
+                <div className="w-full max-w-md">
+                    {/* Logo & Brand */}
+                    <div className="text-center mb-8">
+                        {/* Logo Icon */}
+                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-accent-blue to-blue-600 shadow-lg shadow-accent-blue/25 mb-4">
+                            <svg
+                                className="w-10 h-10 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
+                            </svg>
+                        </div>
+                        {/* Brand Name */}
+                        <h1 className="text-4xl font-black text-white tracking-tight">
+                            FACTO
+                        </h1>
+                        <p className="text-slate-400 mt-1 text-sm">
+                            Sistema de Gestión Documental
+                        </p>
+                    </div>
 
-            {/* Form - grows to fill space */}
-            <div className='flex-1 flex flex-col justify-center items-center gap-4 px-4'>
-                <Textfield label="E-MAIL:"
-                            type='email'
-                            className='w-full max-w-sm sm:max-w-md'
-                            placeholder="Ejemplo@ejemplo.ej"
-                            value={email}
-                            onChange={e => setEmail(e.target.value)}
-                            />
-                <Textfield label="Contraseña:"
-                            type='password'
-                            className='w-full max-w-sm sm:max-w-md'
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            />
+                    {/* Login Form Card */}
+                    <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8 shadow-xl">
+                        <h2 className="text-xl font-semibold text-white mb-1">
+                            Bienvenido
+                        </h2>
+                        <p className="text-slate-400 text-sm mb-6">
+                            Ingrese sus credenciales para continuar
+                        </p>
 
-                {/* Buttons */}
-                <div className='flex flex-col sm:flex-row gap-4 sm:gap-8 mt-6 w-full max-w-sm sm:max-w-md justify-center'>
-                    <YButton text="Iniciar"
-                            className="text-lg sm:text-2xl py-3 sm:py-4 px-8 sm:px-12"
-                            onClick={handleLogin}
+                        {/* Form Fields */}
+                        <div className="space-y-4">
+                            <Textfield
+                                label="Correo electrónico"
+                                type='email'
+                                className='w-full'
+                                placeholder="usuario@ejemplo.com"
+                                value={email}
+                                onChange={e => setEmail(e.target.value)}
+                                onKeyPress={handleKeyPress}
                             />
+                            <div>
+                                <Textfield
+                                    label="Contraseña"
+                                    type='password'
+                                    className='w-full'
+                                    placeholder="Ingrese su contraseña"
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    onKeyPress={handleKeyPress}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleOpenResetModal}
+                                    className="mt-2 text-sm text-accent-blue hover:text-blue-400 transition-colors"
+                                >
+                                    ¿Olvidaste tu contraseña?
+                                </button>
+                            </div>
+                        </div>
 
-                    <XButton text="Salir"
-                            className="text-lg sm:text-2xl py-3 sm:py-4 px-8 sm:px-12"
-                            onClick={() => window.electronAPI.salirApp()}
+                        {/* Buttons */}
+                        <div className='flex flex-col gap-3 mt-6'>
+                            <YButton
+                                text="Iniciar Sesión"
+                                className="w-full text-lg py-3 justify-center font-semibold"
+                                onClick={handleLogin}
                             />
+                            <button
+                                onClick={() => window.electronAPI.salirApp()}
+                                className="w-full py-2.5 text-slate-400 hover:text-white text-sm font-medium transition-colors duration-200"
+                            >
+                                Salir de la aplicación
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Version info */}
+                    <p className="text-center text-slate-500 text-xs mt-6">
+                        v1.0.0
+                    </p>
                 </div>
             </div>
 
+            {/* Error Modal */}
             {showErrorModal && (
                 <Modal onClickOutside={() => setShowErrorModal(false)}>
-                    <div className="flex flex-col items-center gap-4">
-                    <p>{errorMessage}</p>
-                    <XButton
-                        className="h-8"
-                        onClick={() => setShowErrorModal(false)}
-                        text="Volver"
-                    />
+                    <div className="flex flex-col items-center gap-4 p-2">
+                        <div className="w-12 h-12 rounded-full bg-danger/20 flex items-center justify-center">
+                            <svg className="w-6 h-6 text-danger" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </div>
+                        <p className="text-white font-medium">{errorMessage}</p>
+                        <XButton
+                            className="h-10 px-6"
+                            onClick={() => setShowErrorModal(false)}
+                            text="Intentar de nuevo"
+                        />
                     </div>
                 </Modal>
             )}
 
+            {/* Loading Modal */}
             {loadingModal && (
-                      <Modal>
-                          <p className="font-black">Cargando</p>
-                      </Modal>
+                <Modal>
+                    <div className="flex flex-col items-center gap-4 p-4">
+                        {/* Spinner */}
+                        <div className="w-10 h-10 border-4 border-white/20 border-t-accent-blue rounded-full animate-spin"></div>
+                        <p className="text-white font-medium">Iniciando sesión...</p>
+                    </div>
+                </Modal>
             )}
 
-            <Footer />
+            {/* Password Reset Modal */}
+            {showResetModal && (
+                <Modal onClickOutside={handleCloseResetModal}>
+                    <div className="flex flex-col gap-4 p-2 min-w-[320px]">
+                        {!resetSuccess ? (
+                            <>
+                                {/* Header */}
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-accent-blue/20 flex items-center justify-center">
+                                        <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-white font-semibold">Restablecer contraseña</h3>
+                                        <p className="text-slate-400 text-sm">Te enviaremos un correo con instrucciones</p>
+                                    </div>
+                                </div>
 
-        </CGrid>
+                                {/* Email Input */}
+                                <Textfield
+                                    label="Correo electrónico"
+                                    type="email"
+                                    className="w-full"
+                                    placeholder="usuario@ejemplo.com"
+                                    value={resetEmail}
+                                    onChange={e => setResetEmail(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && handlePasswordReset()}
+                                />
+
+                                {/* Error Message */}
+                                {resetError && (
+                                    <p className="text-danger text-sm text-center">{resetError}</p>
+                                )}
+
+                                {/* Buttons */}
+                                <div className="flex gap-3 mt-2">
+                                    <XButton
+                                        className="flex-1 justify-center"
+                                        text="Cancelar"
+                                        onClick={handleCloseResetModal}
+                                    />
+                                    <YButton
+                                        className="flex-1 justify-center"
+                                        text={resetLoading ? "Enviando..." : "Enviar"}
+                                        onClick={handlePasswordReset}
+                                        disabled={resetLoading}
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                {/* Success State */}
+                                <div className="flex flex-col items-center gap-4 py-4">
+                                    <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center">
+                                        <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <div className="text-center">
+                                        <h3 className="text-white font-semibold mb-1">Correo enviado</h3>
+                                        <p className="text-slate-400 text-sm">
+                                            Revisa tu bandeja de entrada en<br />
+                                            <span className="text-white font-medium">{resetEmail}</span>
+                                        </p>
+                                    </div>
+                                    <YButton
+                                        className="mt-2 px-8 justify-center"
+                                        text="Entendido"
+                                        onClick={handleCloseResetModal}
+                                    />
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </Modal>
+            )}
+
+            {/* Footer */}
+            <Footer />
+        </div>
     );
-    
-    
 }
 
 export default IniciarSesion;
