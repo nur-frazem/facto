@@ -6,6 +6,7 @@ import { VolverButton, YButton, XButton } from "../../components/Button";
 import { useNavigate } from "react-router-dom";
 import { Textfield, DropdownMenu, DatepickerField } from "../../components/Textfield";
 import { Modal, LoadingModal, AlertModal } from "../../components/modal";
+import { useTheme } from "../../context/ThemeContext";
 
 import { doc, setDoc, getDoc, collection, onSnapshot, runTransaction, addDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
@@ -17,6 +18,7 @@ import { getAuth } from "firebase/auth";
 
 const RIngresar = () => {
   const navigate = useNavigate();
+  const { isLightTheme } = useTheme();
 
   const [userId, setUserId] = useState("");
 
@@ -613,8 +615,12 @@ const RIngresar = () => {
           <div className="max-w-5xl mx-auto space-y-4">
 
             {/* Card 1: Información del Documento */}
-            <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5">
-              <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+            <div className={`backdrop-blur-sm rounded-xl p-5 ${
+              isLightTheme
+                ? 'bg-white border border-gray-200 shadow-md'
+                : 'bg-gradient-to-br from-white/10 to-white/5 border border-white/10'
+            }`}>
+              <h3 className={`font-semibold mb-4 flex items-center gap-2 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                 <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -701,8 +707,12 @@ const RIngresar = () => {
             </div>
 
             {/* Card 2: Pago y Fechas */}
-            <div className={`bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 transition-opacity ${!selectedDoc ? "opacity-50" : ""}`}>
-              <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+            <div className={`backdrop-blur-sm rounded-xl p-5 transition-opacity ${!selectedDoc ? "opacity-50" : ""} ${
+              isLightTheme
+                ? 'bg-white border border-gray-200 shadow-md'
+                : 'bg-gradient-to-br from-white/10 to-white/5 border border-white/10'
+            }`}>
+              <h3 className={`font-semibold mb-4 flex items-center gap-2 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                 <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
@@ -786,7 +796,7 @@ const RIngresar = () => {
 
               {/* Nota de crédito - Campos adicionales */}
               {selectedDoc === "Nota de crédito" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/10">
+                <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}>
                   <DropdownMenu
                     tittle={
                       <>
@@ -830,8 +840,12 @@ const RIngresar = () => {
             </div>
 
             {/* Card 3: Montos */}
-            <div className={`bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-5 transition-opacity ${!selectedDoc ? "opacity-50" : ""}`}>
-              <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+            <div className={`backdrop-blur-sm rounded-xl p-5 transition-opacity ${!selectedDoc ? "opacity-50" : ""} ${
+              isLightTheme
+                ? 'bg-white border border-gray-200 shadow-md'
+                : 'bg-gradient-to-br from-white/10 to-white/5 border border-white/10'
+            }`}>
+              <h3 className={`font-semibold mb-4 flex items-center gap-2 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                 <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -955,8 +969,8 @@ const RIngresar = () => {
                     </svg>
                   </div>
                   <div>
-                    <p className="text-slate-400 text-sm">Monto Total</p>
-                    <p className="text-white text-2xl font-bold">
+                    <p className={`text-sm ${isLightTheme ? 'text-gray-600' : 'text-slate-400'}`}>Monto Total</p>
+                    <p className={`text-2xl font-bold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                       {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(selectedDoc ? total : 0)}
                     </p>
                   </div>

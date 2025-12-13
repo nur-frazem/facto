@@ -7,6 +7,7 @@ import { VolverButton, TextButton } from '../../components/Button';
 import { Textfield } from '../../components/Textfield';
 import { Card } from '../../components/Container';
 import { Modal, LoadingModal, AlertModal } from '../../components/modal';
+import { useTheme } from '../../context/ThemeContext';
 
 import {
   doc,
@@ -26,6 +27,7 @@ import { useAuth, ROLES_LABELS, ROLES_DESCRIPCION } from '../../context/AuthCont
 const CRolesUsuarios = () => {
   const navigate = useNavigate();
   const { userData, esSuperAdmin, esAdmin, getRolesAsignables, ROLES } = useAuth();
+  const { isLightTheme } = useTheme();
 
   // Estado de usuarios
   const [usuarios, setUsuarios] = useState([]);
@@ -113,7 +115,7 @@ const CRolesUsuarios = () => {
     else if (nuevoPassword.length < 7) newErrors.password = 'Mínimo 7 caracteres';
     else if (!/[A-Z]/.test(nuevoPassword))
       newErrors.password = 'Debe incluir al menos una mayúscula';
-    else if (!/[0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(nuevoPassword))
+    else if (!/[0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(nuevoPassword))
       newErrors.password = 'Debe incluir al menos un número o símbolo';
 
     setErrors(newErrors);
@@ -373,6 +375,22 @@ const CRolesUsuarios = () => {
 
   // Obtener color de badge según rol
   const getRolBadgeColor = (rol) => {
+    if (isLightTheme) {
+      switch (rol) {
+        case ROLES.SUPER_ADMIN:
+          return 'bg-purple-100 text-purple-700 border-purple-300';
+        case ROLES.ADMIN:
+          return 'bg-blue-100 text-blue-700 border-blue-300';
+        case ROLES.GESTOR:
+          return 'bg-green-100 text-green-700 border-green-300';
+        case ROLES.DIGITADOR:
+          return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+        case ROLES.VISOR:
+          return 'bg-gray-100 text-gray-600 border-gray-300';
+        default:
+          return 'bg-gray-100 text-gray-600 border-gray-300';
+      }
+    }
     switch (rol) {
       case ROLES.SUPER_ADMIN:
         return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
@@ -444,7 +462,11 @@ const CRolesUsuarios = () => {
             content={
               <div>
                 {/* Encabezados */}
-                <div className="flex font-semibold text-sm text-slate-300 mb-3 px-2 py-2 bg-white/5 rounded-lg sticky top-0">
+                <div className={`flex font-semibold text-sm mb-3 px-2 py-2 rounded-lg sticky top-0 ${
+                  isLightTheme
+                    ? 'bg-gray-50 text-gray-600'
+                    : 'bg-white/5 text-slate-300'
+                }`}>
                   <div className="w-[25%] text-center">Email</div>
                   <div className="w-[20%] text-center">Nombre</div>
                   <div className="w-[20%] text-center">Rol</div>
@@ -456,7 +478,11 @@ const CRolesUsuarios = () => {
                 {usuariosFiltrados.map((usuario) => (
                   <div
                     key={usuario.id}
-                    className="flex items-center mb-1 px-2 py-3 hover:bg-white/5 rounded-lg transition-colors border-b border-white/5 last:border-b-0"
+                    className={`flex items-center mb-1 px-2 py-3 rounded-lg transition-colors border-b last:border-b-0 ${
+                      isLightTheme
+                        ? 'hover:bg-gray-50 border-gray-100'
+                        : 'hover:bg-white/5 border-white/5'
+                    }`}
                   >
                     <div className="w-[25%] text-center text-sm font-medium truncate px-1">
                       {usuario.email}
@@ -613,12 +639,12 @@ const CRolesUsuarios = () => {
                 />
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className={`block text-sm font-medium mb-2 ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}>
                     Rol:
-                    {errors.rol && <span className="text-red-300 font-black"> - {errors.rol}</span>}
+                    {errors.rol && <span className="text-red-500 font-black"> - {errors.rol}</span>}
                   </label>
                   {limiteAdminsAlcanzado && esSuperAdmin() && (
-                    <p className="text-xs text-yellow-400 mb-2">
+                    <p className={`text-xs mb-2 ${isLightTheme ? 'text-yellow-600' : 'text-yellow-400'}`}>
                       Límite de administradores alcanzado ({cantidadAdmins}/{LIMITE_ADMINS})
                     </p>
                   )}
@@ -633,8 +659,12 @@ const CRolesUsuarios = () => {
                             nuevoRol === rol
                               ? 'border-accent-blue bg-accent-blue/10'
                               : puedeAsignar
-                                ? 'border-white/10 hover:border-white/20 hover:bg-white/5'
-                                : 'border-white/5 opacity-40 cursor-not-allowed'
+                                ? isLightTheme
+                                  ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                                : isLightTheme
+                                  ? 'border-gray-100 opacity-40 cursor-not-allowed'
+                                  : 'border-white/5 opacity-40 cursor-not-allowed'
                           }`}
                         >
                           <input
@@ -655,7 +685,7 @@ const CRolesUsuarios = () => {
                             >
                               {label}
                             </span>
-                            <p className="text-xs text-slate-400 mt-1">
+                            <p className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
                               {ROLES_DESCRIPCION[rol]}
                               {esAdminLimitado && ' (Límite alcanzado)'}
                             </p>
@@ -667,7 +697,7 @@ const CRolesUsuarios = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-white/10">
+              <div className={`flex justify-end gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}>
                 <TextButton
                   text="Cancelar"
                   className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-lg"
@@ -723,12 +753,12 @@ const CRolesUsuarios = () => {
                 />
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className={`block text-sm font-medium mb-2 ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}>
                     Rol:
-                    {errors.rol && <span className="text-red-300 font-black"> - {errors.rol}</span>}
+                    {errors.rol && <span className="text-red-500 font-black"> - {errors.rol}</span>}
                   </label>
                   {limiteAdminsAlcanzado && esSuperAdmin() && editRolOriginal !== ROLES.ADMIN && (
-                    <p className="text-xs text-yellow-400 mb-2">
+                    <p className={`text-xs mb-2 ${isLightTheme ? 'text-yellow-600' : 'text-yellow-400'}`}>
                       Límite de administradores alcanzado ({cantidadAdmins}/{LIMITE_ADMINS})
                     </p>
                   )}
@@ -746,8 +776,12 @@ const CRolesUsuarios = () => {
                             editRol === rol
                               ? 'border-accent-blue bg-accent-blue/10'
                               : puedeAsignar
-                                ? 'border-white/10 hover:border-white/20 hover:bg-white/5'
-                                : 'border-white/5 opacity-40 cursor-not-allowed'
+                                ? isLightTheme
+                                  ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                  : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                                : isLightTheme
+                                  ? 'border-gray-100 opacity-40 cursor-not-allowed'
+                                  : 'border-white/5 opacity-40 cursor-not-allowed'
                           }`}
                         >
                           <input
@@ -768,7 +802,7 @@ const CRolesUsuarios = () => {
                             >
                               {label}
                             </span>
-                            <p className="text-xs text-slate-400 mt-1">
+                            <p className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
                               {ROLES_DESCRIPCION[rol]}
                               {esAdminLimitado && ' (Límite alcanzado)'}
                             </p>
@@ -780,10 +814,14 @@ const CRolesUsuarios = () => {
                 </div>
 
                 {/* Toggle estado activo */}
-                <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+                <div className={`flex items-center justify-between p-4 rounded-lg border ${
+                  isLightTheme
+                    ? 'bg-gray-50 border-gray-200'
+                    : 'bg-white/5 border-white/10'
+                }`}>
                   <div>
-                    <p className="font-medium text-white">Estado de la cuenta</p>
-                    <p className="text-xs text-slate-400">
+                    <p className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>Estado de la cuenta</p>
+                    <p className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
                       {editActivo
                         ? 'El usuario puede acceder al sistema'
                         : 'El acceso está bloqueado'}
@@ -804,7 +842,7 @@ const CRolesUsuarios = () => {
                 </div>
               </div>
 
-              <div className="flex justify-between items-center gap-3 mt-6 pt-4 border-t border-white/10">
+              <div className={`flex justify-between items-center gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}>
                 <TextButton
                   text="Eliminar Usuario"
                   className="px-4 py-2 bg-danger text-white font-medium hover:bg-danger-hover active:bg-danger-active rounded-lg"

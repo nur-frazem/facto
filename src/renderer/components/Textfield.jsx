@@ -11,23 +11,26 @@ import "react-datepicker/dist/react-datepicker.css";
 
 import { useState, useRef, useEffect } from "react";
 import React from "react";
+import { useTheme } from "../context/ThemeContext";
 
-// Base input styles
-const inputBaseStyles = `
+// Helper to get base input styles based on theme
+const getInputBaseStyles = (isLightTheme) => `
   w-full px-4 py-2.5
-  bg-white/5 text-white text-sm
-  placeholder-slate-400
-  border border-white/10
+  text-sm
   rounded-lg
   transition-all duration-200
-  hover:border-white/20
   focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50
   [&::-webkit-inner-spin-button]:appearance-none
   [&::-webkit-outer-spin-button]:appearance-none
   [appearance:textfield]
+  ${isLightTheme
+    ? "bg-gray-50 text-gray-800 placeholder-gray-400 border border-gray-200 hover:border-gray-300"
+    : "bg-white/5 text-white placeholder-slate-400 border border-white/10 hover:border-white/20"
+  }
 `;
 
-const labelStyles = "block text-sm font-medium text-slate-300 mb-1.5";
+const getLabelStyles = (isLightTheme) =>
+  `block text-sm font-medium mb-1.5 ${isLightTheme ? "text-gray-600" : "text-slate-300"}`;
 
 export function Textfield({
   label,
@@ -43,10 +46,13 @@ export function Textfield({
   classNameInput = "",
   currency = false,
 }) {
+  const { isLightTheme } = useTheme();
   const [countryCode, setCountryCode] = useState("+56");
   const [internalValue, setInternalValue] = useState("");
 
   const isReadOnly = readOnly || (!onChange && value !== undefined);
+  const inputBaseStyles = getInputBaseStyles(isLightTheme);
+  const labelStyles = getLabelStyles(isLightTheme);
 
   // === FORMATTERS ===
   const formatCurrency = (val) => {
@@ -113,19 +119,26 @@ export function Textfield({
       {type === "phone" ? (
         <div className={`
           flex items-center
-          bg-white/5 border border-white/10
           rounded-lg
           focus-within:ring-2 focus-within:ring-accent-blue/50 focus-within:border-accent-blue/50
           transition-all duration-200
+          ${isLightTheme
+            ? "bg-gray-50 border border-gray-200"
+            : "bg-white/5 border border-white/10"
+          }
           ${classNameInput}
         `}>
           <select
             value={countryCode}
             onChange={(e) => setCountryCode(e.target.value)}
-            className="bg-transparent text-white text-sm py-2.5 pl-3 pr-1 focus:outline-none border-r border-white/10"
+            className={`bg-transparent text-sm py-2.5 pl-3 pr-1 focus:outline-none ${
+              isLightTheme
+                ? "text-gray-800 border-r border-gray-200"
+                : "text-white border-r border-white/10"
+            }`}
           >
             {countryCodes.map(({ code, country }) => (
-              <option key={code} value={code} className="text-white bg-surface">
+              <option key={code} value={code} className={isLightTheme ? "text-gray-800 bg-white" : "text-white bg-surface"}>
                 {country} {code}
               </option>
             ))}
@@ -138,7 +151,9 @@ export function Textfield({
             onKeyPress={onKeyPress}
             placeholder={placeholder || "987654321"}
             readOnly={isReadOnly}
-            className="flex-1 px-3 py-2.5 bg-transparent text-white text-sm placeholder-slate-400 focus:outline-none"
+            className={`flex-1 px-3 py-2.5 bg-transparent text-sm focus:outline-none ${
+              isLightTheme ? "text-gray-800 placeholder-gray-400" : "text-white placeholder-slate-400"
+            }`}
           />
         </div>
       ) : (
@@ -158,6 +173,9 @@ export function Textfield({
 }
 
 export function SearchBar({ placeholder = "", value, onChange }) {
+  const { isLightTheme } = useTheme();
+  const inputBaseStyles = getInputBaseStyles(isLightTheme);
+
   return (
     <div className="w-full max-w-sm min-w-[200px]">
       <div className="relative">
@@ -167,7 +185,7 @@ export function SearchBar({ placeholder = "", value, onChange }) {
           className={`${inputBaseStyles} pr-10`}
           placeholder={placeholder}
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+        <div className={`absolute right-3 top-1/2 -translate-y-1/2 ${isLightTheme ? "text-gray-400" : "text-slate-400"}`}>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
             <path fillRule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 0 13.5 6.75 6.75 0 0 0 0-13.5ZM2.25 10.5a8.25 8.25 0 1 1 14.59 5.28l4.69 4.69a.75.75 0 1 1-1.06 1.06l-4.69-4.69A8.25 8.25 0 0 1 2.25 10.5Z" clipRule="evenodd" />
           </svg>
@@ -187,6 +205,9 @@ export function DropdownMenu({
   searchable = false,
   searchPlaceholder = "Buscar...",
 }) {
+  const { isLightTheme } = useTheme();
+  const labelStyles = getLabelStyles(isLightTheme);
+
   const [internalSelected, setInternalSelected] = React.useState(tittle);
   const [open, setOpen] = React.useState(false);
   const [menuWidth, setMenuWidth] = React.useState(null);
@@ -273,20 +294,22 @@ export function DropdownMenu({
             type="button"
             className={`
               w-full py-2.5 px-4
-              bg-white/5 border border-white/10
               rounded-lg
-              hover:border-white/20
               focus:outline-none focus:ring-2 focus:ring-accent-blue/50
               transition-all duration-200
+              ${isLightTheme
+                ? "bg-gray-50 border border-gray-200 hover:border-gray-300"
+                : "bg-white/5 border border-white/10 hover:border-white/20"
+              }
               ${classNameMenu}
             `}
           >
             <div className="flex items-center justify-between w-full">
-              <span className="text-sm font-normal truncate text-white">{internalSelected || tittle}</span>
+              <span className={`text-sm font-normal truncate ${isLightTheme ? "text-gray-800" : "text-white"}`}>{internalSelected || tittle}</span>
               <ChevronDownIcon
-                className={`w-4 h-4 text-slate-400 transition-transform duration-200 flex-shrink-0 ml-2 ${
-                  open ? "rotate-180" : "rotate-0"
-                }`}
+                className={`w-4 h-4 transition-transform duration-200 flex-shrink-0 ml-2 ${
+                  isLightTheme ? "text-gray-400" : "text-slate-400"
+                } ${open ? "rotate-180" : "rotate-0"}`}
               />
             </div>
           </button>
@@ -296,24 +319,30 @@ export function DropdownMenu({
           className={`
             px-0 py-1 max-w-96 min-w-52
             overflow-hidden rounded-lg
-            bg-gradient-to-br from-surface-light to-surface
-            border border-white/10
             shadow-modal
             !z-[9999]
+            ${isLightTheme
+              ? "bg-white border border-gray-200"
+              : "bg-gradient-to-br from-surface-light to-surface border border-white/10"
+            }
             ${classNameList}
           `}
           style={{ width: menuWidth }}
         >
           {/* Search input for searchable dropdowns */}
           {searchable && (
-            <div className="px-2 pb-2 pt-1 border-b border-white/10">
+            <div className={`px-2 pb-2 pt-1 border-b ${isLightTheme ? "border-gray-200" : "border-white/10"}`}>
               <input
                 ref={searchInputRef}
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full px-3 py-2 bg-white/5 text-white text-sm placeholder-slate-400 border border-white/10 rounded-md focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50"
+                className={`w-full px-3 py-2 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50 ${
+                  isLightTheme
+                    ? "bg-gray-50 text-gray-800 placeholder-gray-400 border border-gray-200"
+                    : "bg-white/5 text-white placeholder-slate-400 border border-white/10"
+                }`}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
                   // Prevent menu from closing on Enter if there are filtered items
@@ -338,13 +367,17 @@ export function DropdownMenu({
                 <MenuItem
                   key={index}
                   onClick={() => handleSelect(item)}
-                  className="w-full px-4 py-2 text-white text-sm font-normal hover:bg-white/10 transition-colors cursor-pointer"
+                  className={`w-full px-4 py-2 text-sm font-normal transition-colors cursor-pointer ${
+                    isLightTheme
+                      ? "text-gray-800 hover:bg-gray-100"
+                      : "text-white hover:bg-white/10"
+                  }`}
                 >
                   {item}
                 </MenuItem>
               ))
             ) : (
-              <div className="px-4 py-3 text-sm text-slate-400 text-center">
+              <div className={`px-4 py-3 text-sm text-center ${isLightTheme ? "text-gray-400" : "text-slate-400"}`}>
                 No se encontraron resultados
               </div>
             )}
@@ -361,6 +394,9 @@ export function DropdownMenuList({
   value,
   onSelect,
 }) {
+  const { isLightTheme } = useTheme();
+  const labelStyles = getLabelStyles(isLightTheme);
+
   const [selectedItems, setSelectedItems] = useState(value || []);
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
@@ -399,12 +435,14 @@ export function DropdownMenuList({
         className={`
           w-full py-2.5 px-4
           flex justify-between items-center
-          bg-white/5 text-white text-sm
-          border border-white/10
+          text-sm
           rounded-lg
-          hover:border-white/20
           focus:outline-none focus:ring-2 focus:ring-accent-blue/50
           transition-all duration-200
+          ${isLightTheme
+            ? "bg-gray-50 text-gray-800 border border-gray-200 hover:border-gray-300"
+            : "bg-white/5 text-white border border-white/10 hover:border-white/20"
+          }
         `}
       >
         <span className="truncate">
@@ -413,21 +451,23 @@ export function DropdownMenuList({
             : "Seleccionar..."}
         </span>
         <ChevronDownIcon
-          className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ml-2 ${
-            open ? "rotate-180" : "rotate-0"
-          }`}
+          className={`w-4 h-4 transition-transform flex-shrink-0 ml-2 ${
+            isLightTheme ? "text-gray-400" : "text-slate-400"
+          } ${open ? "rotate-180" : "rotate-0"}`}
         />
       </button>
 
       {open && (
-        <div className="
+        <div className={`
           absolute mt-2 w-full z-[9999]
-          bg-gradient-to-br from-surface-light to-surface
-          border border-white/10
           rounded-lg shadow-modal
           max-h-52 overflow-auto scrollbar-custom
           animate-fade-in
-        ">
+          ${isLightTheme
+            ? "bg-white border border-gray-200"
+            : "bg-gradient-to-br from-surface-light to-surface border border-white/10"
+          }
+        `}>
           {items.map((item, index) => {
             const isSelected = selectedItems.includes(item);
             return (
@@ -438,8 +478,10 @@ export function DropdownMenuList({
                   px-4 py-2 cursor-pointer text-sm
                   transition-colors duration-150
                   ${isSelected
-                    ? "bg-accent-blue/20 text-white"
-                    : "text-slate-300 hover:bg-white/10 hover:text-white"
+                    ? `bg-accent-blue/20 ${isLightTheme ? "text-gray-800" : "text-white"}`
+                    : isLightTheme
+                      ? "text-gray-600 hover:bg-gray-100 hover:text-gray-800"
+                      : "text-slate-300 hover:bg-white/10 hover:text-white"
                   }
                 `}
               >
@@ -447,7 +489,7 @@ export function DropdownMenuList({
                   <div className={`
                     w-4 h-4 rounded border-2 flex items-center justify-center
                     transition-colors duration-150
-                    ${isSelected ? 'bg-accent-blue border-accent-blue' : 'border-slate-500'}
+                    ${isSelected ? 'bg-accent-blue border-accent-blue' : isLightTheme ? 'border-gray-400' : 'border-slate-500'}
                   `}>
                     {isSelected && (
                       <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
@@ -477,6 +519,10 @@ export function DatepickerField({
   minDate,
   maxDate
 }) {
+  const { isLightTheme } = useTheme();
+  const inputBaseStyles = getInputBaseStyles(isLightTheme);
+  const labelStyles = getLabelStyles(isLightTheme);
+
   return (
     <div className={`flex flex-col ${className}`}>
       {label && <label className={`${labelStyles} ${classNameLabel}`}>{label}</label>}
@@ -502,6 +548,10 @@ export function DatepickerRange({
   className,
   classNameField
 }) {
+  const { isLightTheme } = useTheme();
+  const inputBaseStyles = getInputBaseStyles(isLightTheme);
+  const labelStyles = getLabelStyles(isLightTheme);
+
   return (
     <div className={`flex flex-col ${className} ${classNameField}`}>
       {label && <label className={labelStyles}>{label}</label>}
@@ -521,6 +571,7 @@ export function DatepickerRange({
 }
 
 export function CheckboxDropdown({ label, items, value, onChange }) {
+  const { isLightTheme } = useTheme();
   const [checked, setChecked] = useState(value);
 
   const handleChange = () => {
@@ -530,19 +581,21 @@ export function CheckboxDropdown({ label, items, value, onChange }) {
 
   return (
     <div className="w-full my-3">
-      <label className="
+      <label className={`
         flex items-center justify-between
         cursor-pointer
-        bg-white/5 hover:bg-white/10
-        border border-white/10
         transition-colors duration-200
         rounded-lg py-2.5 px-4
-      ">
-        <span className="text-white text-sm">{label}</span>
+        ${isLightTheme
+          ? "bg-gray-50 hover:bg-gray-100 border border-gray-200"
+          : "bg-white/5 hover:bg-white/10 border border-white/10"
+        }
+      `}>
+        <span className={`text-sm ${isLightTheme ? "text-gray-800" : "text-white"}`}>{label}</span>
         <div className={`
           w-5 h-5 flex items-center justify-center
           rounded border-2 transition-all duration-200
-          ${checked ? "bg-accent-blue border-accent-blue" : "bg-transparent border-slate-500"}
+          ${checked ? "bg-accent-blue border-accent-blue" : isLightTheme ? "bg-transparent border-gray-400" : "bg-transparent border-slate-500"}
         `}>
           {checked && (
             <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
@@ -559,16 +612,23 @@ export function CheckboxDropdown({ label, items, value, onChange }) {
       </label>
 
       <div className={`
-        mt-2 bg-surface-light border border-white/10
-        rounded-lg shadow-lg overflow-hidden
+        mt-2 rounded-lg shadow-lg overflow-hidden
         transition-all duration-300
+        ${isLightTheme
+          ? "bg-white border border-gray-200"
+          : "bg-surface-light border border-white/10"
+        }
         ${checked ? "max-h-60 opacity-100" : "max-h-0 opacity-0"}
       `}>
-        <ul className="divide-y divide-white/5">
+        <ul className={`divide-y ${isLightTheme ? "divide-gray-100" : "divide-white/5"}`}>
           {items.map((item, index) => (
             <li
               key={index}
-              className="px-4 py-2.5 text-sm text-slate-300 hover:bg-white/5 transition-colors cursor-pointer"
+              className={`px-4 py-2.5 text-sm transition-colors cursor-pointer ${
+                isLightTheme
+                  ? "text-gray-600 hover:bg-gray-50"
+                  : "text-slate-300 hover:bg-white/5"
+              }`}
             >
               {item}
             </li>

@@ -11,6 +11,7 @@ import { doc, getDoc, getDocs, setDoc, collection, onSnapshot, deleteDoc, update
 import { db } from "../../../firebaseConfig";
 import { Card } from "../../components/Container";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import { cleanRUT, formatRUT } from "../../utils/formatRUT";
 import { formatCLP } from "../../utils/formatCurrency";
 import { generarPDF } from "../../utils/generarPDF";
@@ -24,6 +25,7 @@ import configIcon from "../../assets/Logos/config.png";
 const RRevisionDocumentos = () => {
   const navigate = useNavigate();
   const { tienePermiso, esAdmin, user } = useAuth();
+  const { isLightTheme } = useTheme();
 
   // Permisos del usuario
   const puedeEditar = tienePermiso("EDITAR_DOCUMENTOS");
@@ -2034,10 +2036,14 @@ const RRevisionDocumentos = () => {
                   placeholder="Buscar por RUT, razón social, folio, tipo, estado o monto..."
                   value={busquedaRapida}
                   onChange={(e) => setBusquedaRapida(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 pl-10 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50 transition-all"
+                  className={`w-full rounded-lg px-4 py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50 transition-all ${
+                    isLightTheme
+                      ? 'bg-white border border-gray-300 text-gray-800 placeholder-gray-400'
+                      : 'bg-white/5 border border-white/10 text-white placeholder-slate-400'
+                  }`}
                 />
                 <svg
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                  className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isLightTheme ? 'text-gray-400' : 'text-slate-400'}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -2047,7 +2053,9 @@ const RRevisionDocumentos = () => {
                 {busquedaRapida && (
                   <button
                     onClick={() => setBusquedaRapida("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors ${
+                      isLightTheme ? 'text-gray-400 hover:text-gray-700' : 'text-slate-400 hover:text-white'
+                    }`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2057,7 +2065,11 @@ const RRevisionDocumentos = () => {
               </div>
 
               {/* Encabezado - Clickable for sorting */}
-              <div className="flex items-center font-semibold text-xs text-slate-300 mb-2 bg-white/5 rounded-lg py-2">
+              <div className={`flex items-center font-semibold text-xs mb-2 rounded-lg py-2 ${
+                isLightTheme
+                  ? 'bg-gray-50 text-gray-600'
+                  : 'bg-white/5 text-slate-300'
+              }`}>
                 <button
                   onClick={() => handleSort('tipo')}
                   className="w-[17%] text-center hover:text-accent-blue transition-colors flex items-center justify-center gap-1"
@@ -2140,14 +2152,18 @@ const RRevisionDocumentos = () => {
                   <div key={empresa.rut} className="mb-4">
                     <button
                       onClick={() => toggleProviderCollapse(empresa.rut)}
-                      className="w-full flex gap-6 items-center p-3 bg-white/5 border border-white/10 rounded-lg mb-2 hover:bg-white/10 hover:border-accent-blue/30 transition-all duration-200 cursor-pointer"
+                      className={`w-full flex gap-6 items-center p-3 rounded-lg mb-2 transition-all duration-200 cursor-pointer ${
+                        isLightTheme
+                          ? 'bg-gray-50 border border-gray-200 hover:bg-gray-100 hover:border-accent-blue/30'
+                          : 'bg-white/5 border border-white/10 hover:bg-white/10 hover:border-accent-blue/30'
+                      }`}
                     >
                       <span className={`text-accent-blue transition-transform duration-300 ${isProviderExpanded(empresa.rut) ? 'rotate-90' : ''}`}>
                         ▶
                       </span>
-                      <p className="font-semibold">RUT: {formatRUT(empresa.rut)}</p>
-                      <p className="font-semibold">NOMBRE: {empresa.razon}</p>
-                      <p className="text-slate-400 text-sm ml-auto">{empresa.documentos.length} documento{empresa.documentos.length !== 1 ? 's' : ''}</p>
+                      <p className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>RUT: {formatRUT(empresa.rut)}</p>
+                      <p className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>NOMBRE: {empresa.razon}</p>
+                      <p className={`text-sm ml-auto ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>{empresa.documentos.length} documento{empresa.documentos.length !== 1 ? 's' : ''}</p>
                     </button>
 
                     <div
@@ -2159,7 +2175,11 @@ const RRevisionDocumentos = () => {
                         {sortDocuments(empresa.documentos).map((doc) => (
                           <div
                             key={`${empresa.rut}-${doc.tipo}-${doc.id}`}
-                            className="flex items-center py-2 hover:bg-white/5 rounded-lg border-b border-white/5"
+                            className={`flex items-center py-2 rounded-lg border-b ${
+                              isLightTheme
+                                ? 'hover:bg-gray-50 border-gray-100'
+                                : 'hover:bg-white/5 border-white/5'
+                            }`}
                           >
                             <div className="w-[17%] text-center text-xs px-1">
                               {doc.tipo === "facturas"
@@ -2253,7 +2273,7 @@ const RRevisionDocumentos = () => {
           {/* Sección 1 */}
           <div>
             <p className="mt-10 font-bold text-xl">Información del documento</p>
-            <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+            <div className={`grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 rounded-xl p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-black/40'}`}>
               <div className="flex justify-between gap-x-4">
                 <span>Fecha de emisión:</span>
                 <span>{iFechaE ? iFechaE.toLocaleDateString('es-CL') : '-'}</span>
@@ -2291,7 +2311,7 @@ const RRevisionDocumentos = () => {
           {/* Sección 2 */}
           <div>
               <p className="mt-4 font-bold text-xl">Montos del documento</p>
-              <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+              <div className={`grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 rounded-xl p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-black/40'}`}>
               <div className="flex justify-between gap-x-4">
                 <span>Monto neto:</span>
                 <span>{formatCLP(iNeto)}</span>
@@ -2339,7 +2359,7 @@ const RRevisionDocumentos = () => {
           {iNotasCredito != [""] && (
             <div>
               <p className="mt-4 font-bold text-xl">Nota(s) de crédito</p>
-              <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+              <div className={`grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 rounded-xl p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-black/40'}`}>
               {iNotasCredito && iNotasCredito.length > 0 && iNotasCredito[0] !== "" ? (
                 <div className="flex justify-between gap-x-4">
                   <span>Notas de crédito asociadas:</span>
@@ -2375,7 +2395,7 @@ const RRevisionDocumentos = () => {
           {iUsuarioIngreso && (
             <div>
               <p className="mt-4 font-bold text-xl">Movimientos del documento</p>
-              <div className="grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 bg-black/40 rounded-xl p-4">
+              <div className={`grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 rounded-xl p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-black/40'}`}>
                 <div className="flex justify-between gap-x-4">
                   <span>Ingresado por:</span>
                   <span>{iUsuarioIngreso}</span>
@@ -2425,7 +2445,7 @@ const RRevisionDocumentos = () => {
           <div className="grid grid-cols-2 gap-6">
             {/* Columna izquierda - Campos editables */}
             <div className="flex flex-col gap-4">
-              <p className="font-semibold text-lg border-b border-white/30 pb-2">
+              <p className={`font-semibold text-lg pb-2 border-b ${isLightTheme ? 'border-gray-200' : 'border-white/30'}`}>
                 Datos del documento
               </p>
 
@@ -2461,7 +2481,7 @@ const RRevisionDocumentos = () => {
                 )}
               </div>
 
-              <p className="font-semibold text-lg border-b border-white/30 pb-2 mt-2">
+              <p className={`font-semibold text-lg pb-2 mt-2 border-b ${isLightTheme ? 'border-gray-200' : 'border-white/30'}`}>
                 Montos
               </p>
 
@@ -2525,25 +2545,25 @@ const RRevisionDocumentos = () => {
                   value={iTotalNuevo}
                   currency
                   readOnly
-                  classNameInput="font-bold bg-black/20"
+                  classNameInput={`font-bold ${isLightTheme ? 'bg-gray-100' : 'bg-black/20'}`}
                 />
               </div>
             </div>
 
             {/* Columna derecha - Acciones */}
             <div className="flex flex-col">
-              <p className="font-semibold text-lg border-b border-white/30 pb-2 mb-4">
+              <p className={`font-semibold text-lg pb-2 mb-4 border-b ${isLightTheme ? 'border-gray-200' : 'border-white/30'}`}>
                 Acciones
               </p>
 
-              <div className="flex flex-col gap-3 bg-black/20 rounded-xl p-4">
+              <div className={`flex flex-col gap-3 rounded-xl p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-black/20'}`}>
                 {/* Info sobre notas de crédito vinculadas */}
                 {iNotasCredito && iNotasCredito.length > 0 && iNotasCredito[0] !== "" && (
-                  <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-3 mb-2">
-                    <p className="text-sm font-semibold text-yellow-200">
+                  <div className={`rounded-lg p-3 mb-2 ${isLightTheme ? 'bg-yellow-50 border border-yellow-200' : 'bg-yellow-500/20 border border-yellow-500/50'}`}>
+                    <p className={`text-sm font-semibold ${isLightTheme ? 'text-yellow-700' : 'text-yellow-200'}`}>
                       Notas de crédito asociadas: {iNotasCredito.length}
                     </p>
-                    <p className="text-xs text-yellow-100/80 mt-1">
+                    <p className={`text-xs mt-1 ${isLightTheme ? 'text-yellow-600' : 'text-yellow-100/80'}`}>
                       Este documento tiene notas de crédito vinculadas
                     </p>
                   </div>
@@ -2731,34 +2751,36 @@ const RRevisionDocumentos = () => {
           className="!absolute !top-16 !max-w-3xl"
         >
           <div className="flex flex-col gap-4 p-4">
-            <p className="text-xl font-black text-center text-yellow-400">
+            <p className={`text-xl font-black text-center ${isLightTheme ? 'text-yellow-600' : 'text-yellow-400'}`}>
               Reversión de Egreso N° {egresoData.numeroEgreso}
             </p>
 
             {/* Información del egreso */}
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-              <p className="text-sm text-yellow-200 font-semibold mb-2">
+            <div className={`rounded-lg p-4 ${isLightTheme ? 'bg-yellow-50 border border-yellow-200' : 'bg-yellow-500/10 border border-yellow-500/30'}`}>
+              <p className={`text-sm font-semibold mb-2 ${isLightTheme ? 'text-yellow-800' : 'text-yellow-200'}`}>
                 Este documento está asociado a un egreso procesado.
               </p>
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <span className="text-slate-400">Total del egreso:</span>
-                <span className="font-semibold">{formatCLP(egresoData.totalEgreso)}</span>
-                <span className="text-slate-400">Fecha de pago:</span>
-                <span>{egresoData.fechaPago?.toDate ? egresoData.fechaPago.toDate().toLocaleDateString("es-CL") : "-"}</span>
-                <span className="text-slate-400">Documentos en egreso:</span>
-                <span className="font-semibold">{egresoDocumentos.filter(d => !d.esNotaCredito).length} factura(s)</span>
+                <span className={isLightTheme ? 'text-gray-600' : 'text-slate-400'}>Total del egreso:</span>
+                <span className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>{formatCLP(egresoData.totalEgreso)}</span>
+                <span className={isLightTheme ? 'text-gray-600' : 'text-slate-400'}>Fecha de pago:</span>
+                <span className={isLightTheme ? 'text-gray-800' : 'text-white'}>{egresoData.fechaPago?.toDate ? egresoData.fechaPago.toDate().toLocaleDateString("es-CL") : "-"}</span>
+                <span className={isLightTheme ? 'text-gray-600' : 'text-slate-400'}>Documentos en egreso:</span>
+                <span className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>{egresoDocumentos.filter(d => !d.esNotaCredito).length} factura(s)</span>
               </div>
             </div>
 
             {/* Lista de documentos del egreso */}
-            <div className="bg-black/20 rounded-lg p-3 max-h-48 overflow-y-auto scrollbar-custom">
-              <p className="font-semibold text-sm mb-2 text-slate-300">Documentos en este egreso:</p>
+            <div className={`rounded-lg p-3 max-h-48 overflow-y-auto scrollbar-custom ${isLightTheme ? 'bg-gray-100' : 'bg-black/20'}`}>
+              <p className={`font-semibold text-sm mb-2 ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}>Documentos en este egreso:</p>
               <div className="space-y-1">
                 {egresoDocumentos.map((docEgreso) => (
                   <div
                     key={docEgreso.id}
                     className={`flex items-center justify-between text-xs p-2 rounded ${
-                      docEgreso.esNotaCredito ? "bg-blue-500/10 ml-4" : "bg-white/5"
+                      docEgreso.esNotaCredito
+                        ? (isLightTheme ? "bg-blue-50 ml-4" : "bg-blue-500/10 ml-4")
+                        : (isLightTheme ? "bg-white" : "bg-white/5")
                     } ${
                       deleteInfo.numeroDoc === docEgreso.numeroDoc &&
                       deleteInfo.tipoDoc === docEgreso.tipoDoc &&
@@ -2793,12 +2815,12 @@ const RRevisionDocumentos = () => {
                           className="w-4 h-4 rounded border-white/20 bg-white/5 text-accent-blue focus:ring-accent-blue"
                         />
                       )}
-                      <span className="text-slate-400">{formatRUT(docEgreso.rut)}</span>
-                      <span className={docEgreso.esNotaCredito ? "text-blue-400" : "text-white"}>
+                      <span className={isLightTheme ? 'text-gray-500' : 'text-slate-400'}>{formatRUT(docEgreso.rut)}</span>
+                      <span className={docEgreso.esNotaCredito ? (isLightTheme ? "text-blue-600" : "text-blue-400") : (isLightTheme ? "text-gray-800" : "text-white")}>
                         {docEgreso.tipoDocLabel} N° {docEgreso.numeroDoc}
                       </span>
                     </div>
-                    <span className={docEgreso.esNotaCredito ? "text-red-400" : "text-green-400"}>
+                    <span className={docEgreso.esNotaCredito ? "text-red-500" : (isLightTheme ? "text-green-600" : "text-green-400")}>
                       {docEgreso.esNotaCredito ? "-" : ""}{formatCLP(docEgreso.total)}
                     </span>
                   </div>
@@ -2808,7 +2830,7 @@ const RRevisionDocumentos = () => {
 
             {/* Opciones según escenario */}
             <div className="flex flex-col gap-2">
-              <p className="font-semibold text-sm text-slate-300">Seleccione una acción:</p>
+              <p className={`font-semibold text-sm ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}>Seleccione una acción:</p>
 
               {/* Opción 1: Solo revertir pago */}
               <button
@@ -2816,11 +2838,13 @@ const RRevisionDocumentos = () => {
                 className={`p-3 rounded-lg text-left transition-all ${
                   accionReversar === "revertir"
                     ? "bg-accent-blue/20 border-2 border-accent-blue"
-                    : "bg-white/5 border border-white/10 hover:bg-white/10"
+                    : isLightTheme
+                      ? "bg-gray-50 border border-gray-200 hover:bg-gray-100"
+                      : "bg-white/5 border border-white/10 hover:bg-white/10"
                 }`}
               >
-                <p className="font-semibold text-sm">Revertir pago</p>
-                <p className="text-xs text-slate-400">
+                <p className={`font-semibold text-sm ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>Revertir pago</p>
+                <p className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
                   Elimina el egreso y cambia el estado de todos los documentos a "pendiente" o "vencido" según corresponda.
                 </p>
               </button>
@@ -2831,11 +2855,13 @@ const RRevisionDocumentos = () => {
                 className={`p-3 rounded-lg text-left transition-all ${
                   accionReversar === "eliminar"
                     ? "bg-danger/20 border-2 border-danger"
-                    : "bg-white/5 border border-white/10 hover:bg-white/10"
+                    : isLightTheme
+                      ? "bg-gray-50 border border-gray-200 hover:bg-gray-100"
+                      : "bg-white/5 border border-white/10 hover:bg-white/10"
                 }`}
               >
                 <p className="font-semibold text-sm text-danger">Eliminar egreso y documentos</p>
-                <p className="text-xs text-slate-400">
+                <p className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
                   Elimina el egreso y todos los documentos asociados permanentemente.
                 </p>
               </button>
@@ -2846,12 +2872,14 @@ const RRevisionDocumentos = () => {
                   onClick={() => setAccionReversar("parcial")}
                   className={`p-3 rounded-lg text-left transition-all ${
                     accionReversar === "parcial"
-                      ? "bg-yellow-500/20 border-2 border-yellow-500"
-                      : "bg-white/5 border border-white/10 hover:bg-white/10"
+                      ? (isLightTheme ? "bg-yellow-50 border-2 border-yellow-400" : "bg-yellow-500/20 border-2 border-yellow-500")
+                      : isLightTheme
+                        ? "bg-gray-50 border border-gray-200 hover:bg-gray-100"
+                        : "bg-white/5 border border-white/10 hover:bg-white/10"
                   }`}
                 >
-                  <p className="font-semibold text-sm text-yellow-400">Eliminación selectiva</p>
-                  <p className="text-xs text-slate-400">
+                  <p className={`font-semibold text-sm ${isLightTheme ? 'text-yellow-700' : 'text-yellow-400'}`}>Eliminación selectiva</p>
+                  <p className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
                     Selecciona qué documentos eliminar. Los no seleccionados serán revertidos a "pendiente".
                   </p>
                 </button>
@@ -2860,12 +2888,12 @@ const RRevisionDocumentos = () => {
 
             {/* Info adicional para eliminación parcial */}
             {accionReversar === "parcial" && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                <p className="text-xs text-yellow-200">
+              <div className={`rounded-lg p-3 ${isLightTheme ? 'bg-yellow-50 border border-yellow-200' : 'bg-yellow-500/10 border border-yellow-500/30'}`}>
+                <p className={`text-xs ${isLightTheme ? 'text-yellow-800' : 'text-yellow-200'}`}>
                   Marque los documentos que desea eliminar en la lista de arriba.
                   Los documentos no marcados serán revertidos a estado pendiente.
                 </p>
-                <p className="text-xs text-yellow-200 mt-1">
+                <p className={`text-xs mt-1 ${isLightTheme ? 'text-yellow-800' : 'text-yellow-200'}`}>
                   Documentos a eliminar: {documentosAEliminar.length}
                 </p>
               </div>
@@ -2911,7 +2939,7 @@ const RRevisionDocumentos = () => {
               </svg>
             </div>
 
-            <p className="text-lg font-bold text-center text-yellow-400">
+            <p className={`text-lg font-bold text-center ${isLightTheme ? 'text-yellow-600' : 'text-yellow-400'}`}>
               {accionReversar === "revertir" && "¿Confirmar reversión de pago?"}
               {accionReversar === "eliminar" && "¿Confirmar eliminación de egreso y documentos?"}
               {accionReversar === "parcial" && "¿Confirmar eliminación selectiva?"}

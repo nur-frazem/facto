@@ -5,6 +5,7 @@ import { H1Tittle } from '../../components/Fonts';
 import { VolverButton } from '../../components/Button';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 import { formatCLP } from '../../utils/formatCurrency';
@@ -34,59 +35,77 @@ const getShortMonthName = (date) => {
 };
 
 // Stat Card Component (compact version)
-const StatCard = ({ icon: Icon, title, value, subvalue, color }) => {
+const StatCard = ({ icon: Icon, title, value, subvalue, color, isLightTheme }) => {
   const colorClasses = {
-    blue: 'from-blue-500/20 to-blue-600/5 border-blue-500/30',
-    yellow: 'from-yellow-500/20 to-yellow-600/5 border-yellow-500/30',
-    green: 'from-green-500/20 to-green-600/5 border-green-500/30',
-    red: 'from-red-500/20 to-red-600/5 border-red-500/30',
+    blue: isLightTheme
+      ? 'from-blue-100 to-blue-50 border-blue-300'
+      : 'from-blue-500/20 to-blue-600/5 border-blue-500/30',
+    yellow: isLightTheme
+      ? 'from-yellow-100 to-yellow-50 border-yellow-300'
+      : 'from-yellow-500/20 to-yellow-600/5 border-yellow-500/30',
+    green: isLightTheme
+      ? 'from-green-100 to-green-50 border-green-300'
+      : 'from-green-500/20 to-green-600/5 border-green-500/30',
+    red: isLightTheme
+      ? 'from-red-100 to-red-50 border-red-300'
+      : 'from-red-500/20 to-red-600/5 border-red-500/30',
   };
 
   const iconColorClasses = {
-    blue: 'text-blue-400',
-    yellow: 'text-yellow-400',
-    green: 'text-green-400',
-    red: 'text-red-400',
+    blue: isLightTheme ? 'text-blue-600' : 'text-blue-400',
+    yellow: isLightTheme ? 'text-yellow-600' : 'text-yellow-400',
+    green: isLightTheme ? 'text-green-600' : 'text-green-400',
+    red: isLightTheme ? 'text-red-600' : 'text-red-400',
   };
 
   return (
     <div
       className={`
         bg-gradient-to-br ${colorClasses[color]}
-        border border-white/10
+        border ${isLightTheme ? '' : 'border-white/10'}
         rounded-xl p-3
         flex flex-col gap-1
       `}
     >
       <div className="flex items-center justify-between">
         <Icon className={`w-4 h-4 ${iconColorClasses[color]}`} />
-        <span className="text-xs text-slate-400 uppercase tracking-wide">{title}</span>
+        <span className={`text-xs uppercase tracking-wide ${isLightTheme ? 'text-gray-600' : 'text-slate-400'}`}>{title}</span>
       </div>
-      <div className="text-xl font-bold text-white">{value}</div>
-      {subvalue && <div className="text-xs text-slate-400">{subvalue}</div>}
+      <div className={`text-xl font-bold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>{value}</div>
+      {subvalue && <div className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>{subvalue}</div>}
     </div>
   );
 };
 
 // Quick Action Button Component (balanced version)
-const QuickActionButton = ({ icon: Icon, title, onClick, disabled }) => {
+const QuickActionButton = ({ icon: Icon, title, onClick, disabled, isLightTheme }) => {
   if (disabled) return null;
 
   return (
     <button
       onClick={onClick}
-      className="
-        bg-gradient-card
-        border border-white/5
+      className={`
+        ${isLightTheme
+          ? 'bg-white border-gray-200 shadow-sm hover:bg-gray-50 hover:border-gray-300'
+          : 'bg-gradient-card border-white/5 hover:bg-white/5 hover:border-white/10'
+        }
+        border
         rounded-xl px-5 py-3
         flex items-center gap-3
-        hover:bg-white/5 hover:border-white/10
         transition-all duration-200
         group
-      "
+      `}
     >
-      <Icon className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
-      <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+      <Icon className={`w-6 h-6 transition-colors ${
+        isLightTheme
+          ? 'text-gray-500 group-hover:text-gray-800'
+          : 'text-slate-400 group-hover:text-white'
+      }`} />
+      <span className={`text-sm font-medium transition-colors ${
+        isLightTheme
+          ? 'text-gray-600 group-hover:text-gray-800'
+          : 'text-slate-300 group-hover:text-white'
+      }`}>
         {title}
       </span>
     </button>
@@ -131,6 +150,7 @@ const DOC_TYPES = [
 const RIndex = () => {
   const navigate = useNavigate();
   const { tienePermiso } = useAuth();
+  const { isLightTheme } = useTheme();
 
   // Permissions
   const puedeIngresar = tienePermiso('INGRESAR_DOCUMENTOS');
@@ -365,10 +385,14 @@ const RIndex = () => {
           <button
             onClick={fetchAllDocuments}
             disabled={loading}
-            className="absolute right-5 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
+            className={`absolute right-5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
+              isLightTheme
+                ? 'bg-gray-100 hover:bg-gray-200'
+                : 'bg-white/5 hover:bg-white/10'
+            }`}
             title="Actualizar datos"
           >
-            <ArrowPathIcon className={`w-5 h-5 text-white ${loading ? 'animate-spin' : ''}`} />
+            <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''} ${isLightTheme ? 'text-gray-700' : 'text-white'}`} />
           </button>
         </div>
 
@@ -384,24 +408,28 @@ const RIndex = () => {
                 title="Ingresar"
                 onClick={() => navigate('/recepcion-index/ingresar')}
                 disabled={!puedeIngresar}
+                isLightTheme={isLightTheme}
               />
               <QuickActionButton
                 icon={CogIcon}
                 title="Procesar"
                 onClick={() => navigate('/recepcion-index/procesar')}
                 disabled={!puedeProcesar}
+                isLightTheme={isLightTheme}
               />
               <QuickActionButton
                 icon={MagnifyingGlassIcon}
                 title="Revisar"
                 onClick={() => navigate('/recepcion-index/revision-documentos')}
                 disabled={!puedeVerDocumentos}
+                isLightTheme={isLightTheme}
               />
               <QuickActionButton
                 icon={CalendarDaysIcon}
                 title="Calendario"
                 onClick={() => navigate('/recepcion-index/calendario')}
                 disabled={!puedeVerCalendario}
+                isLightTheme={isLightTheme}
               />
             </div>
 
@@ -409,25 +437,37 @@ const RIndex = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={goToPreviousMonth}
-                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                className={`p-2 rounded-lg transition-colors ${
+                  isLightTheme
+                    ? 'bg-white border border-gray-200 hover:bg-gray-50 shadow-sm'
+                    : 'bg-white/5 hover:bg-white/10'
+                }`}
               >
-                <ChevronLeftIcon className="w-4 h-4 text-white" />
+                <ChevronLeftIcon className={`w-4 h-4 ${isLightTheme ? 'text-gray-700' : 'text-white'}`} />
               </button>
 
               <button
                 onClick={goToCurrentMonth}
-                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors min-w-[180px]"
+                className={`px-4 py-2 rounded-lg transition-colors min-w-[180px] ${
+                  isLightTheme
+                    ? 'bg-white border border-gray-200 hover:bg-gray-50 shadow-sm'
+                    : 'bg-white/5 hover:bg-white/10'
+                }`}
               >
-                <span className="text-white text-sm font-medium capitalize">
+                <span className={`text-sm font-medium capitalize ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                   {getMonthName(currentDate)}
                 </span>
               </button>
 
               <button
                 onClick={goToNextMonth}
-                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                className={`p-2 rounded-lg transition-colors ${
+                  isLightTheme
+                    ? 'bg-white border border-gray-200 hover:bg-gray-50 shadow-sm'
+                    : 'bg-white/5 hover:bg-white/10'
+                }`}
               >
-                <ChevronRightIcon className="w-4 h-4 text-white" />
+                <ChevronRightIcon className={`w-4 h-4 ${isLightTheme ? 'text-gray-700' : 'text-white'}`} />
               </button>
             </div>
           </div>
@@ -444,6 +484,7 @@ const RIndex = () => {
                   : `${currentMonthDocs.filter((d) => d.isAdditive).length} fact. / ${currentMonthDocs.filter((d) => !d.isAdditive).length} NC`
               }
               color="blue"
+              isLightTheme={isLightTheme}
             />
             <StatCard
               icon={ClockIcon}
@@ -451,6 +492,7 @@ const RIndex = () => {
               value={loading ? '...' : formatCLP(totalPendiente)}
               subvalue={loading ? '...' : `${stats.pendiente.length} docs`}
               color="yellow"
+              isLightTheme={isLightTheme}
             />
             <StatCard
               icon={CheckCircleIcon}
@@ -458,6 +500,7 @@ const RIndex = () => {
               value={loading ? '...' : formatCLP(totalPagado)}
               subvalue={loading ? '...' : `${stats.pagado.length} docs`}
               color="green"
+              isLightTheme={isLightTheme}
             />
             <StatCard
               icon={ExclamationTriangleIcon}
@@ -465,11 +508,16 @@ const RIndex = () => {
               value={loading ? '...' : formatCLP(totalVencido)}
               subvalue={loading ? '...' : `${stats.vencido.length} docs`}
               color="red"
+              isLightTheme={isLightTheme}
             />
             {/* Net Total Card - inline with stats */}
-            <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/5 border border-emerald-500/30 rounded-xl p-3 flex flex-col gap-1">
-              <span className="text-xs text-slate-400 uppercase tracking-wide">Total Neto</span>
-              <div className="text-xl font-bold text-white">
+            <div className={`bg-gradient-to-br rounded-xl p-3 flex flex-col gap-1 ${
+              isLightTheme
+                ? 'from-emerald-100 to-emerald-50 border border-emerald-300'
+                : 'from-emerald-500/20 to-emerald-600/5 border border-emerald-500/30'
+            }`}>
+              <span className={`text-xs uppercase tracking-wide ${isLightTheme ? 'text-gray-600' : 'text-slate-400'}`}>Total Neto</span>
+              <div className={`text-xl font-bold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                 {loading ? '...' : formatCLP(calculateTotal(currentMonthDocs))}
               </div>
             </div>
@@ -478,14 +526,18 @@ const RIndex = () => {
           {/* Charts Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Monthly NET Chart */}
-            <div className="bg-gradient-card border border-white/5 rounded-xl p-4">
-              <h3 className="text-white text-sm font-semibold mb-3">
+            <div className={`rounded-xl p-4 ${
+              isLightTheme
+                ? 'bg-white border border-gray-200 shadow-sm'
+                : 'bg-gradient-card border border-white/5'
+            }`}>
+              <h3 className={`text-sm font-semibold mb-3 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                 Neto Mensual (últimos 6 meses)
               </h3>
               <div ref={chartContainerRef} className="w-full" style={{ height: 180 }}>
                 {loading || chartDimensions.width === 0 ? (
                   <div className="h-full flex items-center justify-center">
-                    <span className="text-slate-400 text-sm">Cargando...</span>
+                    <span className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Cargando...</span>
                   </div>
                 ) : (
                   <BarChart
@@ -513,16 +565,20 @@ const RIndex = () => {
             </div>
 
             {/* Document Type Distribution */}
-            <div className="bg-gradient-card border border-white/5 rounded-xl p-4">
-              <h3 className="text-white text-sm font-semibold mb-3">Distribución por Tipo</h3>
+            <div className={`rounded-xl p-4 ${
+              isLightTheme
+                ? 'bg-white border border-gray-200 shadow-sm'
+                : 'bg-gradient-card border border-white/5'
+            }`}>
+              <h3 className={`text-sm font-semibold mb-3 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>Distribución por Tipo</h3>
               <div className="space-y-2" style={{ minHeight: 180 }}>
                 {loading ? (
                   <div className="h-full flex items-center justify-center">
-                    <span className="text-slate-400 text-sm">Cargando...</span>
+                    <span className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Cargando...</span>
                   </div>
                 ) : typeDistribution.length === 0 ? (
                   <div className="h-full flex items-center justify-center">
-                    <span className="text-slate-400 text-sm">Sin documentos</span>
+                    <span className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Sin documentos</span>
                   </div>
                 ) : (
                   typeDistribution.map((item, index) => {
@@ -532,14 +588,14 @@ const RIndex = () => {
                     return (
                       <div key={item.name} className="space-y-0.5">
                         <div className="flex justify-between text-xs">
-                          <span className="text-slate-300 flex items-center gap-1">
+                          <span className={`flex items-center gap-1 ${isLightTheme ? 'text-gray-600' : 'text-slate-300'}`}>
                             {item.name}
                           </span>
-                          <span className="text-white font-medium">
+                          <span className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                             {formatCLP(item.total)} ({item.cantidad})
                           </span>
                         </div>
-                        <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className={`h-1.5 rounded-full overflow-hidden ${isLightTheme ? 'bg-gray-200' : 'bg-white/5'}`}>
                           <div
                             className="h-full rounded-full transition-all duration-500"
                             style={{
@@ -567,8 +623,12 @@ const RIndex = () => {
             const needsScroll = chartHeight > maxContainerHeight;
 
             return (
-              <div className="bg-gradient-card border border-white/5 rounded-xl p-4">
-                <h3 className="text-white text-sm font-semibold mb-3">
+              <div className={`rounded-xl p-4 ${
+                isLightTheme
+                  ? 'bg-white border border-gray-200 shadow-sm'
+                  : 'bg-gradient-card border border-white/5'
+              }`}>
+                <h3 className={`text-sm font-semibold mb-3 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
                   Gasto por Proveedor ({providerData.length} {providerData.length === 1 ? 'proveedor' : 'proveedores'})
                 </h3>
                 <div
@@ -578,7 +638,7 @@ const RIndex = () => {
                 >
                   {providerChartDimensions.width === 0 ? (
                     <div className="h-64 flex items-center justify-center">
-                      <span className="text-slate-400 text-sm">Cargando...</span>
+                      <span className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Cargando...</span>
                     </div>
                   ) : (
                     <BarChart
@@ -608,7 +668,7 @@ const RIndex = () => {
                   )}
                 </div>
                 {needsScroll && (
-                  <p className="text-xs text-slate-500 text-center mt-2">
+                  <p className={`text-xs text-center mt-2 ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>
                     Desplaza para ver más proveedores
                   </p>
                 )}

@@ -4,11 +4,13 @@ import { useNavigate } from "react-router-dom";
 import { Textfield } from '../components/Textfield';
 import { Modal } from '../components/modal';
 import Footer from '../components/Footer';
+import { useTheme } from '../context/ThemeContext';
 
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
 
 const IniciarSesion = () => {
+    const { isLightTheme } = useTheme();
     const navigate = useNavigate();
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -109,20 +111,24 @@ const IniciarSesion = () => {
                             </svg>
                         </div>
                         {/* Brand Name */}
-                        <h1 className="text-4xl font-black text-white tracking-tight">
+                        <h1 className={`text-4xl font-black tracking-tight ${isLightTheme ? "text-gray-800" : "text-white"}`}>
                             FACTO
                         </h1>
-                        <p className="text-slate-400 mt-1 text-sm">
+                        <p className={`mt-1 text-sm ${isLightTheme ? "text-gray-500" : "text-slate-400"}`}>
                             Sistema de Gestión Documental
                         </p>
                     </div>
 
                     {/* Login Form Card */}
-                    <div className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 sm:p-8 shadow-xl">
-                        <h2 className="text-xl font-semibold text-white mb-1">
+                    <div className={`backdrop-blur-sm rounded-2xl p-6 sm:p-8 shadow-xl ${
+                        isLightTheme
+                            ? "bg-white border border-gray-200"
+                            : "bg-gradient-to-br from-white/10 to-white/5 border border-white/10"
+                    }`}>
+                        <h2 className={`text-xl font-semibold mb-1 ${isLightTheme ? "text-gray-800" : "text-white"}`}>
                             Bienvenido
                         </h2>
-                        <p className="text-slate-400 text-sm mb-6">
+                        <p className={`text-sm mb-6 ${isLightTheme ? "text-gray-500" : "text-slate-400"}`}>
                             Ingrese sus credenciales para continuar
                         </p>
 
@@ -150,7 +156,11 @@ const IniciarSesion = () => {
                                 <button
                                     type="button"
                                     onClick={handleOpenResetModal}
-                                    className="mt-2 text-sm text-accent-blue hover:text-blue-400 transition-colors"
+                                    className={`mt-2 text-sm transition-colors ${
+                                        isLightTheme
+                                            ? "text-blue-600 hover:text-blue-700"
+                                            : "text-accent-blue hover:text-blue-400"
+                                    }`}
                                 >
                                     ¿Olvidaste tu contraseña?
                                 </button>
@@ -166,7 +176,11 @@ const IniciarSesion = () => {
                             />
                             <button
                                 onClick={() => window.electronAPI.salirApp()}
-                                className="w-full py-2.5 text-slate-400 hover:text-white text-sm font-medium transition-colors duration-200"
+                                className={`w-full py-2.5 text-sm font-medium transition-colors duration-200 ${
+                                    isLightTheme
+                                        ? "text-gray-500 hover:text-gray-800"
+                                        : "text-slate-400 hover:text-white"
+                                }`}
                             >
                                 Salir de la aplicación
                             </button>
@@ -174,7 +188,7 @@ const IniciarSesion = () => {
                     </div>
 
                     {/* Version info */}
-                    <p className="text-center text-slate-500 text-xs mt-6">
+                    <p className={`text-center text-xs mt-6 ${isLightTheme ? "text-gray-400" : "text-slate-500"}`}>
                         v1.0.0
                     </p>
                 </div>
@@ -218,14 +232,16 @@ const IniciarSesion = () => {
                             <>
                                 {/* Header */}
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-accent-blue/20 flex items-center justify-center">
-                                        <svg className="w-5 h-5 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                        isLightTheme ? "bg-blue-100" : "bg-accent-blue/20"
+                                    }`}>
+                                        <svg className={`w-5 h-5 ${isLightTheme ? "text-blue-600" : "text-accent-blue"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                                         </svg>
                                     </div>
                                     <div>
-                                        <h3 className="text-white font-semibold">Restablecer contraseña</h3>
-                                        <p className="text-slate-400 text-sm">Te enviaremos un correo con instrucciones</p>
+                                        <h3 className={`font-semibold ${isLightTheme ? "text-gray-800" : "text-white"}`}>Restablecer contraseña</h3>
+                                        <p className={`text-sm ${isLightTheme ? "text-gray-500" : "text-slate-400"}`}>Te enviaremos un correo con instrucciones</p>
                                     </div>
                                 </div>
 
@@ -264,16 +280,18 @@ const IniciarSesion = () => {
                             <>
                                 {/* Success State */}
                                 <div className="flex flex-col items-center gap-4 py-4">
-                                    <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center">
-                                        <svg className="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                                        isLightTheme ? "bg-green-100" : "bg-success/20"
+                                    }`}>
+                                        <svg className={`w-8 h-8 ${isLightTheme ? "text-green-600" : "text-success"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
                                     <div className="text-center">
-                                        <h3 className="text-white font-semibold mb-1">Correo enviado</h3>
-                                        <p className="text-slate-400 text-sm">
+                                        <h3 className={`font-semibold mb-1 ${isLightTheme ? "text-gray-800" : "text-white"}`}>Correo enviado</h3>
+                                        <p className={`text-sm ${isLightTheme ? "text-gray-500" : "text-slate-400"}`}>
                                             Revisa tu bandeja de entrada en<br />
-                                            <span className="text-white font-medium">{resetEmail}</span>
+                                            <span className={`font-medium ${isLightTheme ? "text-gray-800" : "text-white"}`}>{resetEmail}</span>
                                         </p>
                                     </div>
                                     <YButton

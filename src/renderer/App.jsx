@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import Home from './pages/Home';
 import IniciarSesion from './pages/IniciarSesion';
 import RIndex from './pages/recepcion/RIndex';
@@ -15,20 +16,36 @@ import CRolesUsuarios from './pages/configuracion/CRolesUsuarios';
 import CAuditoria from './pages/configuracion/CAuditoria';
 import CCuenta from './pages/configuracion/CCuenta';
 import ProtectedRoute from './components/ProtectedRoute';
-import Fondo from "./assets/background/FondoModernoAzul.png";
+import FondoOscuro from "./assets/background/FondoModernoAzul.png";
 
-function App() {
+// Theme-aware background component
+function AppBackground() {
+  const { isLightTheme } = useTheme();
+
   return (
-    <div className="min-h-screen flex flex-col relative">
-
+    <>
       {/* Capa gradiente - fixed para que cubra toda la ventana */}
-      <div className="fixed inset-0 bg-gradient-to-tl from-sky-950 to-sky-900 z-0" />
+      <div className={`fixed inset-0 z-0 transition-colors duration-300 ${
+        isLightTheme
+          ? "bg-gradient-to-tl from-blue-50 to-slate-100"
+          : "bg-gradient-to-tl from-sky-950 to-sky-900"
+      }`} />
 
       {/* Capa fondo con imagen - fixed para que cubra toda la ventana */}
-      <div
-        className="fixed inset-0 bg-cover bg-center z-0"
-        style={{ backgroundImage: `url(${Fondo})`, opacity: 0.5 }}
-      />
+      {!isLightTheme && (
+        <div
+          className="fixed inset-0 bg-cover bg-center z-0 app-background-image"
+          style={{ backgroundImage: `url(${FondoOscuro})` }}
+        />
+      )}
+    </>
+  );
+}
+
+function AppContent() {
+  return (
+    <div className="min-h-screen flex flex-col relative">
+      <AppBackground />
 
       {/* Contenido principal - flex-1 para ocupar el espacio disponible */}
       <div className="relative z-10 flex-1 flex flex-col">
@@ -97,6 +114,14 @@ function App() {
         </AuthProvider>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 

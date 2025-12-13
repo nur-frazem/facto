@@ -7,6 +7,7 @@ import { VolverButton, TextButton } from "../../components/Button";
 import { SearchBar, Textfield, CheckboxDropdown } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { Modal, LoadingModal, AlertModal } from "../../components/modal";
+import { useTheme } from "../../context/ThemeContext";
 
 import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig"; // ajusta la ruta a tu config
@@ -17,6 +18,7 @@ import { validateRUT } from "../../utils/validation";
 
 const RProcesar = () => {
     const navigate = useNavigate();
+    const { isLightTheme } = useTheme();
 
     {/* Variables de textfields */}
     const [rut, setRut]                 = useState("");
@@ -257,7 +259,11 @@ const RProcesar = () => {
                     content={
                         <div>
                             {/* Encabezados */}
-                            <div className="flex font-semibold text-sm text-slate-300 mb-3 px-2 py-2 bg-white/5 rounded-lg">
+                            <div className={`flex font-semibold text-sm mb-3 px-2 py-2 rounded-lg ${
+                                isLightTheme
+                                    ? 'bg-gray-50 text-gray-600'
+                                    : 'bg-white/5 text-slate-300'
+                            }`}>
                                 <div className="w-[18%] text-center">RUT</div>
                                 <div className="w-[22%] text-center">Razón social</div>
                                 <div className="w-[20%] text-center">Giro</div>
@@ -274,10 +280,14 @@ const RProcesar = () => {
                             </div>
                             {/* Filas dinámicas */}
                             {filteredRows.map((row, index) => (
-                                <div key={index} className="flex items-center mb-1 px-2 py-3 hover:bg-white/5 rounded-lg transition-colors border-b border-white/5 last:border-b-0">
+                                <div key={index} className={`flex items-center mb-1 px-2 py-3 rounded-lg transition-colors border-b last:border-b-0 ${
+                                    isLightTheme
+                                        ? 'hover:bg-gray-50 border-gray-100'
+                                        : 'hover:bg-white/5 border-white/5'
+                                }`}>
                                     <div className="w-[18%] text-center text-sm font-medium">{formatRUT(row.rut)}</div>
                                     <div className="w-[22%] text-center text-sm">{row.razon}</div>
-                                    <div className="w-[20%] text-center text-sm text-slate-400">{row.giro}</div>
+                                    <div className={`w-[20%] text-center text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>{row.giro}</div>
                                     <div className="w-[12%] flex justify-center">
                                         {row.cliente ? (
                                             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-success/20">

@@ -7,6 +7,7 @@ import { VolverButton, YButton, TextButton, XButton } from "../../components/But
 import { DropdownMenu, DatepickerField } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { Modal, LoadingModal } from "../../components/modal";
+import { useTheme } from "../../context/ThemeContext";
 
 import { doc, updateDoc, setDoc, getDoc, getDocs, where, query, collection, onSnapshot, runTransaction, addDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
@@ -19,6 +20,7 @@ import { getAuth } from "firebase/auth";
 
 const RProcesar = () => {
     const navigate = useNavigate();
+    const { isLightTheme } = useTheme();
 
     const [userId, setUserId] = useState("");
   
@@ -723,7 +725,7 @@ const RProcesar = () => {
                                         <hr className="my-2 border-white/20" />
                                         <div className="flex justify-between font-bold text-lg">
                                             <span>Monto total:</span>
-                                            <span className="text-green-400">{formatCLP(totalDocumentos)}</span>
+                                            <span className={isLightTheme ? "text-green-600" : "text-green-400"}>{formatCLP(totalDocumentos)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -789,9 +791,11 @@ const RProcesar = () => {
                                             className="w-48"
                                         />
                                     </div>
-                                    <div className="flex items-center gap-4 bg-black/20 p-3 rounded-lg">
-                                        <span className="text-lg font-semibold">Total Egreso:</span>
-                                        <span className="text-2xl font-black text-green-400">{formatCLP(totalDocumentos)}</span>
+                                    <div className={`flex items-center gap-4 p-3 rounded-lg ${
+                                        isLightTheme ? 'bg-gray-100' : 'bg-black/20'
+                                    }`}>
+                                        <span className={`text-lg font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>Total Egreso:</span>
+                                        <span className={`text-2xl font-black ${isLightTheme ? 'text-green-600' : 'text-green-400'}`}>{formatCLP(totalDocumentos)}</span>
                                     </div>
                                 </div>
                                 <div className="flex justify-between">

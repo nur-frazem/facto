@@ -4,37 +4,6 @@
 
 /* ==================== CSS VARIABLES ==================== */
 :root {
-  /* Primary colors */
-  --color-primary: #1a1f4e;
-  --color-primary-hover: #252b63;
-  --color-primary-active: #151a42;
-
-  /* Surface colors */
-  --color-surface: #0a1628;
-  --color-surface-light: #0f2035;
-  --color-surface-card: #0c1a2e;
-
-  /* Accent colors */
-  --color-accent-blue: #3b82f6;
-  --color-accent-cyan: #06b6d4;
-
-  /* Danger colors */
-  --color-danger: #dc2626;
-  --color-danger-hover: #ef4444;
-
-  /* Success colors */
-  --color-success: #16a34a;
-  --color-success-hover: #22c55e;
-
-  /* Text colors */
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
-
-  /* Border colors */
-  --color-border: rgba(255, 255, 255, 0.15);
-  --color-border-hover: rgba(59, 130, 246, 0.5);
-
   /* Spacing scale */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
@@ -53,6 +22,153 @@
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
+}
+
+/* ==================== ORIGINAL THEME (Dark) ==================== */
+:root,
+[data-theme="original"] {
+  /* Primary colors */
+  --color-primary: #1a1f4e;
+  --color-primary-light: #2d3575;
+  --color-primary-hover: #252b63;
+  --color-primary-active: #151a42;
+
+  /* Surface colors */
+  --color-surface: #0a1628;
+  --color-surface-light: #0f2035;
+  --color-surface-card: #0c1a2e;
+  --color-surface-dark: #050d18;
+
+  /* Background colors */
+  --color-bg-primary: #0a1628;
+  --color-bg-secondary: #0f2035;
+  --color-bg-card: linear-gradient(145deg, #0f2035 0%, #0a1628 100%);
+  --color-bg-card-solid: #0c1a2e;
+  --color-bg-input: rgba(255, 255, 255, 0.05);
+  --color-bg-hover: rgba(255, 255, 255, 0.1);
+  --color-bg-active: rgba(255, 255, 255, 0.15);
+  --color-bg-modal: linear-gradient(to bottom right, #0f2035, #0a1628);
+  --color-bg-overlay: rgba(0, 0, 0, 0.6);
+  --color-bg-gradient-from: #0f172a;
+  --color-bg-gradient-to: #0a1628;
+
+  /* Accent colors */
+  --color-accent-blue: #3b82f6;
+  --color-accent-cyan: #06b6d4;
+  --color-accent-purple: #8b5cf6;
+
+  /* Status colors */
+  --color-danger: #dc2626;
+  --color-danger-hover: #ef4444;
+  --color-danger-bg: rgba(239, 68, 68, 0.2);
+  --color-success: #16a34a;
+  --color-success-hover: #22c55e;
+  --color-success-bg: rgba(22, 163, 74, 0.2);
+  --color-warning: #eab308;
+  --color-warning-bg: rgba(234, 179, 8, 0.2);
+
+  /* Text colors */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-text-disabled: #475569;
+  --color-text-inverse: #0a1628;
+  --color-text-on-primary: #ffffff;
+
+  /* Border colors */
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-light: rgba(255, 255, 255, 0.05);
+  --color-border-hover: rgba(255, 255, 255, 0.2);
+  --color-border-focus: rgba(59, 130, 246, 0.5);
+
+  /* Shadow colors */
+  --color-shadow: rgba(0, 0, 0, 0.4);
+  --color-shadow-heavy: rgba(0, 0, 0, 0.5);
+
+  /* Scrollbar */
+  --color-scrollbar-thumb: linear-gradient(180deg, #3b82f6, #06b6d4);
+  --color-scrollbar-thumb-hover: linear-gradient(180deg, #60a5fa, #22d3ee);
+
+  /* Glass effect */
+  --color-glass-bg: rgba(10, 22, 40, 0.85);
+
+  /* App background */
+  --app-bg-gradient-from: #0c4a6e;
+  --app-bg-gradient-to: #0c4a6e;
+  --app-bg-opacity: 0.5;
+}
+
+/* ==================== CLARO THEME (Light) ==================== */
+[data-theme="claro"] {
+  /* Primary colors - adjusted for light theme */
+  --color-primary: #2563eb;
+  --color-primary-light: #3b82f6;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-active: #1e40af;
+
+  /* Surface colors */
+  --color-surface: #f8fafc;
+  --color-surface-light: #ffffff;
+  --color-surface-card: #ffffff;
+  --color-surface-dark: #f1f5f9;
+
+  /* Background colors */
+  --color-bg-primary: #f8fafc;
+  --color-bg-secondary: #ffffff;
+  --color-bg-card: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+  --color-bg-card-solid: #ffffff;
+  --color-bg-input: rgba(0, 0, 0, 0.03);
+  --color-bg-hover: rgba(0, 0, 0, 0.05);
+  --color-bg-active: rgba(0, 0, 0, 0.08);
+  --color-bg-modal: linear-gradient(to bottom right, #ffffff, #f8fafc);
+  --color-bg-overlay: rgba(0, 0, 0, 0.4);
+  --color-bg-gradient-from: #f8fafc;
+  --color-bg-gradient-to: #e2e8f0;
+
+  /* Accent colors */
+  --color-accent-blue: #2563eb;
+  --color-accent-cyan: #0891b2;
+  --color-accent-purple: #7c3aed;
+
+  /* Status colors */
+  --color-danger: #dc2626;
+  --color-danger-hover: #b91c1c;
+  --color-danger-bg: rgba(239, 68, 68, 0.15);
+  --color-success: #16a34a;
+  --color-success-hover: #15803d;
+  --color-success-bg: rgba(22, 163, 74, 0.15);
+  --color-warning: #ca8a04;
+  --color-warning-bg: rgba(234, 179, 8, 0.15);
+
+  /* Text colors */
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  --color-text-disabled: #94a3b8;
+  --color-text-inverse: #ffffff;
+  --color-text-on-primary: #ffffff;
+
+  /* Border colors */
+  --color-border: rgba(0, 0, 0, 0.1);
+  --color-border-light: rgba(0, 0, 0, 0.05);
+  --color-border-hover: rgba(0, 0, 0, 0.15);
+  --color-border-focus: rgba(37, 99, 235, 0.5);
+
+  /* Shadow colors */
+  --color-shadow: rgba(0, 0, 0, 0.1);
+  --color-shadow-heavy: rgba(0, 0, 0, 0.15);
+
+  /* Scrollbar */
+  --color-scrollbar-thumb: linear-gradient(180deg, #2563eb, #0891b2);
+  --color-scrollbar-thumb-hover: linear-gradient(180deg, #3b82f6, #06b6d4);
+
+  /* Glass effect */
+  --color-glass-bg: rgba(255, 255, 255, 0.9);
+
+  /* App background */
+  --app-bg-gradient-from: #e0f2fe;
+  --app-bg-gradient-to: #f0f9ff;
+  --app-bg-opacity: 0.3;
 }
 
 /* ==================== BASE STYLES ==================== */
@@ -124,31 +240,63 @@ svg:focus {
   scrollbar-color: var(--color-accent-blue) transparent;
 }
 
+/* ==================== WINDOW/BODY SCROLLBAR ==================== */
+/* Apply same scrollbar styling to the main window */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 10px;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--color-accent-blue), var(--color-accent-cyan));
+  border-radius: 10px;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #60a5fa, #22d3ee);
+}
+
+/* Firefox - window scrollbar */
+html,
+body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-accent-blue) transparent;
+}
+
 /* ==================== UTILITY CLASSES ==================== */
 @layer utilities {
   /* Glass effect for cards and modals */
   .glass {
-    background: rgba(10, 22, 40, 0.85);
+    background: var(--color-glass-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
 
   /* Gradient backgrounds */
   .bg-gradient-primary {
-    background: linear-gradient(135deg, #0c1a2e 0%, #1a1f4e 100%);
+    background: linear-gradient(135deg, var(--color-surface-card) 0%, var(--color-primary) 100%);
   }
 
   .bg-gradient-surface {
-    background: linear-gradient(180deg, #0f172a 0%, #0a1628 100%);
+    background: linear-gradient(180deg, var(--color-bg-gradient-from) 0%, var(--color-bg-gradient-to) 100%);
   }
 
   .bg-gradient-card {
-    background: linear-gradient(145deg, #0f2035 0%, #0a1628 100%);
+    background: var(--color-bg-card);
   }
 
   /* Text gradient */
   .text-gradient {
-    background: linear-gradient(135deg, #60a5fa 0%, #06b6d4 100%);
+    background: linear-gradient(135deg, #60a5fa 0%, var(--color-accent-cyan) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -165,71 +313,187 @@ svg:focus {
   }
 }
 
+/* ==================== THEME CLASSES ==================== */
+/* Theme-aware text colors */
+.theme-text-primary {
+  color: var(--color-text-primary);
+}
+
+.theme-text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.theme-text-muted {
+  color: var(--color-text-muted);
+}
+
+/* Theme-aware backgrounds */
+.theme-bg-primary {
+  background-color: var(--color-bg-primary);
+}
+
+.theme-bg-secondary {
+  background-color: var(--color-bg-secondary);
+}
+
+.theme-bg-card {
+  background: var(--color-bg-card);
+}
+
+.theme-bg-card-solid {
+  background-color: var(--color-bg-card-solid);
+}
+
+.theme-bg-input {
+  background-color: var(--color-bg-input);
+}
+
+.theme-bg-hover:hover {
+  background-color: var(--color-bg-hover);
+}
+
+.theme-bg-surface {
+  background-color: var(--color-surface);
+}
+
+.theme-bg-surface-light {
+  background-color: var(--color-surface-light);
+}
+
+/* Theme-aware borders */
+.theme-border {
+  border-color: var(--color-border);
+}
+
+.theme-border-light {
+  border-color: var(--color-border-light);
+}
+
+.theme-border-hover:hover {
+  border-color: var(--color-border-hover);
+}
+
+/* Theme-aware shadows */
+.theme-shadow-card {
+  box-shadow: 0 8px 32px var(--color-shadow);
+}
+
+.theme-shadow-modal {
+  box-shadow: 0 25px 50px -12px var(--color-shadow-heavy);
+}
+
+/* App background wrapper */
+.app-background {
+  background: linear-gradient(to top left, var(--app-bg-gradient-from), var(--app-bg-gradient-to));
+}
+
+.app-background-image {
+  opacity: var(--app-bg-opacity);
+}
+
 /* ==================== COMPONENT STYLES ==================== */
 @layer components {
   /* Standard input styling */
   .input-base {
-    @apply w-full px-4 py-2.5 rounded-lg bg-white/5 text-white
-           placeholder-slate-400 border border-white/10
+    @apply w-full px-4 py-2.5 rounded-lg
+           placeholder-slate-400
            focus:outline-none focus:ring-2 focus:ring-accent-blue/50 focus:border-accent-blue/50
-           hover:border-white/20 transition-all duration-200;
+           transition-all duration-200;
+    background-color: var(--color-bg-input);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+  }
+
+  .input-base:hover {
+    border-color: var(--color-border-hover);
+  }
+
+  .input-base::placeholder {
+    color: var(--color-text-muted);
   }
 
   /* Standard button base */
   .btn-base {
     @apply inline-flex items-center justify-center font-medium
            transition-all duration-200 focus:outline-none focus:ring-2
-           focus:ring-offset-2 focus:ring-offset-surface disabled:opacity-50
+           focus:ring-offset-2 disabled:opacity-50
            disabled:cursor-not-allowed;
   }
 
   /* Primary button */
   .btn-primary {
-    @apply btn-base px-6 py-2.5 rounded-full
-           bg-primary text-white shadow-btn
-           hover:bg-primary-hover active:bg-primary-active
-           focus:ring-primary-light;
+    @apply btn-base px-6 py-2.5 rounded-full shadow-btn;
+    background-color: var(--color-primary);
+    color: var(--color-text-on-primary);
+  }
+
+  .btn-primary:hover {
+    background-color: var(--color-primary-hover);
+  }
+
+  .btn-primary:active {
+    background-color: var(--color-primary-active);
   }
 
   /* Danger button */
   .btn-danger {
-    @apply btn-base px-6 py-2.5 rounded-full
-           bg-danger text-white shadow-btn
-           hover:bg-danger-hover active:bg-danger-active
-           focus:ring-danger;
+    @apply btn-base px-6 py-2.5 rounded-full shadow-btn;
+    background-color: var(--color-danger);
+    color: var(--color-text-on-primary);
+  }
+
+  .btn-danger:hover {
+    background-color: var(--color-danger-hover);
   }
 
   /* Success button */
   .btn-success {
-    @apply btn-base px-6 py-2.5 rounded-full
-           bg-success text-white shadow-btn
-           hover:bg-success-hover active:bg-success-active
-           focus:ring-success;
+    @apply btn-base px-6 py-2.5 rounded-full shadow-btn;
+    background-color: var(--color-success);
+    color: var(--color-text-on-primary);
+  }
+
+  .btn-success:hover {
+    background-color: var(--color-success-hover);
   }
 
   /* Ghost button */
   .btn-ghost {
-    @apply btn-base px-4 py-2 rounded-lg
-           bg-transparent text-white
-           hover:bg-white/10 active:bg-white/20
-           focus:ring-white/30;
+    @apply btn-base px-4 py-2 rounded-lg bg-transparent;
+    color: var(--color-text-primary);
+  }
+
+  .btn-ghost:hover {
+    background-color: var(--color-bg-hover);
+  }
+
+  .btn-ghost:active {
+    background-color: var(--color-bg-active);
   }
 
   /* Card styling */
   .card-base {
-    @apply bg-gradient-card rounded-card p-5 shadow-card
-           border border-white/5;
+    @apply rounded-card p-5;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-light);
+    box-shadow: 0 8px 32px var(--color-shadow);
   }
 
   /* Modal styling */
   .modal-base {
-    @apply bg-gradient-to-br from-surface-light to-surface
-           rounded-modal p-6 shadow-modal border border-white/10;
+    @apply rounded-modal p-6;
+    background: var(--color-bg-modal);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 25px 50px -12px var(--color-shadow-heavy);
   }
 
   /* Table row hover */
   .table-row-hover {
-    @apply hover:bg-white/5 transition-colors duration-150;
+    @apply transition-colors duration-150;
+  }
+
+  .table-row-hover:hover {
+    background-color: var(--color-bg-hover);
   }
 
   /* Status badges */
@@ -238,63 +502,75 @@ svg:focus {
   }
 
   .badge-success {
-    @apply badge bg-success/20 text-green-400 border border-success/30;
+    @apply badge;
+    background-color: var(--color-success-bg);
+    color: #22c55e;
+    border: 1px solid rgba(22, 163, 74, 0.3);
   }
 
   .badge-warning {
-    @apply badge bg-yellow-500/20 text-yellow-400 border border-yellow-500/30;
+    @apply badge;
+    background-color: var(--color-warning-bg);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.3);
   }
 
   .badge-danger {
-    @apply badge bg-danger/20 text-red-400 border border-danger/30;
+    @apply badge;
+    background-color: var(--color-danger-bg);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
   }
 
   .badge-info {
-    @apply badge bg-accent-blue/20 text-blue-400 border border-accent-blue/30;
+    @apply badge;
+    background-color: rgba(59, 130, 246, 0.2);
+    color: var(--color-accent-blue);
+    border: 1px solid rgba(59, 130, 246, 0.3);
   }
 }
 
 /* ==================== DATEPICKER OVERRIDES ==================== */
 .react-datepicker {
   font-family: inherit !important;
-  background: linear-gradient(145deg, #0f2035, #0a1628) !important;
-  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  background: var(--color-bg-modal) !important;
+  border: 1px solid var(--color-border-focus) !important;
   border-radius: 0.75rem !important;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 25px 50px -12px var(--color-shadow-heavy) !important;
 }
 
 .react-datepicker__header {
   background: transparent !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-bottom: 1px solid var(--color-border) !important;
   padding-top: 1rem !important;
 }
 
 .react-datepicker__current-month,
 .react-datepicker__day-name,
 .react-datepicker-time__header {
-  color: white !important;
+  color: var(--color-text-primary) !important;
 }
 
 .react-datepicker__day {
-  color: #94a3b8 !important;
+  color: var(--color-text-secondary) !important;
   border-radius: 0.375rem !important;
   transition: all 150ms ease !important;
 }
 
 .react-datepicker__day:hover {
   background: rgba(59, 130, 246, 0.3) !important;
-  color: white !important;
+  color: var(--color-text-primary) !important;
 }
 
 /* Remove default keyboard-selected highlight to avoid highlighting same day in other months */
 .react-datepicker__day--keyboard-selected:not(.react-datepicker__day--selected):not(.react-datepicker__day--range-start):not(.react-datepicker__day--in-range):not(.react-datepicker__day--in-selecting-range) {
   background: transparent !important;
-  color: #94a3b8 !important;
+  color: var(--color-text-secondary) !important;
 }
 
 /* Today's date - subtle highlight */
 .react-datepicker__day--today:not(.react-datepicker__day--selected):not(.react-datepicker__day--range-start):not(.react-datepicker__day--range-end):not(.react-datepicker__day--in-range):not(.react-datepicker__day--in-selecting-range) {
-  border: 1px solid #3b82f6 !important;
+  border: 1px solid var(--color-accent-blue) !important;
   font-weight: 600 !important;
   background: rgba(59, 130, 246, 0.2) !important;
 }
@@ -303,7 +579,7 @@ svg:focus {
 .react-datepicker__day--in-range:not(.react-datepicker__day--range-start):not(.react-datepicker__day--range-end),
 .react-datepicker__day--in-selecting-range:not(.react-datepicker__day--selecting-range-start):not(.react-datepicker__day--selecting-range-end) {
   background: rgba(59, 130, 246, 0.4) !important;
-  color: white !important;
+  color: var(--color-text-inverse) !important;
   border-radius: 0.375rem !important;
 }
 
@@ -314,18 +590,18 @@ svg:focus {
 .react-datepicker__day--selecting-range-start,
 .react-datepicker__day--selecting-range-end,
 .react-datepicker__day--in-selecting-range.react-datepicker__day--selecting-range-start {
-  background: #3b82f6 !important;
+  background: var(--color-accent-blue) !important;
   color: white !important;
   border-radius: 0.375rem !important;
   border: none !important;
 }
 
 .react-datepicker__navigation-icon::before {
-  border-color: #94a3b8 !important;
+  border-color: var(--color-text-secondary) !important;
 }
 
 .react-datepicker__navigation:hover *::before {
-  border-color: white !important;
+  border-color: var(--color-text-primary) !important;
 }
 
 .react-datepicker__triangle {
