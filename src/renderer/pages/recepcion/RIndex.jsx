@@ -1,5 +1,5 @@
 import { SidebarWithContentSeparator } from '../../components/sidebar';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Footer from '../../components/Footer';
 import { H1Tittle } from '../../components/Fonts';
 import { VolverButton } from '../../components/Button';
@@ -10,6 +10,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 import { formatCLP } from '../../utils/formatCurrency';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import * as XLSX from 'xlsx';
 import {
   DocumentTextIcon,
   ClockIcon,
@@ -22,6 +23,7 @@ import {
   MagnifyingGlassIcon,
   CalendarDaysIcon,
   ArrowPathIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 
 // Helper to get month name in Spanish
@@ -262,20 +264,20 @@ const RIndex = () => {
   // Calculate stats for current month
   const currentMonthDocs = getDocumentsForMonth(currentDate);
 
-  const stats = {
+  const stats = useMemo(() => ({
     total: currentMonthDocs.length,
     pendiente: currentMonthDocs.filter((d) => d.estado === 'pendiente'),
     pagado: currentMonthDocs.filter((d) => d.estado === 'pagado'),
     vencido: currentMonthDocs.filter((d) => d.estado === 'vencido'),
-  };
+  }), [currentMonthDocs]);
 
   // Calculate totals (facturas/boletas add, notas de crédito subtract)
-  const calculateTotal = (docs) => {
+  const calculateTotal = useCallback((docs) => {
     return docs.reduce((acc, doc) => {
       const amount = doc.total || 0;
       return acc + (doc.isAdditive ? amount : -amount);
     }, 0);
-  };
+  }, []);
 
   const totalPendiente = calculateTotal(stats.pendiente);
   const totalPagado = calculateTotal(stats.pagado);
@@ -352,6 +354,92 @@ const RIndex = () => {
 
   const providerData = getProviderData();
 
+  // Export to Excel function
+  const exportToExcel = useCallback(() => {
+    const workbook = XLSX.utils.book_new();
+    const monthName = getMonthName(currentDate);
+
+    // Sheet 1: Resumen General
+    const resumenData = [
+      ['Resumen de Recepción de Documentos'],
+      ['Período:', monthName],
+      ['Fecha de exportación:', new Date().toLocaleDateString('es-CL')],
+      [],
+      ['Estadísticas Generales'],
+      ['Concepto', 'Cantidad', 'Monto'],
+      ['Total Documentos', stats.total, calculateTotal(currentMonthDocs)],
+      ['Facturas/Boletas', currentMonthDocs.filter(d => d.isAdditive).length, currentMonthDocs.filter(d => d.isAdditive).reduce((acc, d) => acc + (d.total || 0), 0)],
+      ['Notas de Crédito', currentMonthDocs.filter(d => !d.isAdditive).length, currentMonthDocs.filter(d => !d.isAdditive).reduce((acc, d) => acc + (d.total || 0), 0)],
+      [],
+      ['Por Estado'],
+      ['Pendiente', stats.pendiente.length, totalPendiente],
+      ['Pagado', stats.pagado.length, totalPagado],
+      ['Vencido', stats.vencido.length, totalVencido],
+    ];
+    const wsResumen = XLSX.utils.aoa_to_sheet(resumenData);
+    wsResumen['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(workbook, wsResumen, 'Resumen');
+
+    // Sheet 2: Distribución por Tipo
+    const tipoData = [
+      ['Distribución por Tipo de Documento'],
+      ['Período:', monthName],
+      [],
+      ['Tipo', 'Cantidad', 'Total'],
+      ...typeDistribution.map(item => [item.name, item.cantidad, item.total])
+    ];
+    const wsTipo = XLSX.utils.aoa_to_sheet(tipoData);
+    wsTipo['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(workbook, wsTipo, 'Por Tipo');
+
+    // Sheet 3: Gasto por Proveedor
+    const proveedorData = [
+      ['Gasto por Proveedor'],
+      ['Período:', monthName],
+      [],
+      ['Proveedor', 'Documentos', 'Total Neto'],
+      ...providerData.map(item => [item.fullName || item.name, item.docs, item.neto])
+    ];
+    const wsProveedor = XLSX.utils.aoa_to_sheet(proveedorData);
+    wsProveedor['!cols'] = [{ wch: 40 }, { wch: 12 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(workbook, wsProveedor, 'Por Proveedor');
+
+    // Sheet 4: Histórico Mensual (últimos 6 meses)
+    const historicoData = [
+      ['Histórico Neto Mensual'],
+      [],
+      ['Mes', 'Neto'],
+      ...monthlyData.map(item => [item.name, item.neto])
+    ];
+    const wsHistorico = XLSX.utils.aoa_to_sheet(historicoData);
+    wsHistorico['!cols'] = [{ wch: 15 }, { wch: 18 }];
+    XLSX.utils.book_append_sheet(workbook, wsHistorico, 'Histórico');
+
+    // Sheet 5: Detalle de Documentos
+    const detalleData = [
+      ['Detalle de Documentos'],
+      ['Período:', monthName],
+      [],
+      ['Proveedor', 'RUT', 'Tipo', 'Folio', 'Fecha Emisión', 'Estado', 'Total'],
+      ...currentMonthDocs.map(doc => [
+        doc.razon || '-',
+        doc.rut || '-',
+        doc.tipoDoc || '-',
+        doc.numeroDoc || '-',
+        doc.fechaE ? new Date(doc.fechaE.seconds * 1000).toLocaleDateString('es-CL') : '-',
+        doc.estado || '-',
+        doc.isAdditive ? (doc.total || 0) : -(doc.total || 0)
+      ])
+    ];
+    const wsDetalle = XLSX.utils.aoa_to_sheet(detalleData);
+    wsDetalle['!cols'] = [{ wch: 35 }, { wch: 15 }, { wch: 18 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 15 }];
+    XLSX.utils.book_append_sheet(workbook, wsDetalle, 'Detalle');
+
+    // Download file
+    const fileName = `Recepcion_${currentDate.getFullYear()}_${String(currentDate.getMonth() + 1).padStart(2, '0')}.xlsx`;
+    XLSX.writeFile(workbook, fileName);
+  }, [currentDate, stats, currentMonthDocs, totalPendiente, totalPagado, totalVencido, typeDistribution, providerData, monthlyData, calculateTotal]);
+
   // Month navigation
   const goToPreviousMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -382,18 +470,32 @@ const RIndex = () => {
             <VolverButton onClick={() => navigate('/home')} />
           </div>
           <H1Tittle text="Recepción de documentos" />
-          <button
-            onClick={fetchAllDocuments}
-            disabled={loading}
-            className={`absolute right-5 p-2 rounded-lg transition-colors disabled:opacity-50 ${
-              isLightTheme
-                ? 'bg-gray-100 hover:bg-gray-200'
-                : 'bg-white/5 hover:bg-white/10'
-            }`}
-            title="Actualizar datos"
-          >
-            <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''} ${isLightTheme ? 'text-gray-700' : 'text-white'}`} />
-          </button>
+          <div className="absolute right-5 flex items-center gap-2">
+            <button
+              onClick={exportToExcel}
+              disabled={loading || currentMonthDocs.length === 0}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                isLightTheme
+                  ? 'bg-green-100 hover:bg-green-200'
+                  : 'bg-green-500/10 hover:bg-green-500/20'
+              }`}
+              title="Descargar Excel"
+            >
+              <ArrowDownTrayIcon className={`w-5 h-5 ${isLightTheme ? 'text-green-700' : 'text-green-400'}`} />
+            </button>
+            <button
+              onClick={fetchAllDocuments}
+              disabled={loading}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                isLightTheme
+                  ? 'bg-gray-100 hover:bg-gray-200'
+                  : 'bg-white/5 hover:bg-white/10'
+              }`}
+              title="Actualizar datos"
+            >
+              <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''} ${isLightTheme ? 'text-gray-700' : 'text-white'}`} />
+            </button>
+          </div>
         </div>
 
         {/* Main Content */}
