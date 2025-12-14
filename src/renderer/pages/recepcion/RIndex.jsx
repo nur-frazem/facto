@@ -149,6 +149,12 @@ const DOC_TYPES = [
   { subcol: 'notasCredito', tipo: 'Nota de Crédito', isAdditive: false },
 ];
 
+// Cache configuration (outside component)
+const CACHE_KEY = 'recepcion_documents_cache';
+const CACHE_TIMESTAMP_KEY = 'recepcion_cache_timestamp';
+const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+const REFRESH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
 const RIndex = () => {
   const navigate = useNavigate();
   const { tienePermiso } = useAuth();
@@ -172,9 +178,35 @@ const RIndex = () => {
 
   // State for document data
   const [allDocuments, setAllDocuments] = useState([]);
+  const [lastRefreshTime, setLastRefreshTime] = useState(() => {
+    // Initialize from localStorage if available
+    const cached = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+    return cached ? parseInt(cached, 10) : 0;
+  });
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const initialLoadDone = useRef(false);
+
+  // Update current time every second for smooth countdown
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Calculate cooldown remaining (derived value, always accurate)
+  const refreshCooldown = lastRefreshTime > 0
+    ? Math.max(0, Math.ceil((REFRESH_COOLDOWN_MS - (currentTime - lastRefreshTime)) / 1000))
+    : 0;
 
   // Fetch all documents from all companies
-  const fetchAllDocuments = useCallback(async () => {
+  const fetchAllDocuments = useCallback(async (isManualRefresh = false) => {
+    // Check cooldown for manual refresh
+    if (isManualRefresh) {
+      const timeSinceLastRefresh = Date.now() - lastRefreshTime;
+      if (timeSinceLastRefresh < REFRESH_COOLDOWN_MS) {
+        return; // Still on cooldown, UI will show remaining time
+      }
+    }
+
     setLoading(true);
     try {
       const empresasRef = collection(db, 'empresas');
@@ -207,6 +239,17 @@ const RIndex = () => {
       }
 
       setAllDocuments(allDocs);
+
+      // Save to cache
+      const now = Date.now();
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(allDocs));
+        localStorage.setItem(CACHE_TIMESTAMP_KEY, now.toString());
+      } catch (e) {
+        console.warn('Could not save to cache:', e);
+      }
+
+      setLastRefreshTime(now);
     } catch (error) {
       // Ignore permission errors during logout
       if (error.code === 'permission-denied') return;
@@ -214,10 +257,41 @@ const RIndex = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [lastRefreshTime]);
 
+  // Load cached data on mount or fetch fresh data
   useEffect(() => {
-    fetchAllDocuments();
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
+    const loadCachedData = () => {
+      try {
+        const cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+        const cachedData = localStorage.getItem(CACHE_KEY);
+
+        if (cachedTimestamp && cachedData) {
+          const timestamp = parseInt(cachedTimestamp, 10);
+          const age = Date.now() - timestamp;
+
+          // If cache is still valid (less than 30 minutes old)
+          if (age < CACHE_DURATION_MS) {
+            const parsedData = JSON.parse(cachedData);
+            setAllDocuments(parsedData);
+            setLastRefreshTime(timestamp);
+            setLoading(false);
+            return true; // Cache was valid and loaded
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cache:', error);
+      }
+      return false; // No valid cache
+    };
+
+    const cacheLoaded = loadCachedData();
+    if (!cacheLoaded) {
+      fetchAllDocuments();
+    }
   }, [fetchAllDocuments]);
 
   // Measure chart containers when available
@@ -484,16 +558,21 @@ const RIndex = () => {
               <ArrowDownTrayIcon className={`w-5 h-5 ${isLightTheme ? 'text-green-700' : 'text-green-400'}`} />
             </button>
             <button
-              onClick={fetchAllDocuments}
-              disabled={loading}
-              className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
+              onClick={() => fetchAllDocuments(true)}
+              disabled={loading || refreshCooldown > 0}
+              className={`p-2 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1 ${
                 isLightTheme
                   ? 'bg-gray-100 hover:bg-gray-200'
                   : 'bg-white/5 hover:bg-white/10'
               }`}
-              title="Actualizar datos"
+              title={refreshCooldown > 0 ? `Disponible en ${Math.floor(refreshCooldown / 60)}:${String(refreshCooldown % 60).padStart(2, '0')}` : 'Actualizar datos'}
             >
               <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''} ${isLightTheme ? 'text-gray-700' : 'text-white'}`} />
+              {refreshCooldown > 0 && (
+                <span className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                  {Math.floor(refreshCooldown / 60)}:{String(refreshCooldown % 60).padStart(2, '0')}
+                </span>
+              )}
             </button>
           </div>
         </div>
