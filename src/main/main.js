@@ -1,8 +1,11 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, session, Menu } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
 const {ipcMain } = require('electron');
+
+// Remove the menu bar (File, Edit, View, Window, Help)
+Menu.setApplicationMenu(null);
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
