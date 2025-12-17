@@ -1,5 +1,5 @@
 import { SidebarWithContentSeparator } from '../../components/sidebar';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Footer from '../../components/Footer';
 import { H1Tittle } from '../../components/Fonts';
 import { VolverButton } from '../../components/Button';
@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { Modal, LoadingModal } from '../../components/modal';
 import { useTheme } from '../../context/ThemeContext';
 
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 
 import { formatRUT } from '../../utils/formatRUT';
@@ -69,6 +69,7 @@ const RCalendario = () => {
   // State for all documents
   const [allDocuments, setAllDocuments] = useState([]);
   const [loadingModal, setLoadingModal] = useState(true);
+  const [loadingMonth, setLoadingMonth] = useState(false);
 
   // State for selected day modal
   const [selectedDay, setSelectedDay] = useState(null);
@@ -78,21 +79,150 @@ const RCalendario = () => {
   const [providerCompanies, setProviderCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState('Todos');
 
-  // Fetch all documents from all companies
+  // Track loaded months and empresas data for lazy loading
+  const loadedMonthsRef = useRef(new Set());
+  const empresasDataRef = useRef([]);
+
+  // Document types to fetch
+  const tiposDoc = useMemo(() => ['facturas', 'facturasExentas', 'notasCredito', 'boletas'], []);
+
+  // Calculate the cutoff date for initial load (12 months ago)
+  const initialLoadCutoff = useMemo(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 12);
+    date.setDate(1);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }, []);
+
+  // Helper to create month key for tracking
+  const getMonthKey = useCallback((year, month) => `${year}-${month}`, []);
+
+  // Process document data helper
+  const processDocData = useCallback((docSnap, tipo, rut, razon, hoy) => {
+    const docData = docSnap.data();
+    const fechaPagoDate = docData.fechaPago?.toDate ? docData.fechaPago.toDate() : null;
+    const fechaProcesoDate = docData.fechaProceso?.toDate ? docData.fechaProceso.toDate() : null;
+    const fechaV = docData.fechaV?.toDate ? docData.fechaV.toDate() : null;
+    const isOverdue = fechaV && fechaV < hoy && docData.estado === 'pendiente';
+
+    return {
+      id: docSnap.id,
+      tipo,
+      rut,
+      razon,
+      numeroDoc: docData.numeroDoc,
+      total: docData.totalDescontado ?? docData.total,
+      estado: isOverdue ? 'vencido' : docData.estado,
+      fechaE: docData.fechaE?.toDate ? docData.fechaE.toDate() : null,
+      fechaV,
+      fechaPago: fechaPagoDate,
+      fechaProceso: fechaProcesoDate,
+      formaPago: docData.formaPago,
+    };
+  }, []);
+
+  // Fetch documents for a specific month (lazy loading)
+  const fetchMonthDocuments = useCallback(async (year, month) => {
+    const monthKey = getMonthKey(year, month);
+    if (loadedMonthsRef.current.has(monthKey) || empresasDataRef.current.length === 0) {
+      return;
+    }
+
+    setLoadingMonth(true);
+    try {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      // Calculate date range for the specific month
+      const startDate = new Date(year, month, 1);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(year, month + 1, 1);
+      endDate.setHours(0, 0, 0, 0);
+
+      const startTimestamp = Timestamp.fromDate(startDate);
+      const endTimestamp = Timestamp.fromDate(endDate);
+
+      const fetchPromises = [];
+
+      for (const { rut, razon } of empresasDataRef.current) {
+        for (const tipo of tiposDoc) {
+          const docsRef = collection(db, 'empresas', rut, tipo);
+          const docsQuery = query(
+            docsRef,
+            where('fechaE', '>=', startTimestamp),
+            where('fechaE', '<', endTimestamp)
+          );
+
+          fetchPromises.push(
+            getDocs(docsQuery).then((docsSnap) => ({ docsSnap, tipo, rut, razon }))
+          );
+        }
+      }
+
+      const results = await Promise.all(fetchPromises);
+      const newDocs = [];
+      const updatePromises = [];
+
+      for (const { docsSnap, tipo, rut, razon } of results) {
+        for (const docSnap of docsSnap.docs) {
+          const docData = docSnap.data();
+
+          // Check and queue overdue document updates
+          if (
+            docData.estado === 'pendiente' &&
+            docData.fechaV?.toDate &&
+            docData.fechaV.toDate() < hoy
+          ) {
+            const docRef = doc(db, 'empresas', rut, tipo, docSnap.id);
+            updatePromises.push(updateDoc(docRef, { estado: 'vencido' }));
+          }
+
+          newDocs.push(processDocData(docSnap, tipo, rut, razon, hoy));
+        }
+      }
+
+      // Execute overdue updates in parallel (non-blocking)
+      if (updatePromises.length > 0) {
+        Promise.all(updatePromises).catch((err) =>
+          console.warn('Error updating overdue documents:', err)
+        );
+      }
+
+      // Mark month as loaded and merge documents
+      loadedMonthsRef.current.add(monthKey);
+      setAllDocuments((prev) => [...prev, ...newDocs]);
+    } catch (error) {
+      console.error('Error fetching month documents:', error);
+    } finally {
+      setLoadingMonth(false);
+    }
+  }, [getMonthKey, tiposDoc, processDocData]);
+
+  // Initial fetch: load last 12 months
   useEffect(() => {
-    const fetchAllDocuments = async () => {
+    const fetchInitialDocuments = async () => {
       setLoadingModal(true);
       try {
         const empresasSnap = await getDocs(collection(db, 'empresas'));
-        const allDocs = [];
         const providers = [];
+        const empresasData = [];
+
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        const twelveMonthsAgoTimestamp = Timestamp.fromDate(initialLoadCutoff);
+
+        const fetchPromises = [];
 
         for (const empresaDoc of empresasSnap.docs) {
           const empresaData = empresaDoc.data();
           const rut = empresaDoc.id;
           const razon = empresaData.razon || 'Sin nombre';
 
-          // Collect provider companies
+          // Store empresa data for lazy loading
+          empresasData.push({ rut, razon });
+
           if (empresaData.proveedor) {
             providers.push({
               rut,
@@ -101,70 +231,53 @@ const RCalendario = () => {
             });
           }
 
-          // Document types to fetch
-          const tiposDoc = ['facturas', 'facturasExentas', 'notasCredito', 'boletas'];
-
-          // Today's date for overdue check
-          const hoy = new Date();
-          hoy.setHours(0, 0, 0, 0);
-
           for (const tipo of tiposDoc) {
-            const docsSnap = await getDocs(collection(db, 'empresas', rut, tipo));
+            const docsRef = collection(db, 'empresas', rut, tipo);
+            const docsQuery = query(docsRef, where('fechaE', '>=', twelveMonthsAgoTimestamp));
 
-            // Check and update overdue documents
-            const updatePromises = [];
-            for (const docSnap of docsSnap.docs) {
-              const docData = docSnap.data();
-              if (
-                docData.estado === 'pendiente' &&
-                docData.fechaV?.toDate &&
-                docData.fechaV.toDate() < hoy
-              ) {
-                const docRef = doc(db, 'empresas', rut, tipo, docSnap.id);
-                updatePromises.push(updateDoc(docRef, { estado: 'vencido' }));
-              }
-            }
-
-            // Execute updates in parallel
-            if (updatePromises.length > 0) {
-              await Promise.all(updatePromises);
-            }
-
-            docsSnap.docs.forEach((docSnap) => {
-              const docData = docSnap.data();
-              // For fechaPago: use fechaPago if available, otherwise fall back to fechaProceso
-              // This handles legacy documents that only had fechaPago as processing date
-              const fechaPagoDate = docData.fechaPago?.toDate ? docData.fechaPago.toDate() : null;
-              const fechaProcesoDate = docData.fechaProceso?.toDate
-                ? docData.fechaProceso.toDate()
-                : null;
-
-              // Apply local status update if it was overdue
-              const fechaV = docData.fechaV?.toDate ? docData.fechaV.toDate() : null;
-              const isOverdue = fechaV && fechaV < hoy && docData.estado === 'pendiente';
-
-              allDocs.push({
-                id: docSnap.id,
-                tipo,
-                rut,
-                razon,
-                numeroDoc: docData.numeroDoc,
-                total: docData.totalDescontado ?? docData.total,
-                estado: isOverdue ? 'vencido' : docData.estado,
-                fechaE: docData.fechaE?.toDate ? docData.fechaE.toDate() : null,
-                fechaV: docData.fechaV?.toDate ? docData.fechaV.toDate() : null,
-                // Use fechaPago for calendar display (the actual payment date)
-                // If fechaProceso exists, it means the new structure is in use
-                // If not, fechaPago is the legacy processing date which we still show
-                fechaPago: fechaPagoDate,
-                fechaProceso: fechaProcesoDate,
-                formaPago: docData.formaPago,
-              });
-            });
+            fetchPromises.push(
+              getDocs(docsQuery).then((docsSnap) => ({ docsSnap, tipo, rut, razon }))
+            );
           }
         }
 
-        // Sort providers by razon social
+        // Store empresas data for lazy loading
+        empresasDataRef.current = empresasData;
+
+        const results = await Promise.all(fetchPromises);
+        const allDocs = [];
+        const updatePromises = [];
+
+        for (const { docsSnap, tipo, rut, razon } of results) {
+          for (const docSnap of docsSnap.docs) {
+            const docData = docSnap.data();
+
+            if (
+              docData.estado === 'pendiente' &&
+              docData.fechaV?.toDate &&
+              docData.fechaV.toDate() < hoy
+            ) {
+              const docRef = doc(db, 'empresas', rut, tipo, docSnap.id);
+              updatePromises.push(updateDoc(docRef, { estado: 'vencido' }));
+            }
+
+            allDocs.push(processDocData(docSnap, tipo, rut, razon, hoy));
+          }
+        }
+
+        if (updatePromises.length > 0) {
+          Promise.all(updatePromises).catch((err) =>
+            console.warn('Error updating overdue documents:', err)
+          );
+        }
+
+        // Mark initial months as loaded
+        const now = new Date();
+        for (let i = 0; i < 12; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          loadedMonthsRef.current.add(getMonthKey(d.getFullYear(), d.getMonth()));
+        }
+
         providers.sort((a, b) => a.razon.localeCompare(b.razon));
         setProviderCompanies(providers);
         setAllDocuments(allDocs);
@@ -175,8 +288,19 @@ const RCalendario = () => {
       }
     };
 
-    fetchAllDocuments();
-  }, []);
+    fetchInitialDocuments();
+  }, [tiposDoc, initialLoadCutoff, getMonthKey, processDocData]);
+
+  // Lazy load when navigating to an unloaded month
+  useEffect(() => {
+    const monthKey = getMonthKey(currentYear, currentMonth);
+    const selectedDate = new Date(currentYear, currentMonth, 1);
+
+    // Only lazy load if month is older than initial load and not already loaded
+    if (selectedDate < initialLoadCutoff && !loadedMonthsRef.current.has(monthKey)) {
+      fetchMonthDocuments(currentYear, currentMonth);
+    }
+  }, [currentYear, currentMonth, initialLoadCutoff, getMonthKey, fetchMonthDocuments]);
 
   // Generate calendar days for current month
   const calendarDays = useMemo(() => {
@@ -460,6 +584,32 @@ const RCalendario = () => {
               >
                 Hoy
               </button>
+
+              {/* Loading indicator for lazy-loaded months */}
+              {loadingMonth && (
+                <div className="flex items-center gap-2 ml-2 px-3 py-2 bg-accent-blue/20 rounded-lg">
+                  <svg
+                    className="w-4 h-4 animate-spin text-accent-blue"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  <span className="text-xs text-accent-blue">Cargando mes...</span>
+                </div>
+              )}
 
               {/* Company Filter */}
               <div

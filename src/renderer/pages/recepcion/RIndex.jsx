@@ -6,7 +6,7 @@ import { VolverButton } from '../../components/Button';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 import { formatCLP } from '../../utils/formatCurrency';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
@@ -197,7 +197,7 @@ const RIndex = () => {
     ? Math.max(0, Math.ceil((REFRESH_COOLDOWN_MS - (currentTime - lastRefreshTime)) / 1000))
     : 0;
 
-  // Fetch all documents from all companies
+  // Fetch all documents from all companies (optimized with parallel fetching and date filtering)
   const fetchAllDocuments = useCallback(async (isManualRefresh = false) => {
     // Check cooldown for manual refresh
     if (isManualRefresh) {
@@ -212,31 +212,41 @@ const RIndex = () => {
       const empresasRef = collection(db, 'empresas');
       const empresasSnapshot = await getDocs(empresasRef);
 
-      const allDocs = [];
+      // Filter providers first
+      const proveedores = empresasSnapshot.docs.filter(doc => doc.data().proveedor);
 
-      for (const empresaDoc of empresasSnapshot.docs) {
+      // Calculate 6 months ago for date filtering (covers charts + export needs)
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      sixMonthsAgo.setDate(1); // Start of that month
+      sixMonthsAgo.setHours(0, 0, 0, 0);
+      const sixMonthsAgoTimestamp = Timestamp.fromDate(sixMonthsAgo);
+
+      // Create all fetch promises in parallel (instead of sequential for loops)
+      const fetchPromises = proveedores.flatMap(empresaDoc => {
         const empresaData = empresaDoc.data();
-        if (!empresaData.proveedor) continue;
-
         const rut = empresaDoc.id;
 
-        for (const docType of DOC_TYPES) {
+        return DOC_TYPES.map(async (docType) => {
           const docsRef = collection(db, 'empresas', rut, docType.subcol);
-          const docsSnapshot = await getDocs(docsRef);
+          // Query only documents from the last 6 months
+          const docsQuery = query(docsRef, where('fechaE', '>=', sixMonthsAgoTimestamp));
+          const docsSnapshot = await getDocs(docsQuery);
 
-          docsSnapshot.docs.forEach((doc) => {
-            const data = doc.data();
-            allDocs.push({
-              ...data,
-              rut,
-              razon: empresaData.razon,
-              tipoDoc: docType.tipo,
-              isAdditive: docType.isAdditive,
-              id: doc.id,
-            });
-          });
-        }
-      }
+          return docsSnapshot.docs.map(doc => ({
+            ...doc.data(),
+            rut,
+            razon: empresaData.razon,
+            tipoDoc: docType.tipo,
+            isAdditive: docType.isAdditive,
+            id: doc.id,
+          }));
+        });
+      });
+
+      // Execute all fetches in parallel
+      const results = await Promise.all(fetchPromises);
+      const allDocs = results.flat();
 
       setAllDocuments(allDocs);
 
