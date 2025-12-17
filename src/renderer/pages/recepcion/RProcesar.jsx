@@ -90,6 +90,9 @@ const RProcesar = () => {
     // Fecha de pago (por defecto hoy)
     const [fechaPagoSeleccionada, setFechaPagoSeleccionada] = useState(new Date());
 
+    // Search state for filtering documents
+    const [searchTerm, setSearchTerm] = useState('');
+
     // Sorting state
     const [sortColumn, setSortColumn] = useState(null);
     const [sortDirection, setSortDirection] = useState('asc');
@@ -152,6 +155,26 @@ const RProcesar = () => {
             return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
         });
     }, [facturas, sortColumn, sortDirection]);
+
+    // Filtered facturas based on search term (by document number or amount)
+    const filteredFacturas = React.useMemo(() => {
+        if (!searchTerm.trim()) return sortedFacturas;
+
+        const term = searchTerm.trim().toLowerCase();
+        return sortedFacturas.filter((doc) => {
+            // Filter by document number
+            const numeroDoc = String(doc.numeroDoc || '').toLowerCase();
+            if (numeroDoc.includes(term)) return true;
+
+            // Filter by amount (total or totalDescontado)
+            const monto = doc.totalDescontado ?? doc.total ?? 0;
+            const montoStr = String(monto);
+            const montoFormateado = formatCLP(monto).toLowerCase();
+            if (montoStr.includes(term) || montoFormateado.includes(term)) return true;
+
+            return false;
+        });
+    }, [sortedFacturas, searchTerm]);
 
     // OBTENCIÓN DE DOCUMENTOS PARA EMPRESA SELECCIONADA
     useEffect(() => {
@@ -486,6 +509,7 @@ const RProcesar = () => {
                             (item) => {setGiro(item);
                             const rutSolo = item.split(" ")[0];
                             setGiroRut(cleanRUT(rutSolo));
+                            setSearchTerm(''); // Clear search when company changes
                         }}
                     />
                 </div>
@@ -493,9 +517,25 @@ const RProcesar = () => {
                 {/* Tabla dinámica */}
                 <Card
                     hasButton={false}
-                    contentClassName="w-96 h-64 overflow-y-auto scrollbar-custom flex flex-col w-full"
+                    contentClassName="w-96 h-80 overflow-y-auto scrollbar-custom flex flex-col w-full"
                     content={
                         <div>
+                            {/* Search bar */}
+                            {giroRut && (
+                                <div className="mb-3">
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por N° documento o monto..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className={`w-full px-3 py-2 rounded-lg border-2 text-sm outline-none transition-colors ${
+                                            isLightTheme
+                                                ? 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-accent-blue'
+                                                : 'bg-black/20 border-white/20 text-white placeholder-gray-400 focus:border-accent-blue'
+                                        }`}
+                                    />
+                                </div>
+                            )}
                             {/* Encabezados - Clickable for sorting */}
                             <div className="flex justify-between font-bold mb-2">
                                 <button
@@ -548,7 +588,7 @@ const RProcesar = () => {
                             <hr className="mb-4" />
 
                             {/* Filas dinámicas */}
-                            {sortedFacturas.map((row, index) => (
+                            {filteredFacturas.map((row, index) => (
                                 <div key={`${row.tipoDoc}-${row.numeroDoc}-${index}`} className="flex justify-between mb-2 items-center">
                                     <div className="w-[20%] text-center text-xs">
                                         {row.tipoDocLabel || "Factura"}
@@ -596,9 +636,16 @@ const RProcesar = () => {
                             ))}
 
                             {/* Si no hay facturas */}
-                            {sortedFacturas.length === 0 && giroRut && (
+                            {filteredFacturas.length === 0 && giroRut && sortedFacturas.length === 0 && (
                                 <div className="text-center text-gray-400 mt-4">
                                     No hay documentos pendientes de pago
+                                </div>
+                            )}
+
+                            {/* Si hay facturas pero el filtro no encuentra resultados */}
+                            {filteredFacturas.length === 0 && giroRut && sortedFacturas.length > 0 && (
+                                <div className="text-center text-gray-400 mt-4">
+                                    No se encontraron documentos con "{searchTerm}"
                                 </div>
                             )}
 

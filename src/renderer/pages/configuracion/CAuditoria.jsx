@@ -458,12 +458,20 @@ const CAuditoria = () => {
                       <span className="text-success">{selectedLog.cambios.numeroDoc.nuevo}</span>
                     </div>
                   )}
-                  {selectedLog.cambios.total && String(selectedLog.cambios.total.anterior) !== String(selectedLog.cambios.total.nuevo) && (
+                  {selectedLog.cambios.fechaE && String(selectedLog.cambios.fechaE.anterior) !== String(selectedLog.cambios.fechaE.nuevo) && (
                     <div className="flex items-center gap-2">
-                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>Total:</span>
-                      <span className="text-danger line-through">{formatCLP(selectedLog.cambios.total.anterior)}</span>
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>Fecha Emisión:</span>
+                      <span className="text-danger line-through">{formatDate(selectedLog.cambios.fechaE.anterior)}</span>
                       <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>→</span>
-                      <span className="text-success">{formatCLP(selectedLog.cambios.total.nuevo)}</span>
+                      <span className="text-success">{formatDate(selectedLog.cambios.fechaE.nuevo)}</span>
+                    </div>
+                  )}
+                  {selectedLog.cambios.fechaV && String(selectedLog.cambios.fechaV.anterior) !== String(selectedLog.cambios.fechaV.nuevo) && (
+                    <div className="flex items-center gap-2">
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>Fecha Vencimiento:</span>
+                      <span className="text-danger line-through">{formatDate(selectedLog.cambios.fechaV.anterior)}</span>
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>→</span>
+                      <span className="text-success">{formatDate(selectedLog.cambios.fechaV.nuevo)}</span>
                     </div>
                   )}
                   {selectedLog.cambios.neto && String(selectedLog.cambios.neto.anterior) !== String(selectedLog.cambios.neto.nuevo) && (
@@ -472,6 +480,46 @@ const CAuditoria = () => {
                       <span className="text-danger line-through">{formatCLP(selectedLog.cambios.neto.anterior)}</span>
                       <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>→</span>
                       <span className="text-success">{formatCLP(selectedLog.cambios.neto.nuevo)}</span>
+                    </div>
+                  )}
+                  {selectedLog.cambios.iva && String(selectedLog.cambios.iva.anterior) !== String(selectedLog.cambios.iva.nuevo) && (
+                    <div className="flex items-center gap-2">
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>IVA:</span>
+                      <span className="text-danger line-through">{formatCLP(selectedLog.cambios.iva.anterior)}</span>
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>→</span>
+                      <span className="text-success">{formatCLP(selectedLog.cambios.iva.nuevo)}</span>
+                    </div>
+                  )}
+                  {selectedLog.cambios.flete && String(selectedLog.cambios.flete.anterior) !== String(selectedLog.cambios.flete.nuevo) && (
+                    <div className="flex items-center gap-2">
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>Flete:</span>
+                      <span className="text-danger line-through">{formatCLP(selectedLog.cambios.flete.anterior)}</span>
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>→</span>
+                      <span className="text-success">{formatCLP(selectedLog.cambios.flete.nuevo)}</span>
+                    </div>
+                  )}
+                  {selectedLog.cambios.retencion && String(selectedLog.cambios.retencion.anterior) !== String(selectedLog.cambios.retencion.nuevo) && (
+                    <div className="flex items-center gap-2">
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>Retención:</span>
+                      <span className="text-danger line-through">{formatCLP(selectedLog.cambios.retencion.anterior)}</span>
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>→</span>
+                      <span className="text-success">{formatCLP(selectedLog.cambios.retencion.nuevo)}</span>
+                    </div>
+                  )}
+                  {selectedLog.cambios.otros && String(selectedLog.cambios.otros.anterior) !== String(selectedLog.cambios.otros.nuevo) && (
+                    <div className="flex items-center gap-2">
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>Otros:</span>
+                      <span className="text-danger line-through">{formatCLP(selectedLog.cambios.otros.anterior)}</span>
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>→</span>
+                      <span className="text-success">{formatCLP(selectedLog.cambios.otros.nuevo)}</span>
+                    </div>
+                  )}
+                  {selectedLog.cambios.total && String(selectedLog.cambios.total.anterior) !== String(selectedLog.cambios.total.nuevo) && (
+                    <div className="flex items-center gap-2">
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>Total:</span>
+                      <span className="text-danger line-through">{formatCLP(selectedLog.cambios.total.anterior)}</span>
+                      <span className={isLightTheme ? 'text-gray-400' : 'text-slate-500'}>→</span>
+                      <span className="text-success">{formatCLP(selectedLog.cambios.total.nuevo)}</span>
                     </div>
                   )}
                 </div>

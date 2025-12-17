@@ -1393,8 +1393,13 @@ const RRevisionDocumentos = () => {
           fechaEdicion: fechaEdicionActual,
           cambios: {
             numeroDoc: { anterior: numeroDoc, nuevo: iNumeroDocNuevo },
-            fechaE: { anterior: iFechaE, nuevo: iFechaENuevo },
+            fechaE: { anterior: iFechaE ? (iFechaE instanceof Date ? iFechaE.toISOString() : iFechaE) : null, nuevo: iFechaENuevo ? (iFechaENuevo instanceof Date ? iFechaENuevo.toISOString() : iFechaENuevo) : null },
+            fechaV: { anterior: iFechaV ? (iFechaV instanceof Date ? iFechaV.toISOString() : iFechaV) : null, nuevo: iFechaVNuevo ? (iFechaVNuevo instanceof Date ? iFechaVNuevo.toISOString() : iFechaVNuevo) : null },
             neto: { anterior: iNeto, nuevo: iNetoNuevo },
+            iva: { anterior: iIva, nuevo: iIvaNuevo },
+            flete: { anterior: iFlete, nuevo: iFleteNuevo },
+            retencion: { anterior: iRetencion, nuevo: iRetencionNuevo },
+            otros: { anterior: iOtros, nuevo: iOtrosNuevo },
             total: { anterior: iTotal, nuevo: iTotalNuevo }
           }
         });

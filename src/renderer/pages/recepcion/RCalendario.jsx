@@ -838,7 +838,9 @@ const RCalendario = () => {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto space-y-6">
+            <div className="flex-1 overflow-y-auto flex gap-4">
+              {/* Documents List - Left Side */}
+              <div className="flex-1 space-y-6 min-w-0">
               {/* No documents message */}
               {selectedDayDocuments.expiring.length === 0 &&
                 selectedDayDocuments.paid.length === 0 && (
@@ -981,6 +983,57 @@ const RCalendario = () => {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+              </div>
+
+              {/* Totals Summary - Right Side */}
+              {(selectedDayDocuments.expiring.length > 0 || selectedDayDocuments.paid.length > 0) && (
+                <div className={`w-56 flex-shrink-0 space-y-4 ${isLightTheme ? 'border-l border-gray-200' : 'border-l border-white/10'} pl-4`}>
+                  <h3 className={`text-sm font-semibold uppercase tracking-wider ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                    Resumen del día
+                  </h3>
+
+                  {/* Expiring/Overdue Total */}
+                  {selectedDayDocuments.expiring.length > 0 && (() => {
+                    const isOverdueDate = selectedDay <= today;
+                    const expiringTotal = selectedDayDocuments.expiring.reduce((sum, doc) => sum + (doc.total || 0), 0);
+                    return (
+                      <div className={`p-4 rounded-xl ${isOverdueDate ? 'bg-danger/10 border border-danger/30' : 'bg-yellow-500/10 border border-yellow-500/30'}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-2.5 h-2.5 rounded-full ${isOverdueDate ? 'bg-danger' : 'bg-yellow-400'}`} />
+                          <span className={`text-xs font-medium ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}>
+                            {isOverdueDate ? 'Vencido' : 'Por vencer'}
+                          </span>
+                        </div>
+                        <div className={`text-2xl font-bold ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}>
+                          {formatCLP(expiringTotal)}
+                        </div>
+                        <div className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                          {selectedDayDocuments.expiring.length} documento{selectedDayDocuments.expiring.length !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Paid Total */}
+                  {selectedDayDocuments.paid.length > 0 && (() => {
+                    const paidTotal = selectedDayDocuments.paid.reduce((sum, doc) => sum + (doc.total || 0), 0);
+                    return (
+                      <div className="p-4 rounded-xl bg-success/10 border border-success/30">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2.5 h-2.5 rounded-full bg-success" />
+                          <span className="text-xs font-medium text-success">Pagado</span>
+                        </div>
+                        <div className="text-2xl font-bold text-success">
+                          {formatCLP(paidTotal)}
+                        </div>
+                        <div className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                          {selectedDayDocuments.paid.length} documento{selectedDayDocuments.paid.length !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
