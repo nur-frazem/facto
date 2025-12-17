@@ -219,6 +219,15 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
         y = 20;
       }
 
+      // Get abono information from facturaItem (if passed)
+      const esAbono = typeof facturaItem === "object" && facturaItem.esAbono;
+      // Check for montoAPagar first, then montoPagado (stored in pago_recepcion), then fallback to factura.total
+      const montoAPagar = typeof facturaItem === "object" && facturaItem.montoAPagar != null
+        ? facturaItem.montoAPagar
+        : typeof facturaItem === "object" && facturaItem.montoPagado != null
+        ? facturaItem.montoPagado
+        : factura.total;
+
       // Determine the label based on document type
       let tipoLabel = "Factura";
       if (tipoDoc === "facturasExentas") {
@@ -238,14 +247,36 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
       pdf.text(String(factura.numeroDoc || facturaNum), colX, y + 5);
       colX += colWidths.numero;
       pdf.text(fechaE, colX, y + 5);
-      pdf.text(formatCLP(factura.total), marginRight - 5, y + 5, { align: "right" });
+
+      // Show amount with (Abono) indicator at the left if it's an abono
+      if (esAbono) {
+        // Calculate amount width at current font size (9pt) before changing font
+        const montoText = formatCLP(montoAPagar);
+        const montoWidth = pdf.getTextWidth(montoText);
+
+        // Now draw the abono label in smaller italic font
+        pdf.setFont("helvetica", "italic");
+        pdf.setFontSize(7);
+        pdf.setTextColor(...COLORS.mediumGray);
+        const abonoText = "(Abono)";
+        const abonoWidth = pdf.getTextWidth(abonoText);
+        // Position abono label to the left of the amount with spacing
+        pdf.text(abonoText, marginRight - 5 - montoWidth - abonoWidth - 3, y + 5);
+
+        // Restore font for amount
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        pdf.setTextColor(...COLORS.black);
+      }
+      pdf.text(formatCLP(montoAPagar), marginRight - 5, y + 5, { align: "right" });
 
       // Row bottom border
       pdf.setDrawColor(...COLORS.lightGray);
       pdf.setLineWidth(0.1);
       pdf.line(marginLeft, y + rowHeight, marginRight, y + rowHeight);
 
-      subtotalEmpresa += factura.total || 0;
+      // Use montoAPagar for subtotal calculation
+      subtotalEmpresa += montoAPagar || 0;
       y += rowHeight;
 
       // Credit notes associated

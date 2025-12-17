@@ -6,7 +6,7 @@ import { VolverButton } from '../../components/Button';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 import { formatCLP } from '../../utils/formatCurrency';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
@@ -223,6 +223,10 @@ const RIndex = () => {
       const sixMonthsAgoTimestamp = Timestamp.fromDate(sixMonthsAgo);
 
       // Create all fetch promises in parallel (instead of sequential for loops)
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const documentsToUpdate = []; // Track documents that need status updates
+
       const fetchPromises = proveedores.flatMap(empresaDoc => {
         const empresaData = empresaDoc.data();
         const rut = empresaDoc.id;
@@ -233,20 +237,70 @@ const RIndex = () => {
           const docsQuery = query(docsRef, where('fechaE', '>=', sixMonthsAgoTimestamp));
           const docsSnapshot = await getDocs(docsQuery);
 
-          return docsSnapshot.docs.map(doc => ({
-            ...doc.data(),
-            rut,
-            razon: empresaData.razon,
-            tipoDoc: docType.tipo,
-            isAdditive: docType.isAdditive,
-            id: doc.id,
-          }));
+          return docsSnapshot.docs.map(docSnap => {
+            const docData = docSnap.data();
+
+            // Check if document is overdue and needs status update (only for facturas/facturasExentas)
+            if (docType.subcol === 'facturas' || docType.subcol === 'facturasExentas') {
+              const fechaV = docData.fechaV?.seconds
+                ? new Date(docData.fechaV.seconds * 1000)
+                : docData.fechaV?.toDate
+                ? docData.fechaV.toDate()
+                : null;
+
+              if (fechaV) {
+                fechaV.setHours(0, 0, 0, 0);
+                const isOverdue = fechaV <= hoy;
+
+                if (isOverdue) {
+                  const hasAbono = (docData.totalAbonado || 0) > 0;
+
+                  // Check if status needs to change
+                  if (docData.estado === 'pendiente') {
+                    documentsToUpdate.push({
+                      rut,
+                      subcol: docType.subcol,
+                      docId: docSnap.id,
+                      newEstado: 'vencido'
+                    });
+                    docData.estado = 'vencido'; // Update local copy too
+                  } else if (docData.estado === 'parcialmente_pagado' && hasAbono) {
+                    documentsToUpdate.push({
+                      rut,
+                      subcol: docType.subcol,
+                      docId: docSnap.id,
+                      newEstado: 'parcialmente_vencido'
+                    });
+                    docData.estado = 'parcialmente_vencido'; // Update local copy too
+                  }
+                }
+              }
+            }
+
+            return {
+              ...docData,
+              rut,
+              razon: empresaData.razon,
+              tipoDoc: docType.tipo,
+              isAdditive: docType.isAdditive,
+              id: docSnap.id,
+            };
+          });
         });
       });
 
       // Execute all fetches in parallel
       const results = await Promise.all(fetchPromises);
       const allDocs = results.flat();
+
+      // Update overdue documents in Firestore (in parallel, silently)
+      if (documentsToUpdate.length > 0) {
+        const updatePromises = documentsToUpdate.map(({ rut, subcol, docId, newEstado }) =>
+          updateDoc(doc(db, 'empresas', rut, subcol, docId), { estado: newEstado })
+            .catch(err => console.warn(`Could not update ${docId}:`, err))
+        );
+        await Promise.all(updatePromises);
+      }
 
       setAllDocuments(allDocs);
 
@@ -330,6 +384,32 @@ const RIndex = () => {
     };
   }, [loading]);
 
+  // Helper to calculate effective status based on expiration date
+  const getEffectiveEstado = useCallback((doc) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    // Get expiration date
+    const fechaV = doc.fechaV?.seconds
+      ? new Date(doc.fechaV.seconds * 1000)
+      : doc.fechaV?.toDate
+      ? doc.fechaV.toDate()
+      : null;
+
+    if (fechaV) {
+      fechaV.setHours(0, 0, 0, 0);
+      const isOverdue = fechaV <= hoy;
+      const hasAbono = (doc.totalAbonado || 0) > 0;
+
+      if (isOverdue) {
+        if (doc.estado === 'pendiente') return 'vencido';
+        if (doc.estado === 'parcialmente_pagado' && hasAbono) return 'parcialmente_vencido';
+      }
+    }
+
+    return doc.estado;
+  }, []);
+
   // Filter documents for a specific month
   const getDocumentsForMonth = useCallback(
     (date) => {
@@ -348,12 +428,26 @@ const RIndex = () => {
   // Calculate stats for current month
   const currentMonthDocs = getDocumentsForMonth(currentDate);
 
-  const stats = useMemo(() => ({
-    total: currentMonthDocs.length,
-    pendiente: currentMonthDocs.filter((d) => d.estado === 'pendiente'),
-    pagado: currentMonthDocs.filter((d) => d.estado === 'pagado'),
-    vencido: currentMonthDocs.filter((d) => d.estado === 'vencido'),
-  }), [currentMonthDocs]);
+  const stats = useMemo(() => {
+    // Calculate effective status for each document
+    const docsWithEffectiveStatus = currentMonthDocs.map(doc => ({
+      ...doc,
+      effectiveEstado: getEffectiveEstado(doc),
+    }));
+
+    return {
+      total: docsWithEffectiveStatus.length,
+      pendiente: docsWithEffectiveStatus.filter((d) => d.effectiveEstado === 'pendiente'),
+      pagado: docsWithEffectiveStatus.filter((d) => d.effectiveEstado === 'pagado'),
+      vencido: docsWithEffectiveStatus.filter((d) =>
+        d.effectiveEstado === 'vencido' || d.effectiveEstado === 'parcialmente_vencido'
+      ),
+      // Documents with partial payments (to track abono amounts)
+      parcialmentePagado: docsWithEffectiveStatus.filter((d) =>
+        d.effectiveEstado === 'parcialmente_pagado' || d.effectiveEstado === 'parcialmente_vencido'
+      ),
+    };
+  }, [currentMonthDocs, getEffectiveEstado]);
 
   // Calculate totals (facturas/boletas add, notas de crédito subtract)
   const calculateTotal = useCallback((docs) => {
@@ -363,9 +457,41 @@ const RIndex = () => {
     }, 0);
   }, []);
 
-  const totalPendiente = calculateTotal(stats.pendiente);
-  const totalPagado = calculateTotal(stats.pagado);
-  const totalVencido = calculateTotal(stats.vencido);
+  // Calculate totals with abono handling
+  // For pendiente: use saldoPendiente if document has abonos
+  const totalPendiente = useMemo(() => {
+    return stats.pendiente.reduce((acc, doc) => {
+      const hasAbono = (doc.totalAbonado || 0) > 0;
+      const amount = hasAbono ? (doc.saldoPendiente || 0) : (doc.total || 0);
+      return acc + (doc.isAdditive ? amount : -amount);
+    }, 0);
+  }, [stats.pendiente]);
+
+  // For pagado: include full amounts of paid docs + totalAbonado from partially paid docs
+  const totalPagado = useMemo(() => {
+    let total = 0;
+    // Full payments
+    stats.pagado.forEach((doc) => {
+      const amount = doc.total || 0;
+      total += doc.isAdditive ? amount : -amount;
+    });
+    // Add abonos from partially paid/vencido documents
+    stats.parcialmentePagado.forEach((doc) => {
+      if (doc.isAdditive) {
+        total += doc.totalAbonado || 0;
+      }
+    });
+    return total;
+  }, [stats.pagado, stats.parcialmentePagado]);
+
+  // For vencido: use saldoPendiente if document has abonos
+  const totalVencido = useMemo(() => {
+    return stats.vencido.reduce((acc, doc) => {
+      const hasAbono = (doc.totalAbonado || 0) > 0;
+      const amount = hasAbono ? (doc.saldoPendiente || 0) : (doc.total || 0);
+      return acc + (doc.isAdditive ? amount : -amount);
+    }, 0);
+  }, [stats.vencido]);
 
   // Get data for last 6 months chart - now only showing NET
   const getMonthlyChartData = useCallback(() => {

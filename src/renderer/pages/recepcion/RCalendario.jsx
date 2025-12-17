@@ -106,19 +106,33 @@ const RCalendario = () => {
     const fechaV = docData.fechaV?.toDate ? docData.fechaV.toDate() : null;
     const isOverdue = fechaV && fechaV < hoy && docData.estado === 'pendiente';
 
+    // Calculate abono status
+    const totalAbonado = docData.totalAbonado ?? 0;
+    const totalOriginal = docData.totalDescontado ?? docData.total ?? 0;
+    const saldoPendiente = docData.saldoPendiente ?? totalOriginal;
+    const tieneAbonos = (docData.abonos?.length ?? 0) > 0;
+
+    // Build array of individual abono payments for calendar display
+    const abonosArray = docData.abonos || [];
+
     return {
       id: docSnap.id,
       tipo,
       rut,
       razon,
       numeroDoc: docData.numeroDoc,
-      total: docData.totalDescontado ?? docData.total,
+      total: totalOriginal,
+      saldoPendiente,
+      totalAbonado,
       estado: isOverdue ? 'vencido' : docData.estado,
       fechaE: docData.fechaE?.toDate ? docData.fechaE.toDate() : null,
       fechaV,
       fechaPago: fechaPagoDate,
       fechaProceso: fechaProcesoDate,
       formaPago: docData.formaPago,
+      // Abono tracking
+      tieneAbonos,
+      abonos: abonosArray,
     };
   }, []);
 
@@ -353,26 +367,64 @@ const RCalendario = () => {
   const documentsByDate = useMemo(() => {
     const map = {
       expiring: {}, // Unpaid documents expiring on each date (fechaV) - yellow for future, red for past
-      paid: {}, // Documents paid on each date (fechaPago) - green
+      paid: {}, // Documents/abonos paid on each date - green
     };
 
     filteredDocuments.forEach((doc) => {
-      // Add to expiring map ONLY if has fechaV AND is NOT paid
+      // Add to expiring map ONLY if has fechaV AND is NOT fully paid
+      // For documents with abonos, show saldoPendiente instead of total
       if (doc.fechaV && doc.estado !== 'pagado') {
         const dateKey = doc.fechaV.toDateString();
         if (!map.expiring[dateKey]) {
           map.expiring[dateKey] = [];
         }
-        map.expiring[dateKey].push(doc);
+        // Use saldoPendiente for display if document has abonos
+        map.expiring[dateKey].push({
+          ...doc,
+          displayTotal: doc.tieneAbonos ? doc.saldoPendiente : doc.total,
+        });
       }
 
-      // Add to paid map if has fechaPago
-      if (doc.fechaPago) {
+      // Add individual abono payments to paid map
+      if (doc.abonos && doc.abonos.length > 0) {
+        doc.abonos.forEach((abono) => {
+          // Parse abono date
+          let abonoDate = null;
+          if (abono.fecha?.toDate) {
+            abonoDate = abono.fecha.toDate();
+          } else if (abono.fecha?.seconds) {
+            abonoDate = new Date(abono.fecha.seconds * 1000);
+          } else if (abono.fecha instanceof Date) {
+            abonoDate = abono.fecha;
+          }
+
+          if (abonoDate) {
+            const dateKey = abonoDate.toDateString();
+            if (!map.paid[dateKey]) {
+              map.paid[dateKey] = [];
+            }
+            map.paid[dateKey].push({
+              ...doc,
+              displayTotal: abono.monto,
+              isAbonoEntry: true,
+              abonoMonto: abono.monto,
+              abonoFecha: abonoDate,
+              abonoUsuario: abono.usuario,
+              abonoNumeroEgreso: abono.numeroEgreso,
+            });
+          }
+        });
+      } else if (doc.fechaPago && doc.estado === 'pagado') {
+        // Full payment without abonos array - add to paid map
         const dateKey = doc.fechaPago.toDateString();
         if (!map.paid[dateKey]) {
           map.paid[dateKey] = [];
         }
-        map.paid[dateKey].push(doc);
+        map.paid[dateKey].push({
+          ...doc,
+          displayTotal: doc.total,
+          isAbonoEntry: false,
+        });
       }
     });
 
@@ -389,25 +441,50 @@ const RCalendario = () => {
     let overdueTotal = 0;
 
     filteredDocuments.forEach((doc) => {
-      // Check if document expires this month AND is NOT paid
+      // Check if document expires this month AND is NOT fully paid
+      // For documents with abonos, use saldoPendiente for pending/overdue totals
       if (doc.fechaV && doc.estado !== 'pagado') {
         const docMonth = doc.fechaV.getMonth();
         const docYear = doc.fechaV.getFullYear();
         if (docMonth === currentMonth && docYear === currentYear) {
+          // Use saldoPendiente if document has abonos
+          const amountRemaining = doc.tieneAbonos ? (doc.saldoPendiente || 0) : (doc.total || 0);
+
           // Check if overdue (today or past due date)
           if (doc.fechaV <= today) {
             overdueCount++;
-            overdueTotal += doc.total || 0;
+            overdueTotal += amountRemaining;
           } else {
             // Future expiring
             pendingCount++;
-            pendingTotal += doc.total || 0;
+            pendingTotal += amountRemaining;
           }
         }
       }
 
-      // Check if document was paid this month
-      if (doc.fechaPago) {
+      // Check abono payments made this month
+      if (doc.abonos && doc.abonos.length > 0) {
+        doc.abonos.forEach((abono) => {
+          let abonoDate = null;
+          if (abono.fecha?.toDate) {
+            abonoDate = abono.fecha.toDate();
+          } else if (abono.fecha?.seconds) {
+            abonoDate = new Date(abono.fecha.seconds * 1000);
+          } else if (abono.fecha instanceof Date) {
+            abonoDate = abono.fecha;
+          }
+
+          if (abonoDate) {
+            const docMonth = abonoDate.getMonth();
+            const docYear = abonoDate.getFullYear();
+            if (docMonth === currentMonth && docYear === currentYear) {
+              paidCount++;
+              paidTotal += abono.monto || 0;
+            }
+          }
+        });
+      } else if (doc.fechaPago && doc.estado === 'pagado') {
+        // Full payment without abonos array
         const docMonth = doc.fechaPago.getMonth();
         const docYear = doc.fechaPago.getFullYear();
         if (docMonth === currentMonth && docYear === currentYear) {
@@ -912,6 +989,12 @@ const RCalendario = () => {
                                       VENCIDO
                                     </span>
                                   )}
+                                  {doc.tieneAbonos && (
+                                    <span
+                                      className="w-2 h-2 rounded-full bg-cyan-400 inline-block"
+                                      title="Con abono"
+                                    />
+                                  )}
                                 </div>
                                 <div
                                   className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
@@ -923,12 +1006,12 @@ const RCalendario = () => {
                                 <div
                                   className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
                                 >
-                                  {formatCLP(doc.total)}
+                                  {formatCLP(doc.displayTotal || doc.total)}
                                 </div>
                                 <div
                                   className={`text-xs capitalize ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
                                 >
-                                  {doc.estado}
+                                  {doc.estado === 'parcialmente_vencido' ? 'Parc. vencido' : doc.estado}
                                 </div>
                               </div>
                             </div>
@@ -957,7 +1040,7 @@ const RCalendario = () => {
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success font-medium">
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-success/20 text-success">
                               {getDocTypeShort(doc.tipo)}
                             </span>
                             <span
@@ -965,6 +1048,12 @@ const RCalendario = () => {
                             >
                               N° {doc.numeroDoc}
                             </span>
+                            {doc.isAbonoEntry && (
+                              <span
+                                className="w-2 h-2 rounded-full bg-cyan-400 inline-block"
+                                title="Abono"
+                              />
+                            )}
                           </div>
                           <div
                             className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
@@ -976,9 +1065,11 @@ const RCalendario = () => {
                           <div
                             className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
                           >
-                            {formatCLP(doc.total)}
+                            {formatCLP(doc.displayTotal || doc.total)}
                           </div>
-                          <div className="text-xs text-success capitalize">Pagado</div>
+                          <div className="text-xs text-success">
+                            {doc.isAbonoEntry ? 'Abono' : 'Pagado'}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -997,7 +1088,7 @@ const RCalendario = () => {
                   {/* Expiring/Overdue Total */}
                   {selectedDayDocuments.expiring.length > 0 && (() => {
                     const isOverdueDate = selectedDay <= today;
-                    const expiringTotal = selectedDayDocuments.expiring.reduce((sum, doc) => sum + (doc.total || 0), 0);
+                    const expiringTotal = selectedDayDocuments.expiring.reduce((sum, doc) => sum + (doc.displayTotal || doc.total || 0), 0);
                     return (
                       <div className={`p-4 rounded-xl ${isOverdueDate ? 'bg-danger/10 border border-danger/30' : 'bg-yellow-500/10 border border-yellow-500/30'}`}>
                         <div className="flex items-center gap-2 mb-2">
@@ -1018,7 +1109,7 @@ const RCalendario = () => {
 
                   {/* Paid Total */}
                   {selectedDayDocuments.paid.length > 0 && (() => {
-                    const paidTotal = selectedDayDocuments.paid.reduce((sum, doc) => sum + (doc.total || 0), 0);
+                    const paidTotal = selectedDayDocuments.paid.reduce((sum, doc) => sum + (doc.displayTotal || doc.total || 0), 0);
                     return (
                       <div className="p-4 rounded-xl bg-success/10 border border-success/30">
                         <div className="flex items-center gap-2 mb-2">
@@ -1029,7 +1120,7 @@ const RCalendario = () => {
                           {formatCLP(paidTotal)}
                         </div>
                         <div className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
-                          {selectedDayDocuments.paid.length} documento{selectedDayDocuments.paid.length !== 1 ? 's' : ''}
+                          {selectedDayDocuments.paid.length} pago{selectedDayDocuments.paid.length !== 1 ? 's' : ''}
                         </div>
                       </div>
                     );

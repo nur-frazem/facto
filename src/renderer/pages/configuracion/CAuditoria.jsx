@@ -29,8 +29,10 @@ const TIPO_ACCION_LABELS = {
   edicion: "Editado",
   creacion: "Creado",
   pago: "Procesado",
+  abono: "Abonado",
   revinculacion: "Revinculado",
-  reversion_pago: "Reversión"
+  reversion_pago: "Reversión",
+  reversion_abono: "Abono revertido"
 };
 
 // Labels for reversal sub-actions
@@ -228,8 +230,10 @@ const CAuditoria = () => {
                             log.tipo === "eliminacion" ? "bg-danger/20 text-danger" :
                             log.tipo === "edicion" ? (isLightTheme ? "bg-yellow-100 text-yellow-700" : "bg-yellow-500/20 text-yellow-400") :
                             log.tipo === "pago" ? "bg-success/20 text-success" :
+                            log.tipo === "abono" ? (isLightTheme ? "bg-cyan-100 text-cyan-700" : "bg-cyan-500/20 text-cyan-400") :
                             log.tipo === "revinculacion" ? (isLightTheme ? "bg-purple-100 text-purple-700" : "bg-purple-500/20 text-purple-400") :
                             log.tipo === "reversion_pago" ? (isLightTheme ? "bg-orange-100 text-orange-700" : "bg-orange-500/20 text-orange-400") :
+                            log.tipo === "reversion_abono" ? (isLightTheme ? "bg-rose-100 text-rose-700" : "bg-rose-500/20 text-rose-400") :
                             log.tipo === "creacion" ? "bg-accent-blue/20 text-accent-blue" :
                             "bg-primary/20 text-primary"
                           }`}>
@@ -239,6 +243,8 @@ const CAuditoria = () => {
                         <div className="col-span-3 truncate">
                           {log.tipo === "reversion_pago"
                             ? `Egreso #${log.numeroEgreso || "--"}`
+                            : log.tipo === "reversion_abono"
+                            ? `Egreso #${log.numeroEgreso || "--"} - Doc #${log.documento?.numeroDoc || "--"}`
                             : `${getTipoDocLabel(log.tipoDocumento)} #${log.numeroDocumento}`
                           }
                         </div>
@@ -300,8 +306,10 @@ const CAuditoria = () => {
                     selectedLog.tipo === "eliminacion" ? "bg-danger/20 text-danger" :
                     selectedLog.tipo === "edicion" ? "bg-yellow-500/20 text-yellow-400" :
                     selectedLog.tipo === "pago" ? "bg-success/20 text-success" :
+                    selectedLog.tipo === "abono" ? (isLightTheme ? "bg-cyan-100 text-cyan-700" : "bg-cyan-500/20 text-cyan-400") :
                     selectedLog.tipo === "revinculacion" ? "bg-purple-500/20 text-purple-400" :
                     selectedLog.tipo === "reversion_pago" ? "bg-orange-500/20 text-orange-400" :
+                    selectedLog.tipo === "reversion_abono" ? (isLightTheme ? "bg-rose-100 text-rose-700" : "bg-rose-500/20 text-rose-400") :
                     selectedLog.tipo === "creacion" ? "bg-accent-blue/20 text-accent-blue" :
                     "bg-primary/20 text-primary"
                   }`}>
@@ -318,7 +326,7 @@ const CAuditoria = () => {
             </div>
 
             {/* Document info - Regular documents */}
-            {selectedLog.tipo !== "reversion_pago" && (
+            {selectedLog.tipo !== "reversion_pago" && selectedLog.tipo !== "reversion_abono" && (
               <div className={`rounded-lg p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-surface-dark'}`}>
                 <div className={`text-xs mb-2 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Documento</div>
                 <div className="grid grid-cols-2 gap-4">
@@ -553,6 +561,98 @@ const CAuditoria = () => {
                     <div>
                       <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Procesado por</div>
                       <div className="truncate">{selectedLog.procesadoPor}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Abono details (if partial payment) */}
+            {selectedLog.tipo === "abono" && (
+              <div className={`rounded-lg p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-surface-dark'}`}>
+                <div className={`text-xs mb-2 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Detalles del abono</div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {selectedLog.numeroEgreso && (
+                    <div>
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>N° Egreso</div>
+                      <div className="font-mono text-accent-blue">{selectedLog.numeroEgreso}</div>
+                    </div>
+                  )}
+                  {selectedLog.montoAbonado !== undefined && (
+                    <div>
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Monto abonado</div>
+                      <div className={isLightTheme ? "text-cyan-600" : "text-cyan-400"}>{formatCLP(selectedLog.montoAbonado)}</div>
+                    </div>
+                  )}
+                  {selectedLog.saldoRestante !== undefined && (
+                    <div>
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Saldo restante</div>
+                      <div className={selectedLog.saldoRestante > 0 ? "text-yellow-400" : "text-green-400"}>{formatCLP(selectedLog.saldoRestante)}</div>
+                    </div>
+                  )}
+                  {selectedLog.total && (
+                    <div>
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Total documento</div>
+                      <div>{formatCLP(selectedLog.total)}</div>
+                    </div>
+                  )}
+                  {selectedLog.fechaPago && (
+                    <div>
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Fecha de Pago</div>
+                      <div>{formatDate(selectedLog.fechaPago)}</div>
+                    </div>
+                  )}
+                  {selectedLog.procesadoPor && (
+                    <div>
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Procesado por</div>
+                      <div className="truncate">{selectedLog.procesadoPor}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Reversion abono details */}
+            {selectedLog.tipo === "reversion_abono" && (
+              <div className={`rounded-lg p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-surface-dark'}`}>
+                <div className={`text-xs mb-2 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Detalles de la reversión de abono</div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  {selectedLog.numeroEgreso && (
+                    <div>
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>N° Egreso revertido</div>
+                      <div className={`font-mono ${isLightTheme ? 'text-rose-600' : 'text-rose-400'}`}>{selectedLog.numeroEgreso}</div>
+                    </div>
+                  )}
+                  {selectedLog.documento && (
+                    <>
+                      <div>
+                        <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Documento</div>
+                        <div className="font-mono">
+                          {getTipoDocLabel(selectedLog.documento.tipoDoc)} #{selectedLog.documento.numeroDoc}
+                        </div>
+                      </div>
+                      <div>
+                        <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Empresa (RUT)</div>
+                        <div>{selectedLog.documento.rut ? formatRUT(selectedLog.documento.rut) : "--"}</div>
+                      </div>
+                      {selectedLog.documento.montoRevertido && (
+                        <div>
+                          <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Monto revertido</div>
+                          <div className={isLightTheme ? "text-rose-600" : "text-rose-400"}>{formatCLP(selectedLog.documento.montoRevertido)}</div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {selectedLog.reversadoPor && (
+                    <div>
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Reversado por</div>
+                      <div className="truncate">{selectedLog.reversadoPor}</div>
+                    </div>
+                  )}
+                  {selectedLog.descripcion && (
+                    <div className="col-span-2">
+                      <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Descripción</div>
+                      <div>{selectedLog.descripcion}</div>
                     </div>
                   )}
                 </div>
