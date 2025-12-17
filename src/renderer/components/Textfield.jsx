@@ -45,6 +45,7 @@ export function Textfield({
   classNameLabel = "",
   classNameInput = "",
   currency = false,
+  allowNegative = false, // New prop to allow negative numbers in currency fields
 }) {
   const { isLightTheme } = useTheme();
   const [countryCode, setCountryCode] = useState("+56");
@@ -80,12 +81,27 @@ export function Textfield({
   // === ON CHANGE HANDLER ===
   const handleChange = (e) => {
     if (currency) {
-      const raw = e.target.value.replace(/\D/g, "");
-      onChange?.({
-        ...e,
-        target: { ...e.target, value: raw ? parseInt(raw, 10) : "" }
-      });
-      if (!onChange) setInternalValue(raw);
+      let raw;
+      if (allowNegative) {
+        // Allow negative sign at the beginning, then only digits
+        const inputVal = e.target.value;
+        const isNegative = inputVal.startsWith("-") || inputVal.includes("-");
+        const digits = inputVal.replace(/[^0-9]/g, "");
+        raw = isNegative && digits ? `-${digits}` : digits;
+        const numericValue = raw ? parseInt(raw, 10) : "";
+        onChange?.({
+          ...e,
+          target: { ...e.target, value: numericValue }
+        });
+        if (!onChange) setInternalValue(raw);
+      } else {
+        raw = e.target.value.replace(/\D/g, "");
+        onChange?.({
+          ...e,
+          target: { ...e.target, value: raw ? parseInt(raw, 10) : "" }
+        });
+        if (!onChange) setInternalValue(raw);
+      }
     } else if (type === "rut") {
       const raw = e.target.value.replace(/[^0-9kK]/g, "").toUpperCase();
       onChange?.({

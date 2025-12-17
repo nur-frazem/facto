@@ -858,27 +858,55 @@ const RRevisionDocumentos = () => {
           setErrorModal('Error: No se encontraron egresos asociados a este documento.');
         }
       } else if (puedeReversarPago && docData.estado === 'pagado') {
-        // Si es admin/super_admin y el documento está pagado, buscar el egreso
-        const egreso = await findEgresoForDocument(rut, numeroDoc, tipoDoc);
+        // Si es admin/super_admin y el documento está pagado, buscar TODOS los egresos
+        const egresos = await findAllEgresosForDocument(rut, numeroDoc, tipoDoc);
 
-        if (egreso) {
+        if (egresos.length > 0) {
           // Preparar datos del documento actual
           handleSetParams(docData, tipoDoc);
           setDeleteInfo({ rut, tipoDoc, numeroDoc });
           setCurrentDocRut(rut);
           setCurrentDocTipo(tipoDoc);
 
-          // Guardar datos del egreso
-          setEgresoData(egreso);
+          // Determinar si el documento tiene múltiples abonos reales (pagos parciales en diferentes egresos)
+          // Un documento tiene abonos reales si:
+          // 1. Tiene un array de abonos con más de 1 entrada, O
+          // 2. Está en múltiples egresos diferentes (egresos.length > 1)
+          const tieneAbonosReales =
+            (docData.abonos && docData.abonos.length > 1) ||
+            egresos.length > 1;
 
-          // Preparar lista de todos los documentos del egreso
-          const todosDocumentos = prepararDocumentosEgreso(egreso);
-          setEgresoDocumentos(todosDocumentos);
-          setDocumentosAEliminar([]);
-          setAccionReversar('');
+          if (tieneAbonosReales) {
+            // Documento con múltiples abonos - mostrar modal de reversión de abonos
+            setDocumentoActualAbono({
+              rut,
+              numeroDoc,
+              tipoDoc,
+              total: docData.total,
+              totalAbonado: docData.totalAbonado || docData.totalDescontado || docData.total,
+              saldoPendiente: docData.saldoPendiente || 0,
+              abonos: docData.abonos || [],
+            });
+            setEgresosConAbono(egresos);
+            setEgresosSeleccionados([]);
 
-          // Mostrar modal de reversión de pago
-          setReversarPagoModal(true);
+            // Mostrar modal de reversión de abonos
+            setReversarAbonoModal(true);
+          } else {
+            // Pago único (un solo egreso, sin múltiples abonos)
+            // Usar el modal de reversión de pago tradicional
+            const egreso = egresos[0];
+            setEgresoData(egreso);
+
+            // Preparar lista de todos los documentos del egreso
+            const todosDocumentos = prepararDocumentosEgreso(egreso);
+            setEgresoDocumentos(todosDocumentos);
+            setDocumentosAEliminar([]);
+            setAccionReversar('');
+
+            // Mostrar modal de reversión de pago
+            setReversarPagoModal(true);
+          }
         } else {
           setErrorModal('Error: No se encontró el egreso asociado a este documento.');
         }

@@ -387,7 +387,14 @@ const RCalendario = () => {
 
       // Add individual abono payments to paid map
       if (doc.abonos && doc.abonos.length > 0) {
-        doc.abonos.forEach((abono) => {
+        // Determine if this is a true partial payment scenario or a full payment with abonos array
+        // A full payment has: estado === 'pagado' AND only 1 abono AND that abono equals the total
+        const isFullPaymentWithAbono =
+          doc.estado === 'pagado' &&
+          doc.abonos.length === 1 &&
+          doc.abonos[0].monto >= (doc.total || 0);
+
+        doc.abonos.forEach((abono, index) => {
           // Parse abono date
           let abonoDate = null;
           if (abono.fecha?.toDate) {
@@ -403,10 +410,14 @@ const RCalendario = () => {
             if (!map.paid[dateKey]) {
               map.paid[dateKey] = [];
             }
+
+            // If it's a full payment (single abono that covers the total), mark as not an abono entry
+            const isActualAbono = !isFullPaymentWithAbono;
+
             map.paid[dateKey].push({
               ...doc,
               displayTotal: abono.monto,
-              isAbonoEntry: true,
+              isAbonoEntry: isActualAbono,
               abonoMonto: abono.monto,
               abonoFecha: abonoDate,
               abonoUsuario: abono.usuario,

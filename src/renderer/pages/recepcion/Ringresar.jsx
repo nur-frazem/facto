@@ -12,7 +12,7 @@ import { doc, setDoc, getDoc, collection, onSnapshot, runTransaction, addDoc } f
 import { db } from "../../../firebaseConfig";
 
 import { formatRUT, cleanRUT } from "../../utils/formatRUT";
-import { validateNumeroDoc, validateAmount, validateNeto, validateTotal, validateEmissionDate, validateDueDate } from "../../utils/validation";
+import { validateNumeroDoc, validateAmount, validateNeto, validateTotal, validateEmissionDate, validateDueDate, validateRetencion } from "../../utils/validation";
 
 import { getAuth } from "firebase/auth";
 
@@ -130,8 +130,9 @@ const RIngresar = () => {
   }, [neto, flete, selectedDoc]);
 
   // Total calculado (Factura exenta no incluye IVA)
+  // Retención es aditiva por defecto, pero puede ser negativa si el usuario lo especifica
   const ivaParaTotal = selectedDoc === "Factura exenta" ? 0 : (Number(iva) || 0);
-  const total = (Number(neto) || 0) + ivaParaTotal + (Number(otros) || 0) + (Number(flete) || 0) - (Number(retencion) || 0);
+  const total = (Number(neto) || 0) + ivaParaTotal + (Number(otros) || 0) + (Number(flete) || 0) + (Number(retencion) || 0);
 
   useEffect(() => {
     setFormaPago("");
@@ -203,8 +204,7 @@ const RIngresar = () => {
     if (selectedGiro && selectedDoc && neto === "") newErrors.neto = ECampo;
     // IVA no es requerido para Factura exenta
     if (selectedGiro && selectedDoc && selectedDoc !== "Factura exenta" && iva === "") newErrors.iva = ECampo;
-    if (selectedGiro && selectedDoc && flete === "") newErrors.flete = ECampo;
-    if (selectedGiro && selectedDoc && retencion === "") newErrors.retencion = ECampo;
+    // flete y retencion no son campos obligatorios - se tratan como 0 si están vacíos
   
     setErrors(newErrors);
 
@@ -242,7 +242,7 @@ const RIngresar = () => {
     const fleteResult = validateAmount(flete, "flete");
     if (!fleteResult.valid) validationErrors.push(fleteResult.error);
 
-    const retencionResult = validateAmount(retencion, "retención");
+    const retencionResult = validateRetencion(retencion, neto);
     if (!retencionResult.valid) validationErrors.push(retencionResult.error);
 
     // Validate total is positive
@@ -917,6 +917,7 @@ const RIngresar = () => {
                     }}
                     placeholder="$0"
                     currency
+                    allowNegative
                     readOnly={!selectedDoc}
                     classNameInput={errors.retencion ? "ring-red-400 ring-2" : ""}
                   />

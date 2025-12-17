@@ -39,6 +39,29 @@ export const validateAmount = (amount, fieldName = "monto") => {
 };
 
 /**
+ * Validates retención amount - allows negative numbers but absolute value cannot exceed neto
+ * @param {string|number} retencion - Retención amount to validate
+ * @param {string|number} neto - Neto amount to compare against
+ * @returns {{ valid: boolean, error?: string }}
+ */
+export const validateRetencion = (retencion, neto) => {
+  const retencionNum = Number(retencion);
+  const netoNum = Number(neto) || 0;
+
+  if (isNaN(retencionNum)) {
+    return { valid: false, error: "La retención debe ser un número válido" };
+  }
+  if (Math.abs(retencionNum) > 999999999999) {
+    return { valid: false, error: "La retención es demasiado grande" };
+  }
+  // The absolute value of retención cannot exceed neto
+  if (Math.abs(retencionNum) > netoNum) {
+    return { valid: false, error: "La retención no puede exceder el monto neto" };
+  }
+  return { valid: true };
+};
+
+/**
  * Validates neto amount with specific limit of $999.999.999
  * @param {string|number} neto - Neto amount to validate
  * @returns {{ valid: boolean, error?: string }}
