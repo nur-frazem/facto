@@ -2819,7 +2819,13 @@ const RRevisionDocumentos = () => {
                             className={`text-sm ml-auto ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
                           >
                             {empresa.documentos.length} documento
-                            {empresa.documentos.length !== 1 ? 's' : ''}
+                            {empresa.documentos.length !== 1 ? 's' : ''} •{' '}
+                            <span className="font-medium">
+                              $
+                              {empresa.documentos
+                                .reduce((sum, doc) => sum + (doc.total || 0), 0)
+                                .toLocaleString('es-CL')}
+                            </span>
                           </p>
                         </button>
 

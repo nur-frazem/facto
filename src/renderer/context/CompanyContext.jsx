@@ -80,8 +80,12 @@ export function CompanyProvider({ children }) {
   const [error, setError] = useState(null);
   const isLoggingOutRef = useRef(false);
 
-  // Get available companies from userData
-  const availableCompanies = userData?.empresas || [];
+  // Get available companies from userData (handles both old array and new object structure)
+  const availableCompanies = userData?.empresas
+    ? (Array.isArray(userData.empresas)
+        ? userData.empresas  // Old structure: array of RUTs
+        : Object.keys(userData.empresas))  // New structure: object with RUT keys
+    : [];
 
   // Check if a company exists in Firestore
   const validateCompanyExists = useCallback(async (rut) => {
@@ -112,12 +116,17 @@ export function CompanyProvider({ children }) {
     localStorage.setItem(SELECTED_COMPANY_KEY, cleanedRut);
   }, []);
 
-  // Check if user has access to a specific company
+  // Check if user has access to a specific company (handles both old and new structure)
   const hasAccessToCompany = useCallback((rut) => {
-    if (!rut || availableCompanies.length === 0) return false;
+    if (!rut || !userData?.empresas) return false;
     const cleanedRut = cleanRut(rut);
-    return availableCompanies.includes(cleanedRut);
-  }, [availableCompanies]);
+
+    // Handle both old array and new object structure
+    if (Array.isArray(userData.empresas)) {
+      return userData.empresas.includes(cleanedRut);
+    }
+    return cleanedRut in userData.empresas;
+  }, [userData?.empresas]);
 
   // Load saved company from localStorage on mount
   useEffect(() => {

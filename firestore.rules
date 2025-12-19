@@ -24,8 +24,11 @@ service cloud.firestore {
              (getUserData().activo == true || getUserData().activo == "true");
     }
 
-    function getUserRole() {
-      return getUserData().rol;
+    // Get user's role for a specific company (per-company roles structure)
+    function getUserRoleForCompany(companyRut) {
+      let userData = getUserData();
+      // New structure: empresas is an object with RUT keys and role values
+      return userData.empresas[companyRut];
     }
 
     // Check if user has access to a specific company
@@ -33,42 +36,52 @@ service cloud.firestore {
       return isActive() && companyRut in getUserData().empresas;
     }
 
-    // Role checks
-    function isSuperAdmin() {
-      return isActive() && getUserRole() == 'super_admin';
+    // Role checks with company access (per-company roles)
+    function isSuperAdminForCompany(companyRut) {
+      return hasCompanyAccess(companyRut) && getUserRoleForCompany(companyRut) == 'super_admin';
     }
 
-    function isAdmin() {
-      return isActive() && (getUserRole() == 'admin' || getUserRole() == 'super_admin');
-    }
-
-    function isGestor() {
-      return isActive() && (getUserRole() == 'gestor' || isAdmin());
-    }
-
-    function isDigitador() {
-      return isActive() && (getUserRole() == 'digitador' || isGestor());
-    }
-
-    function isVisor() {
-      return isActive(); // All active users can at least view
-    }
-
-    // Role checks with company access
     function isAdminWithAccess(companyRut) {
-      return hasCompanyAccess(companyRut) && isAdmin();
+      return hasCompanyAccess(companyRut) &&
+             (getUserRoleForCompany(companyRut) == 'admin' || getUserRoleForCompany(companyRut) == 'super_admin');
     }
 
     function isGestorWithAccess(companyRut) {
-      return hasCompanyAccess(companyRut) && isGestor();
+      return hasCompanyAccess(companyRut) &&
+             (getUserRoleForCompany(companyRut) == 'gestor' ||
+              getUserRoleForCompany(companyRut) == 'admin' ||
+              getUserRoleForCompany(companyRut) == 'super_admin');
     }
 
     function isDigitadorWithAccess(companyRut) {
-      return hasCompanyAccess(companyRut) && isDigitador();
+      return hasCompanyAccess(companyRut) &&
+             (getUserRoleForCompany(companyRut) == 'digitador' ||
+              getUserRoleForCompany(companyRut) == 'gestor' ||
+              getUserRoleForCompany(companyRut) == 'admin' ||
+              getUserRoleForCompany(companyRut) == 'super_admin');
     }
 
     function isVisorWithAccess(companyRut) {
-      return hasCompanyAccess(companyRut) && isVisor();
+      return hasCompanyAccess(companyRut); // All active users with access can at least view
+    }
+
+    // Check if user is admin using OLD structure (global rol field)
+    function isAdminOldStructure() {
+      let userData = getUserData();
+      return isActive() && userData.rol != null &&
+             (userData.rol == 'admin' || userData.rol == 'super_admin');
+    }
+
+    // Check if user is admin in at least one company using NEW structure
+    function isAdminNewStructure() {
+      let empresas = getUserData().empresas;
+      // Check if any of the user's company roles is admin or super_admin
+      return isActive() && empresas.values().hasAny(['admin', 'super_admin']);
+    }
+
+    // Check if user is admin in any company (handles both old and new structures)
+    function isAdminInAnyCompany() {
+      return isAdminOldStructure() || isAdminNewStructure();
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -77,10 +90,12 @@ service cloud.firestore {
     match /usuarios/{email} {
       // Users can read their own document
       allow read: if isAuthenticated() && request.auth.token.email == email;
-      // Admins can read all users
-      allow read: if isAdmin();
-      // Only super_admin and admin can manage users
-      allow write: if isAdmin();
+      // Users can update their own document (for migration and profile updates)
+      allow update: if isAuthenticated() && request.auth.token.email == email;
+      // Admins (in any company) can read all users
+      allow read: if isAdminInAnyCompany();
+      // Only super_admin and admin (in any company) can create or manage other users
+      allow write: if isAdminInAnyCompany();
     }
 
     // ═══════════════════════════════════════════════════════════════

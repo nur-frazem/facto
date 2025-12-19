@@ -101,8 +101,30 @@ const CRolesUsuarios = () => {
     return () => unsubscribe();
   }, []);
 
-  // Contar administradores actuales
-  const cantidadAdmins = usuarios.filter((u) => u.rol === ROLES.ADMIN).length;
+  // Helper to get user's role for current company
+  const getUserRoleForCompany = (usuario) => {
+    if (!usuario.empresas || !currentCompanyRUT) return null;
+    // Handle both old (array + global rol) and new (object) structure
+    if (Array.isArray(usuario.empresas)) {
+      return usuario.rol || null;
+    }
+    return usuario.empresas[currentCompanyRUT] || null;
+  };
+
+  // Check if user has access to current company
+  const userHasAccessToCurrentCompany = (usuario) => {
+    if (!usuario.empresas || !currentCompanyRUT) return false;
+    if (Array.isArray(usuario.empresas)) {
+      return usuario.empresas.includes(currentCompanyRUT);
+    }
+    return currentCompanyRUT in usuario.empresas;
+  };
+
+  // Filter users to only those with access to current company
+  const usuariosDeEmpresa = usuarios.filter(userHasAccessToCurrentCompany);
+
+  // Contar administradores actuales (for current company only)
+  const cantidadAdmins = usuariosDeEmpresa.filter((u) => getUserRoleForCompany(u) === ROLES.ADMIN).length;
 
   // Validar email
   const validarEmail = (email) => {
@@ -139,16 +161,54 @@ const CRolesUsuarios = () => {
         const docSnap = await getDoc(userDocRef);
 
         if (docSnap.exists()) {
+          const existingUserData = docSnap.data();
+          const existingEmpresas = existingUserData.empresas || {};
+
+          // Check if user already has access to current company
+          const alreadyHasAccess = typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
+            ? currentCompanyRUT in existingEmpresas
+            : Array.isArray(existingEmpresas) && existingEmpresas.includes(currentCompanyRUT);
+
+          if (alreadyHasAccess) {
+            setLoadingModal(false);
+            setAlertModal({
+              open: true,
+              title: 'Error',
+              message: 'Este usuario ya tiene acceso a esta empresa',
+              variant: 'error',
+            });
+            return;
+          }
+
+          // User exists but doesn't have access to current company - add them
+          const updatedEmpresas = typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
+            ? { ...existingEmpresas, [currentCompanyRUT]: nuevoRol }
+            : { [currentCompanyRUT]: nuevoRol }; // Convert from old array structure
+
+          await setDoc(
+            userDocRef,
+            {
+              empresas: updatedEmpresas,
+              fechaModificacion: serverTimestamp(),
+              modificadoPor: userData?.email || 'sistema',
+            },
+            { merge: true }
+          );
+
           setLoadingModal(false);
+          setShowModal(false);
+          handleResetNuevo();
+
           setAlertModal({
             open: true,
-            title: 'Error',
-            message: 'Ya existe un usuario con este email',
-            variant: 'error',
+            title: 'Usuario agregado',
+            message: `El usuario ${nuevoEmail} ya existía y ha sido agregado a esta empresa con rol ${ROLES_LABELS[nuevoRol]}.`,
+            variant: 'success',
           });
           return;
         }
 
+        // User doesn't exist - create new user in Auth and Firestore
         // Crear una instancia secundaria de Firebase para crear el usuario
         // sin afectar la sesión actual
         const firebaseConfig = {
@@ -175,13 +235,12 @@ const CRolesUsuarios = () => {
         await deleteApp(secondaryApp);
         secondaryApp = null;
 
-        // Crear documento en Firestore
+        // Crear documento en Firestore (new per-company role structure)
         await setDoc(userDocRef, {
           email: nuevoEmail.toLowerCase(),
           nombre: nuevoNombre,
-          rol: nuevoRol,
           activo: true,
-          empresas: [currentCompanyRUT], // Grant access to current company
+          empresas: { [currentCompanyRUT]: nuevoRol }, // Role is per-company
           fechaCreacion: serverTimestamp(),
           creadoPor: userData?.email || 'sistema',
         });
@@ -197,23 +256,61 @@ const CRolesUsuarios = () => {
           variant: 'success',
         });
       } catch (err) {
-        console.error('Error creando usuario:', err);
-
         // Limpiar la app secundaria si existe
         if (secondaryApp) {
           try {
             await deleteApp(secondaryApp);
-          } catch (e) {
-            console.error('Error eliminando app secundaria:', e);
+          } catch {
+            // Silent cleanup
           }
         }
 
+        // Special case: Auth user exists but Firestore doc doesn't (user was previously deleted from Firestore)
+        // In this case, just create the Firestore document to re-associate the user
+        // This is expected behavior, not an error
+        if (err.code === 'auth/email-already-in-use') {
+          try {
+            const userDocRef = doc(db, 'usuarios', nuevoEmail.toLowerCase());
+            await setDoc(userDocRef, {
+              email: nuevoEmail.toLowerCase(),
+              nombre: nuevoNombre,
+              activo: true,
+              empresas: { [currentCompanyRUT]: nuevoRol },
+              fechaCreacion: serverTimestamp(),
+              creadoPor: userData?.email || 'sistema',
+              reactivado: true, // Flag to indicate this user was re-associated
+            });
+
+            setLoadingModal(false);
+            setShowModal(false);
+            handleResetNuevo();
+
+            setAlertModal({
+              open: true,
+              title: 'Usuario reasociado',
+              message: `El usuario ${nuevoEmail} ya existía en el sistema y ha sido reasociado. La contraseña anterior sigue vigente (puede usar "¿Olvidaste tu contraseña?" si no la recuerda).`,
+              variant: 'success',
+            });
+            return;
+          } catch (firestoreErr) {
+            console.error('Error creando documento Firestore:', firestoreErr);
+            setLoadingModal(false);
+            setAlertModal({
+              open: true,
+              title: 'Error',
+              message: 'El email existe en Auth pero no se pudo crear el documento en Firestore',
+              variant: 'error',
+            });
+            return;
+          }
+        }
+
+        // Log unexpected errors (not the handled auth/email-already-in-use case)
+        console.error('Error creando usuario:', err);
         setLoadingModal(false);
 
         let errorMsg = 'Error al crear el usuario';
-        if (err.code === 'auth/email-already-in-use') {
-          errorMsg = 'Este email ya está registrado en Firebase Auth';
-        } else if (err.code === 'auth/invalid-email') {
+        if (err.code === 'auth/invalid-email') {
           errorMsg = 'El email no es válido';
         } else if (err.code === 'auth/weak-password') {
           errorMsg = 'La contraseña es muy débil';
@@ -243,12 +340,23 @@ const CRolesUsuarios = () => {
         setLoadingModal(true);
 
         const userDocRef = doc(db, 'usuarios', editEmail);
+
+        // Get current user data to preserve other company roles
+        const userSnap = await getDoc(userDocRef);
+        const existingData = userSnap.exists() ? userSnap.data() : {};
+        const existingEmpresas = existingData.empresas || {};
+
+        // Update role for current company while preserving other companies
+        const updatedEmpresas = typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
+          ? { ...existingEmpresas, [currentCompanyRUT]: editRol }
+          : { [currentCompanyRUT]: editRol }; // If old structure, start fresh with new structure
+
         await setDoc(
           userDocRef,
           {
             email: editEmail,
             nombre: editNombre,
-            rol: editRol,
+            empresas: updatedEmpresas,
             activo: editActivo,
             fechaModificacion: serverTimestamp(),
             modificadoPor: userData?.email || 'sistema',
@@ -279,26 +387,76 @@ const CRolesUsuarios = () => {
     }
   };
 
-  // Eliminar usuario (solo de Firestore - requiere eliminación manual de Firebase Auth)
+  // Eliminar usuario de la empresa actual (o completamente si es su única empresa)
   const handleEliminarUsuario = async () => {
     try {
       setLoadingModal(true);
 
       const userDocRef = doc(db, 'usuarios', editEmail);
-      await deleteDoc(userDocRef);
+      const userSnap = await getDoc(userDocRef);
 
-      setLoadingModal(false);
-      setEliminarModal(false);
-      setEditModal(false);
-      handleResetEdit();
+      if (!userSnap.exists()) {
+        setLoadingModal(false);
+        setAlertModal({
+          open: true,
+          title: 'Error',
+          message: 'El usuario no existe',
+          variant: 'error',
+        });
+        return;
+      }
 
-      setAlertModal({
-        open: true,
-        title: 'Usuario eliminado',
-        message:
-          'Usuario eliminado de Facto. Recuerde eliminar también de Firebase Console > Authentication para liberar el email.',
-        variant: 'success',
-      });
+      const userData = userSnap.data();
+      const empresas = userData.empresas || {};
+
+      // Check how many companies the user has access to
+      const companyCount = typeof empresas === 'object' && !Array.isArray(empresas)
+        ? Object.keys(empresas).length
+        : (Array.isArray(empresas) ? empresas.length : 0);
+
+      if (companyCount <= 1) {
+        // User only has access to this company - delete entirely
+        await deleteDoc(userDocRef);
+
+        setLoadingModal(false);
+        setEliminarModal(false);
+        setEditModal(false);
+        handleResetEdit();
+
+        setAlertModal({
+          open: true,
+          title: 'Usuario eliminado',
+          message:
+            'Usuario eliminado de Facto. Recuerde eliminar también de Firebase Console > Authentication para liberar el email.',
+          variant: 'success',
+        });
+      } else {
+        // User has access to multiple companies - only remove from current company
+        const updatedEmpresas = { ...empresas };
+        delete updatedEmpresas[currentCompanyRUT];
+
+        await setDoc(
+          userDocRef,
+          {
+            empresas: updatedEmpresas,
+            fechaModificacion: serverTimestamp(),
+            modificadoPor: userData?.email || 'sistema',
+          },
+          { merge: true }
+        );
+
+        setLoadingModal(false);
+        setEliminarModal(false);
+        setEditModal(false);
+        handleResetEdit();
+
+        setAlertModal({
+          open: true,
+          title: 'Usuario removido',
+          message: `El usuario ${editEmail} ha sido removido de esta empresa. Aún tiene acceso a otras ${companyCount - 1} empresa(s).`,
+          variant: 'success',
+        });
+      }
     } catch (err) {
       console.error('Error eliminando usuario:', err);
       setLoadingModal(false);
@@ -369,24 +527,42 @@ const CRolesUsuarios = () => {
 
   // Abrir modal de edición
   const handleOpenEdit = (usuario) => {
+    const rolEnEmpresa = getUserRoleForCompany(usuario);
     setEditEmail(usuario.email);
     setEditNombre(usuario.nombre || '');
-    setEditRol(usuario.rol || '');
-    setEditRolOriginal(usuario.rol || '');
+    setEditRol(rolEnEmpresa || '');
+    setEditRolOriginal(rolEnEmpresa || '');
     setEditActivo(usuario.activo !== false);
     setEditModal(true);
   };
+
+  // Check if user has access to multiple companies (for delete confirmation message)
+  const getUserCompanyCount = (usuario) => {
+    if (!usuario.empresas) return 0;
+    if (typeof usuario.empresas === 'object' && !Array.isArray(usuario.empresas)) {
+      return Object.keys(usuario.empresas).length;
+    }
+    return Array.isArray(usuario.empresas) ? usuario.empresas.length : 0;
+  };
+
+  // Get count for user being edited
+  const editUserCompanyCount = usuarios.find(u => u.email === editEmail)
+    ? getUserCompanyCount(usuarios.find(u => u.email === editEmail))
+    : 0;
 
   // Verificar si puede editar un usuario
   const puedeEditarUsuario = (usuario) => {
     // No puede editarse a sí mismo (para evitar problemas)
     if (usuario.email === userData?.email) return false;
 
+    // Get target user's role for current company
+    const targetRol = getUserRoleForCompany(usuario);
+
     // Super admin puede editar todos
     if (esSuperAdmin()) return true;
 
     // Admin no puede editar super admins ni otros admins
-    if (esAdmin() && (usuario.rol === ROLES.SUPER_ADMIN || usuario.rol === ROLES.ADMIN))
+    if (esAdmin() && (targetRol === ROLES.SUPER_ADMIN || targetRol === ROLES.ADMIN))
       return false;
 
     // Admin puede editar otros roles
@@ -414,8 +590,8 @@ const CRolesUsuarios = () => {
   // Verificar si el límite de admins está alcanzado
   const limiteAdminsAlcanzado = cantidadAdmins >= LIMITE_ADMINS;
 
-  // Filtrar usuarios
-  const usuariosFiltrados = usuarios.filter(
+  // Filtrar usuarios (from users with access to current company)
+  const usuariosFiltrados = usuariosDeEmpresa.filter(
     (u) =>
       u.email?.toLowerCase().includes(filtroEmail.toLowerCase()) ||
       u.nombre?.toLowerCase().includes(filtroEmail.toLowerCase())
@@ -553,9 +729,9 @@ const CRolesUsuarios = () => {
                     </div>
                     <div className="w-[20%] flex justify-center">
                       <span
-                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getRolBadgeColor(usuario.rol)}`}
+                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getRolBadgeColor(getUserRoleForCompany(usuario))}`}
                       >
-                        {ROLES_LABELS[usuario.rol] || usuario.rol || 'Sin rol'}
+                        {ROLES_LABELS[getUserRoleForCompany(usuario)] || getUserRoleForCompany(usuario) || 'Sin rol'}
                       </span>
                     </div>
                     <div className="w-[12%] flex justify-center">
@@ -944,13 +1120,29 @@ const CRolesUsuarios = () => {
                     />
                   </svg>
                 </div>
-                <h3 className="text-xl font-bold mb-2">Eliminar Usuario</h3>
-                <p className="text-slate-300 text-sm mb-2">
-                  ¿Está seguro que desea eliminar a{' '}
-                  <span className="font-semibold text-white">{editEmail}</span>?
+                <h3 className="text-xl font-bold mb-2">
+                  {editUserCompanyCount > 1 ? 'Remover Usuario' : 'Eliminar Usuario'}
+                </h3>
+                <p className={`text-sm mb-2 ${isLightTheme ? 'text-gray-600' : 'text-slate-300'}`}>
+                  {editUserCompanyCount > 1 ? (
+                    <>
+                      ¿Está seguro que desea remover a{' '}
+                      <span className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>{editEmail}</span>{' '}
+                      de esta empresa?
+                    </>
+                  ) : (
+                    <>
+                      ¿Está seguro que desea eliminar a{' '}
+                      <span className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>{editEmail}</span>?
+                    </>
+                  )}
                 </p>
-                <p className="text-danger text-sm font-medium mb-6">
-                  Esta acción no se puede deshacer. El usuario perderá acceso al sistema.
+                <p className={`text-sm font-medium mb-6 ${editUserCompanyCount > 1 ? 'text-yellow-500' : 'text-danger'}`}>
+                  {editUserCompanyCount > 1 ? (
+                    <>El usuario seguirá teniendo acceso a otras {editUserCompanyCount - 1} empresa(s).</>
+                  ) : (
+                    <>Esta acción no se puede deshacer. El usuario perderá acceso al sistema.</>
+                  )}
                 </p>
                 <div className="flex justify-center gap-4">
                   <TextButton
@@ -959,7 +1151,7 @@ const CRolesUsuarios = () => {
                     onClick={() => setEliminarModal(false)}
                   />
                   <TextButton
-                    text="Eliminar"
+                    text={editUserCompanyCount > 1 ? 'Remover' : 'Eliminar'}
                     className="px-5 py-2 bg-danger text-white font-medium hover:bg-danger-hover active:bg-danger-active rounded-full"
                     onClick={handleEliminarUsuario}
                   />

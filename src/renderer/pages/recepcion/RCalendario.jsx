@@ -76,6 +76,23 @@ const RCalendario = () => {
   // State for selected day modal
   const [selectedDay, setSelectedDay] = useState(null);
   const [dayModalOpen, setDayModalOpen] = useState(false);
+  const [collapsedDayProviders, setCollapsedDayProviders] = useState({});
+
+  // Toggle collapse for provider in day modal
+  const toggleDayProviderCollapse = (key) => {
+    setCollapsedDayProviders((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const isDayProviderExpanded = (key) => collapsedDayProviders[key] === true;
+
+  // Close day modal and reset collapsed state
+  const closeDayModal = () => {
+    setDayModalOpen(false);
+    setCollapsedDayProviders({});
+  };
 
   // State for provider companies filter
   const [providerCompanies, setProviderCompanies] = useState([]);
@@ -139,81 +156,84 @@ const RCalendario = () => {
   }, []);
 
   // Fetch documents for a specific month (lazy loading)
-  const fetchMonthDocuments = useCallback(async (year, month) => {
-    const monthKey = getMonthKey(year, month);
-    if (loadedMonthsRef.current.has(monthKey) || empresasDataRef.current.length === 0) {
-      return;
-    }
-
-    setLoadingMonth(true);
-    try {
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-
-      // Calculate date range for the specific month
-      const startDate = new Date(year, month, 1);
-      startDate.setHours(0, 0, 0, 0);
-      const endDate = new Date(year, month + 1, 1);
-      endDate.setHours(0, 0, 0, 0);
-
-      const startTimestamp = Timestamp.fromDate(startDate);
-      const endTimestamp = Timestamp.fromDate(endDate);
-
-      const fetchPromises = [];
-
-      for (const { rut, razon } of empresasDataRef.current) {
-        for (const tipo of tiposDoc) {
-          const docsRef = collection(db, currentCompanyRUT, '_root', 'empresas', rut, tipo);
-          const docsQuery = query(
-            docsRef,
-            where('fechaE', '>=', startTimestamp),
-            where('fechaE', '<', endTimestamp)
-          );
-
-          fetchPromises.push(
-            getDocs(docsQuery).then((docsSnap) => ({ docsSnap, tipo, rut, razon }))
-          );
-        }
+  const fetchMonthDocuments = useCallback(
+    async (year, month) => {
+      const monthKey = getMonthKey(year, month);
+      if (loadedMonthsRef.current.has(monthKey) || empresasDataRef.current.length === 0) {
+        return;
       }
 
-      const results = await Promise.all(fetchPromises);
-      const newDocs = [];
-      const updatePromises = [];
+      setLoadingMonth(true);
+      try {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
 
-      for (const { docsSnap, tipo, rut, razon } of results) {
-        for (const docSnap of docsSnap.docs) {
-          const docData = docSnap.data();
+        // Calculate date range for the specific month
+        const startDate = new Date(year, month, 1);
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(year, month + 1, 1);
+        endDate.setHours(0, 0, 0, 0);
 
-          // Check and queue overdue document updates
-          if (
-            docData.estado === 'pendiente' &&
-            docData.fechaV?.toDate &&
-            docData.fechaV.toDate() < hoy
-          ) {
-            const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut, tipo, docSnap.id);
-            updatePromises.push(updateDoc(docRef, { estado: 'vencido' }));
+        const startTimestamp = Timestamp.fromDate(startDate);
+        const endTimestamp = Timestamp.fromDate(endDate);
+
+        const fetchPromises = [];
+
+        for (const { rut, razon } of empresasDataRef.current) {
+          for (const tipo of tiposDoc) {
+            const docsRef = collection(db, currentCompanyRUT, '_root', 'empresas', rut, tipo);
+            const docsQuery = query(
+              docsRef,
+              where('fechaE', '>=', startTimestamp),
+              where('fechaE', '<', endTimestamp)
+            );
+
+            fetchPromises.push(
+              getDocs(docsQuery).then((docsSnap) => ({ docsSnap, tipo, rut, razon }))
+            );
           }
-
-          newDocs.push(processDocData(docSnap, tipo, rut, razon, hoy));
         }
-      }
 
-      // Execute overdue updates in parallel (non-blocking)
-      if (updatePromises.length > 0) {
-        Promise.all(updatePromises).catch((err) =>
-          console.warn('Error updating overdue documents:', err)
-        );
-      }
+        const results = await Promise.all(fetchPromises);
+        const newDocs = [];
+        const updatePromises = [];
 
-      // Mark month as loaded and merge documents
-      loadedMonthsRef.current.add(monthKey);
-      setAllDocuments((prev) => [...prev, ...newDocs]);
-    } catch (error) {
-      console.error('Error fetching month documents:', error);
-    } finally {
-      setLoadingMonth(false);
-    }
-  }, [getMonthKey, tiposDoc, processDocData, currentCompanyRUT]);
+        for (const { docsSnap, tipo, rut, razon } of results) {
+          for (const docSnap of docsSnap.docs) {
+            const docData = docSnap.data();
+
+            // Check and queue overdue document updates
+            if (
+              docData.estado === 'pendiente' &&
+              docData.fechaV?.toDate &&
+              docData.fechaV.toDate() < hoy
+            ) {
+              const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut, tipo, docSnap.id);
+              updatePromises.push(updateDoc(docRef, { estado: 'vencido' }));
+            }
+
+            newDocs.push(processDocData(docSnap, tipo, rut, razon, hoy));
+          }
+        }
+
+        // Execute overdue updates in parallel (non-blocking)
+        if (updatePromises.length > 0) {
+          Promise.all(updatePromises).catch((err) =>
+            console.warn('Error updating overdue documents:', err)
+          );
+        }
+
+        // Mark month as loaded and merge documents
+        loadedMonthsRef.current.add(monthKey);
+        setAllDocuments((prev) => [...prev, ...newDocs]);
+      } catch (error) {
+        console.error('Error fetching month documents:', error);
+      } finally {
+        setLoadingMonth(false);
+      }
+    },
+    [getMonthKey, tiposDoc, processDocData, currentCompanyRUT]
+  );
 
   // Initial fetch: load last 12 months
   useEffect(() => {
@@ -461,7 +481,7 @@ const RCalendario = () => {
         const docYear = doc.fechaV.getFullYear();
         if (docMonth === currentMonth && docYear === currentYear) {
           // Use saldoPendiente if document has abonos
-          const amountRemaining = doc.tieneAbonos ? (doc.saldoPendiente || 0) : (doc.total || 0);
+          const amountRemaining = doc.tieneAbonos ? doc.saldoPendiente || 0 : doc.total || 0;
 
           // Check if overdue (today or past due date)
           if (doc.fechaV <= today) {
@@ -551,6 +571,43 @@ const RCalendario = () => {
       paid: documentsByDate.paid[dateKey] || [],
     };
   }, [selectedDay, documentsByDate]);
+
+  // Group selected day documents by provider
+  const groupedDayDocuments = useMemo(() => {
+    const groupByProvider = (docs) => {
+      const grouped = {};
+      docs.forEach((doc) => {
+        if (!grouped[doc.rut]) {
+          grouped[doc.rut] = {
+            rut: doc.rut,
+            razon: doc.razon,
+            documentos: [],
+            total: 0,
+          };
+        }
+        grouped[doc.rut].documentos.push(doc);
+        grouped[doc.rut].total += doc.displayTotal || doc.total || 0;
+      });
+      // Sort by total descending, then sort documents by fechaV
+      return Object.values(grouped)
+        .sort((a, b) => b.total - a.total)
+        .map((provider) => ({
+          ...provider,
+          documentos: provider.documentos.sort((a, b) => {
+            const aDate = a.fechaV || a.abonoFecha;
+            const bDate = b.fechaV || b.abonoFecha;
+            if (!aDate) return 1;
+            if (!bDate) return -1;
+            return aDate.getTime() - bDate.getTime();
+          }),
+        }));
+    };
+
+    return {
+      expiring: groupByProvider(selectedDayDocuments.expiring),
+      paid: groupByProvider(selectedDayDocuments.paid),
+    };
+  }, [selectedDayDocuments]);
 
   // Check if a date is today
   const isToday = (date) => {
@@ -896,7 +953,7 @@ const RCalendario = () => {
         {/* Day Details Modal */}
         {dayModalOpen && selectedDay && (
           <Modal
-            onClickOutside={() => setDayModalOpen(false)}
+            onClickOutside={closeDayModal}
             className="!max-w-2xl !max-h-[80vh] overflow-hidden flex flex-col"
           >
             {/* Modal Header */}
@@ -912,7 +969,7 @@ const RCalendario = () => {
                 })}
               </h2>
               <button
-                onClick={() => setDayModalOpen(false)}
+                onClick={closeDayModal}
                 className={`p-2 rounded-lg transition-colors ${isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/10'}`}
               >
                 <svg
@@ -931,213 +988,346 @@ const RCalendario = () => {
             <div className="flex-1 overflow-y-auto flex gap-4">
               {/* Documents List - Left Side */}
               <div className="flex-1 space-y-6 min-w-0">
-              {/* No documents message */}
-              {selectedDayDocuments.expiring.length === 0 &&
-                selectedDayDocuments.paid.length === 0 && (
-                  <div className="text-center py-8 text-slate-400">
-                    <svg
-                      className="w-12 h-12 mx-auto mb-3 opacity-50"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"
-                      />
-                    </svg>
-                    <p>No hay documentos para este día</p>
+                {/* No documents message */}
+                {selectedDayDocuments.expiring.length === 0 &&
+                  selectedDayDocuments.paid.length === 0 && (
+                    <div className="text-center py-8 text-slate-400">
+                      <svg
+                        className="w-12 h-12 mx-auto mb-3 opacity-50"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"
+                        />
+                      </svg>
+                      <p>No hay documentos para este día</p>
+                    </div>
+                  )}
+
+                {/* Unpaid Documents Section (expiring/overdue) - Grouped by Provider */}
+                {groupedDayDocuments.expiring.length > 0 && (
+                  <div>
+                    {(() => {
+                      const isOverdueDate = selectedDay <= today;
+                      return (
+                        <>
+                          <div className="flex items-center gap-2 mb-3">
+                            <div
+                              className={`w-3 h-3 rounded-full ${isOverdueDate ? 'bg-danger' : 'bg-yellow-400'}`}
+                            />
+                            <h3
+                              className={`text-lg font-semibold ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}
+                            >
+                              {isOverdueDate
+                                ? 'Documentos vencidos sin pagar'
+                                : 'Documentos por vencer'}{' '}
+                              ({selectedDayDocuments.expiring.length})
+                            </h3>
+                          </div>
+                          <div className="space-y-2">
+                            {groupedDayDocuments.expiring.map((provider) => (
+                              <div
+                                key={`exp-provider-${provider.rut}`}
+                                className={`rounded-lg overflow-hidden ${
+                                  isOverdueDate
+                                    ? 'bg-danger/10 border border-danger/30'
+                                    : 'bg-yellow-500/10 border border-yellow-500/30'
+                                }`}
+                              >
+                                {/* Provider Header - Clickable */}
+                                <button
+                                  onClick={() => toggleDayProviderCollapse(`exp-${provider.rut}`)}
+                                  className={`w-full flex items-center justify-between p-3 transition-colors ${
+                                    isOverdueDate ? 'hover:bg-danger/20' : 'hover:bg-yellow-500/20'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <span
+                                      className={`transition-transform duration-300 ${
+                                        isDayProviderExpanded(`exp-${provider.rut}`)
+                                          ? 'rotate-90'
+                                          : ''
+                                      } ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}
+                                    >
+                                      ▶
+                                    </span>
+                                    <div className="text-left">
+                                      <p
+                                        className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                                      >
+                                        {provider.razon}
+                                      </p>
+                                      <p
+                                        className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+                                      >
+                                        {formatRUT(provider.rut)} · {provider.documentos.length}{' '}
+                                        doc(s)
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p
+                                      className={`font-semibold ${
+                                        isOverdueDate ? 'text-danger' : 'text-yellow-400'
+                                      }`}
+                                    >
+                                      {formatCLP(provider.total)}
+                                    </p>
+                                  </div>
+                                </button>
+
+                                {/* Expandable Documents List */}
+                                <div
+                                  className={`grid transition-all duration-300 ease-in-out ${
+                                    isDayProviderExpanded(`exp-${provider.rut}`)
+                                      ? 'grid-rows-[1fr] opacity-100'
+                                      : 'grid-rows-[0fr] opacity-0'
+                                  }`}
+                                >
+                                  <div className="overflow-hidden">
+                                    <div
+                                      className={`px-3 pb-3 space-y-2 pt-3 ${
+                                        isOverdueDate ? 'bg-danger/5' : 'bg-yellow-500/5'
+                                      }`}
+                                    >
+                                      {provider.documentos.map((doc, idx) => (
+                                        <div
+                                          key={`exp-${provider.rut}-${idx}`}
+                                          className={`flex items-center justify-between p-2 rounded-lg ${
+                                            isLightTheme ? 'bg-white/50' : 'bg-black/20'
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-2">
+                                            <span
+                                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                                isOverdueDate
+                                                  ? 'bg-danger/20 text-danger'
+                                                  : 'bg-yellow-500/20 text-yellow-400'
+                                              }`}
+                                            >
+                                              {getDocTypeShort(doc.tipo)}
+                                            </span>
+                                            <span
+                                              className={`font-medium text-sm ${
+                                                isLightTheme ? 'text-gray-800' : 'text-white'
+                                              }`}
+                                            >
+                                              N° {doc.numeroDoc}
+                                            </span>
+                                            {doc.tieneAbonos && (
+                                              <span
+                                                className="w-2 h-2 rounded-full bg-cyan-400 inline-block"
+                                                title="Con abono"
+                                              />
+                                            )}
+                                          </div>
+                                          <div
+                                            className={`font-medium text-sm ${
+                                              isLightTheme ? 'text-gray-800' : 'text-white'
+                                            }`}
+                                          >
+                                            {formatCLP(doc.displayTotal || doc.total)}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
-              {/* Unpaid Documents Section (expiring/overdue) */}
-              {selectedDayDocuments.expiring.length > 0 && (
-                <div>
-                  {(() => {
-                    const isOverdueDate = selectedDay <= today;
-                    return (
-                      <>
-                        <div className="flex items-center gap-2 mb-3">
-                          <div
-                            className={`w-3 h-3 rounded-full ${isOverdueDate ? 'bg-danger' : 'bg-yellow-400'}`}
-                          />
-                          <h3
-                            className={`text-lg font-semibold ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}
+                {/* Paid Documents Section - Grouped by Provider */}
+                {groupedDayDocuments.paid.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-3 h-3 rounded-full bg-success" />
+                      <h3 className="text-lg font-semibold text-success">
+                        Documentos pagados ({selectedDayDocuments.paid.length})
+                      </h3>
+                    </div>
+                    <div className="space-y-2">
+                      {groupedDayDocuments.paid.map((provider) => (
+                        <div
+                          key={`paid-provider-${provider.rut}`}
+                          className="rounded-lg overflow-hidden bg-success/10 border border-success/30"
+                        >
+                          {/* Provider Header - Clickable */}
+                          <button
+                            onClick={() => toggleDayProviderCollapse(`paid-${provider.rut}`)}
+                            className="w-full flex items-center justify-between p-3 transition-colors hover:bg-success/20"
                           >
-                            {isOverdueDate
-                              ? 'Documentos vencidos sin pagar'
-                              : 'Documentos por vencer'}{' '}
-                            ({selectedDayDocuments.expiring.length})
-                          </h3>
-                        </div>
-                        <div className="space-y-2">
-                          {selectedDayDocuments.expiring.map((doc, idx) => (
-                            <div
-                              key={`exp-${idx}`}
-                              className={`
-                              flex items-center justify-between p-3 rounded-lg
-                              ${isOverdueDate ? 'bg-danger/10 border border-danger/30' : 'bg-yellow-500/10 border border-yellow-500/30'}
-                            `}
-                            >
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span
-                                    className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                      isOverdueDate
-                                        ? 'bg-danger/20 text-danger'
-                                        : 'bg-yellow-500/20 text-yellow-400'
-                                    }`}
-                                  >
-                                    {getDocTypeShort(doc.tipo)}
-                                  </span>
-                                  <span
-                                    className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
-                                  >
-                                    N° {doc.numeroDoc}
-                                  </span>
-                                  {isOverdueDate && (
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-danger/20 text-danger">
-                                      VENCIDO
-                                    </span>
-                                  )}
-                                  {doc.tieneAbonos && (
-                                    <span
-                                      className="w-2 h-2 rounded-full bg-cyan-400 inline-block"
-                                      title="Con abono"
-                                    />
-                                  )}
-                                </div>
-                                <div
-                                  className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={`transition-transform duration-300 text-success ${
+                                  isDayProviderExpanded(`paid-${provider.rut}`) ? 'rotate-90' : ''
+                                }`}
+                              >
+                                ▶
+                              </span>
+                              <div className="text-left">
+                                <p
+                                  className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
                                 >
-                                  {doc.razon} ({formatRUT(doc.rut)})
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div
-                                  className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                                  {provider.razon}
+                                </p>
+                                <p
+                                  className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
                                 >
-                                  {formatCLP(doc.displayTotal || doc.total)}
-                                </div>
-                                <div
-                                  className={`text-xs capitalize ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
-                                >
-                                  {doc.estado === 'parcialmente_vencido' ? 'Parc. vencido' : doc.estado}
-                                </div>
+                                  {formatRUT(provider.rut)} · {provider.documentos.length} pago(s)
+                                </p>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+                            <div className="text-right">
+                              <p className="font-semibold text-success">
+                                {formatCLP(provider.total)}
+                              </p>
+                            </div>
+                          </button>
 
-              {/* Paid Documents Section */}
-              {selectedDayDocuments.paid.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-3 h-3 rounded-full bg-success" />
-                    <h3 className="text-lg font-semibold text-success">
-                      Documentos pagados ({selectedDayDocuments.paid.length})
-                    </h3>
-                  </div>
-                  <div className="space-y-2">
-                    {selectedDayDocuments.paid.map((doc, idx) => (
-                      <div
-                        key={`paid-${idx}`}
-                        className="flex items-center justify-between p-3 rounded-lg bg-success/10 border border-success/30"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-success/20 text-success">
-                              {getDocTypeShort(doc.tipo)}
-                            </span>
-                            <span
-                              className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
-                            >
-                              N° {doc.numeroDoc}
-                            </span>
-                            {doc.isAbonoEntry && (
-                              <span
-                                className="w-2 h-2 rounded-full bg-cyan-400 inline-block"
-                                title="Abono"
-                              />
-                            )}
-                          </div>
+                          {/* Expandable Documents List */}
                           <div
-                            className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+                            className={`grid transition-all duration-300 ease-in-out ${
+                              isDayProviderExpanded(`paid-${provider.rut}`)
+                                ? 'grid-rows-[1fr] opacity-100'
+                                : 'grid-rows-[0fr] opacity-0'
+                            }`}
                           >
-                            {doc.razon} ({formatRUT(doc.rut)})
+                            <div className="overflow-hidden">
+                              <div className="px-3 pt-3 pb-3 space-y-2 bg-success/5">
+                                {provider.documentos.map((doc, idx) => (
+                                  <div
+                                    key={`paid-${provider.rut}-${idx}`}
+                                    className={`flex items-center justify-between p-2 rounded-lg ${
+                                      isLightTheme ? 'bg-white/50' : 'bg-black/20'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-success/20 text-success">
+                                        {getDocTypeShort(doc.tipo)}
+                                      </span>
+                                      <span
+                                        className={`font-medium text-sm ${
+                                          isLightTheme ? 'text-gray-800' : 'text-white'
+                                        }`}
+                                      >
+                                        N° {doc.numeroDoc}
+                                      </span>
+                                      {doc.isAbonoEntry && (
+                                        <span
+                                          className="w-2 h-2 rounded-full bg-cyan-400 inline-block"
+                                          title="Abono"
+                                        />
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-success">
+                                        {doc.isAbonoEntry ? 'Abono' : 'Pagado'}
+                                      </span>
+                                      <span
+                                        className={`font-medium text-sm ${
+                                          isLightTheme ? 'text-gray-800' : 'text-white'
+                                        }`}
+                                      >
+                                        {formatCLP(doc.displayTotal || doc.total)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div
-                            className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
-                          >
-                            {formatCLP(doc.displayTotal || doc.total)}
-                          </div>
-                          <div className="text-xs text-success">
-                            {doc.isAbonoEntry ? 'Abono' : 'Pagado'}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
               </div>
 
               {/* Totals Summary - Right Side */}
-              {(selectedDayDocuments.expiring.length > 0 || selectedDayDocuments.paid.length > 0) && (
-                <div className={`w-56 flex-shrink-0 space-y-4 ${isLightTheme ? 'border-l border-gray-200' : 'border-l border-white/10'} pl-4`}>
-                  <h3 className={`text-sm font-semibold uppercase tracking-wider ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+              {(selectedDayDocuments.expiring.length > 0 ||
+                selectedDayDocuments.paid.length > 0) && (
+                <div
+                  className={`w-56 flex-shrink-0 space-y-4 ${isLightTheme ? 'border-l border-gray-200' : 'border-l border-white/10'} pl-4`}
+                >
+                  <h3
+                    className={`text-sm font-semibold uppercase tracking-wider ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+                  >
                     Resumen del día
                   </h3>
 
                   {/* Expiring/Overdue Total */}
-                  {selectedDayDocuments.expiring.length > 0 && (() => {
-                    const isOverdueDate = selectedDay <= today;
-                    const expiringTotal = selectedDayDocuments.expiring.reduce((sum, doc) => sum + (doc.displayTotal || doc.total || 0), 0);
-                    return (
-                      <div className={`p-4 rounded-xl ${isOverdueDate ? 'bg-danger/10 border border-danger/30' : 'bg-yellow-500/10 border border-yellow-500/30'}`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className={`w-2.5 h-2.5 rounded-full ${isOverdueDate ? 'bg-danger' : 'bg-yellow-400'}`} />
-                          <span className={`text-xs font-medium ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}>
-                            {isOverdueDate ? 'Vencido' : 'Por vencer'}
-                          </span>
+                  {selectedDayDocuments.expiring.length > 0 &&
+                    (() => {
+                      const isOverdueDate = selectedDay <= today;
+                      const expiringTotal = selectedDayDocuments.expiring.reduce(
+                        (sum, doc) => sum + (doc.displayTotal || doc.total || 0),
+                        0
+                      );
+                      return (
+                        <div
+                          className={`p-4 rounded-xl ${isOverdueDate ? 'bg-danger/10 border border-danger/30' : 'bg-yellow-500/10 border border-yellow-500/30'}`}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <div
+                              className={`w-2.5 h-2.5 rounded-full ${isOverdueDate ? 'bg-danger' : 'bg-yellow-400'}`}
+                            />
+                            <span
+                              className={`text-xs font-medium ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}
+                            >
+                              {isOverdueDate ? 'Vencido' : 'Por vencer'}
+                            </span>
+                          </div>
+                          <div
+                            className={`text-2xl font-bold ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}
+                          >
+                            {formatCLP(expiringTotal)}
+                          </div>
+                          <div
+                            className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+                          >
+                            {selectedDayDocuments.expiring.length} documento
+                            {selectedDayDocuments.expiring.length !== 1 ? 's' : ''}
+                          </div>
                         </div>
-                        <div className={`text-2xl font-bold ${isOverdueDate ? 'text-danger' : 'text-yellow-400'}`}>
-                          {formatCLP(expiringTotal)}
-                        </div>
-                        <div className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
-                          {selectedDayDocuments.expiring.length} documento{selectedDayDocuments.expiring.length !== 1 ? 's' : ''}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
 
                   {/* Paid Total */}
-                  {selectedDayDocuments.paid.length > 0 && (() => {
-                    const paidTotal = selectedDayDocuments.paid.reduce((sum, doc) => sum + (doc.displayTotal || doc.total || 0), 0);
-                    return (
-                      <div className="p-4 rounded-xl bg-success/10 border border-success/30">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-2.5 h-2.5 rounded-full bg-success" />
-                          <span className="text-xs font-medium text-success">Pagado</span>
+                  {selectedDayDocuments.paid.length > 0 &&
+                    (() => {
+                      const paidTotal = selectedDayDocuments.paid.reduce(
+                        (sum, doc) => sum + (doc.displayTotal || doc.total || 0),
+                        0
+                      );
+                      return (
+                        <div className="p-4 rounded-xl bg-success/10 border border-success/30">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2.5 h-2.5 rounded-full bg-success" />
+                            <span className="text-xs font-medium text-success">Pagado</span>
+                          </div>
+                          <div className="text-2xl font-bold text-success">
+                            {formatCLP(paidTotal)}
+                          </div>
+                          <div
+                            className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+                          >
+                            {selectedDayDocuments.paid.length} pago
+                            {selectedDayDocuments.paid.length !== 1 ? 's' : ''}
+                          </div>
                         </div>
-                        <div className="text-2xl font-bold text-success">
-                          {formatCLP(paidTotal)}
-                        </div>
-                        <div className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
-                          {selectedDayDocuments.paid.length} pago{selectedDayDocuments.paid.length !== 1 ? 's' : ''}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
                 </div>
               )}
             </div>
@@ -1151,7 +1341,7 @@ const RCalendario = () => {
                 documento(s) en total
               </div>
               <button
-                onClick={() => setDayModalOpen(false)}
+                onClick={closeDayModal}
                 className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 Cerrar

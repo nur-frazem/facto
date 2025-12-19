@@ -86,9 +86,14 @@ const IniciarSesion = () => {
             }
 
             const userData = userDoc.data();
-            const userCompanies = userData.empresas || [];
+            const userEmpresas = userData.empresas || {};
 
-            if (!userCompanies.includes(cleanedRut)) {
+            // Check access - handle both old (array) and new (object) structure
+            const hasAccess = Array.isArray(userEmpresas)
+                ? userEmpresas.includes(cleanedRut)
+                : (cleanedRut in userEmpresas);
+
+            if (!hasAccess) {
                 setErrorMessage("No tiene acceso a esta empresa");
                 setLoadingModal(false);
                 setShowErrorModal(true);

@@ -132,6 +132,34 @@ const RProcesar = () => {
   const [includeNotaCredito, setIncludeNotaCredito] = useState(false);
   const [ncDisponible, setNcDisponible] = useState(false); // Whether NC is still available (not already paid)
 
+  // Estado de cuenta modal state
+  const [estadoCuentaModal, setEstadoCuentaModal] = useState(false);
+  const [estadoCuentaLoading, setEstadoCuentaLoading] = useState(false);
+  const [documentosVencidos, setDocumentosVencidos] = useState([]);
+  const [documentosPendientes, setDocumentosPendientes] = useState([]);
+  const [collapsedVencidos, setCollapsedVencidos] = useState({});
+  const [collapsedPendientes, setCollapsedPendientes] = useState({});
+
+  // Toggle collapse for vencidos section
+  const toggleVencidoCollapse = (rut) => {
+    setCollapsedVencidos((prev) => ({
+      ...prev,
+      [rut]: !prev[rut],
+    }));
+  };
+
+  // Toggle collapse for pendientes section
+  const togglePendienteCollapse = (rut) => {
+    setCollapsedPendientes((prev) => ({
+      ...prev,
+      [rut]: !prev[rut],
+    }));
+  };
+
+  // Check if provider is expanded
+  const isVencidoExpanded = (rut) => collapsedVencidos[rut] === true;
+  const isPendienteExpanded = (rut) => collapsedPendientes[rut] === true;
+
   // Handle column sort
   const handleSort = (column) => {
     if (sortColumn === column) {
@@ -702,6 +730,154 @@ const RProcesar = () => {
     return maxEgreso + 1;
   };
 
+  // Fetch estado de cuenta - all documents from all companies (parallel fetching)
+  const fetchEstadoCuenta = async () => {
+    if (!currentCompanyRUT || rows.length === 0) return;
+
+    try {
+      setEstadoCuentaLoading(true);
+      setEstadoCuentaModal(true);
+
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      // Fetch all companies in parallel
+      const fetchPromises = rows.map(async (empresa) => {
+        const empresaRut = String(empresa.rut);
+        const empresaRazon = empresa.razon || 'Sin nombre';
+
+        // Create both queries
+        const facturasRef = collection(
+          db,
+          currentCompanyRUT,
+          '_root',
+          'empresas',
+          empresaRut,
+          'facturas'
+        );
+        const facturasQuery = query(
+          facturasRef,
+          where('formaPago', '==', 'Crédito'),
+          where('estado', 'in', [
+            'pendiente',
+            'vencido',
+            'parcialmente_pagado',
+            'parcialmente_vencido',
+          ])
+        );
+
+        const facturasExentasRef = collection(
+          db,
+          currentCompanyRUT,
+          '_root',
+          'empresas',
+          empresaRut,
+          'facturasExentas'
+        );
+        const facturasExentasQuery = query(
+          facturasExentasRef,
+          where('formaPago', '==', 'Crédito'),
+          where('estado', 'in', [
+            'pendiente',
+            'vencido',
+            'parcialmente_pagado',
+            'parcialmente_vencido',
+          ])
+        );
+
+        // Fetch both document types in parallel
+        const [facturasSnap, facturasExentasSnap] = await Promise.all([
+          getDocs(facturasQuery),
+          getDocs(facturasExentasQuery),
+        ]);
+
+        return {
+          empresaRut,
+          empresaRazon,
+          facturas: facturasSnap.docs.map((d) => ({ ...d.data(), id: d.id, tipoDoc: 'facturas' })),
+          facturasExentas: facturasExentasSnap.docs.map((d) => ({
+            ...d.data(),
+            id: d.id,
+            tipoDoc: 'facturasExentas',
+          })),
+        };
+      });
+
+      // Wait for all companies to be fetched in parallel
+      const allResults = await Promise.all(fetchPromises);
+
+      // Process results
+      const vencidosMap = {};
+      const pendientesMap = {};
+
+      for (const { empresaRut, empresaRazon, facturas, facturasExentas } of allResults) {
+        const allDocs = [...facturas, ...facturasExentas];
+
+        for (const docData of allDocs) {
+          const fechaV = docData.fechaV?.toDate ? docData.fechaV.toDate() : null;
+          const isOverdue = fechaV && fechaV <= hoy;
+          const saldoPendiente =
+            docData.saldoPendiente ?? docData.totalDescontado ?? docData.total ?? 0;
+
+          const esVencido =
+            docData.estado === 'vencido' ||
+            docData.estado === 'parcialmente_vencido' ||
+            (isOverdue &&
+              (docData.estado === 'pendiente' || docData.estado === 'parcialmente_pagado'));
+
+          const targetMap = esVencido ? vencidosMap : pendientesMap;
+
+          if (!targetMap[empresaRut]) {
+            targetMap[empresaRut] = {
+              rut: empresaRut,
+              razon: empresaRazon,
+              documentos: [],
+              total: 0,
+            };
+          }
+
+          targetMap[empresaRut].documentos.push({
+            id: docData.id,
+            numeroDoc: docData.numeroDoc,
+            fechaV: fechaV,
+            total: saldoPendiente,
+            tipoDoc: docData.tipoDoc,
+            estado: docData.estado,
+          });
+
+          targetMap[empresaRut].total += saldoPendiente;
+        }
+      }
+
+      // Convert maps to arrays and sort by total descending
+      const vencidosArray = Object.values(vencidosMap).sort((a, b) => b.total - a.total);
+      const pendientesArray = Object.values(pendientesMap).sort((a, b) => b.total - a.total);
+
+      // Sort documents within each provider by expiration date (sooner first)
+      for (const empresa of vencidosArray) {
+        empresa.documentos.sort((a, b) => {
+          if (!a.fechaV) return 1;
+          if (!b.fechaV) return -1;
+          return a.fechaV.getTime() - b.fechaV.getTime();
+        });
+      }
+      for (const empresa of pendientesArray) {
+        empresa.documentos.sort((a, b) => {
+          if (!a.fechaV) return 1;
+          if (!b.fechaV) return -1;
+          return a.fechaV.getTime() - b.fechaV.getTime();
+        });
+      }
+
+      setDocumentosVencidos(vencidosArray);
+      setDocumentosPendientes(pendientesArray);
+      setEstadoCuentaLoading(false);
+    } catch (error) {
+      console.error('Error fetching estado de cuenta:', error);
+      setEstadoCuentaLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}
@@ -721,7 +897,7 @@ const RProcesar = () => {
 
         {/* Contenido principal */}
         <div className="flex-1 flex flex-col flex-wrap justify-start px-3 sm:px-5 py-2 overflow-x-auto">
-          <div className="grid grid-cols-3 grid-rows-1 gap-x-10 mb-2">
+          <div className="grid grid-cols-3 grid-rows-1 gap-x-10 mb-2 items-end">
             {/* Selección de giro */}
             <DropdownMenu
               tittle={<>Seleccione empresa</>}
@@ -736,6 +912,42 @@ const RProcesar = () => {
                 setSearchTerm(''); // Clear search when company changes
               }}
             />
+            {/* Estado de cuenta button */}
+            <div className="flex items-end">
+              <button
+                onClick={fetchEstadoCuenta}
+                disabled={rows.length === 0}
+                className={`
+                  inline-flex items-center justify-center gap-2
+                  px-4 py-2.5 h-[42px]
+                  text-sm font-medium
+                  rounded-lg
+                  transition-all duration-200
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  ${
+                    isLightTheme
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300'
+                      : 'bg-accent-blue/20 text-accent-blue border border-accent-blue/30 hover:bg-accent-blue/30'
+                  }
+                `}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                Estado de cuenta
+              </button>
+            </div>
           </div>
 
           {/* Tabla dinámica */}
@@ -1418,6 +1630,342 @@ const RProcesar = () => {
                     setAbonoError('');
                     setIncludeNotaCredito(false);
                     setNcDisponible(false);
+                  }}
+                />
+              </div>
+            </Modal>
+          )}
+
+          {/* Modal Estado de cuenta */}
+          {estadoCuentaModal && (
+            <Modal
+              className="w-[90%] max-w-5xl"
+              alignTop
+              onClickOutside={() => {
+                setEstadoCuentaModal(false);
+                setCollapsedVencidos({});
+                setCollapsedPendientes({});
+              }}
+            >
+              <p className="text-2xl font-black mb-6 text-center">ESTADO DE CUENTA</p>
+
+              {estadoCuentaLoading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="w-8 h-8 border-4 border-accent-blue border-t-transparent rounded-full animate-spin"></div>
+                  <span className="ml-3">Cargando documentos...</span>
+                </div>
+              ) : (
+                <div className="flex gap-4 max-h-[70vh]">
+                  {/* Columna VENCIDOS (Red themed) */}
+                  <div className="flex-1 flex flex-col">
+                    <div
+                      className={`rounded-t-lg px-4 py-3 ${
+                        isLightTheme
+                          ? 'bg-red-50 border border-red-200'
+                          : 'bg-red-900/30 border border-red-500/30'
+                      }`}
+                    >
+                      <h3
+                        className={`text-lg font-bold ${
+                          isLightTheme ? 'text-red-700' : 'text-red-400'
+                        }`}
+                      >
+                        Documentos Vencidos
+                      </h3>
+                      <p
+                        className={`text-sm ${
+                          isLightTheme ? 'text-red-600' : 'text-red-300'
+                        }`}
+                      >
+                        Total:{' '}
+                        {formatCLP(
+                          documentosVencidos.reduce((acc, emp) => acc + emp.total, 0)
+                        )}
+                      </p>
+                    </div>
+                    <div
+                      className={`flex-1 overflow-y-auto scrollbar-custom rounded-b-lg border-x border-b max-h-[50vh] ${
+                        isLightTheme
+                          ? 'border-red-200 bg-white'
+                          : 'border-red-500/30 bg-black/20'
+                      }`}
+                    >
+                      {documentosVencidos.length === 0 ? (
+                        <div className="text-center text-gray-400 py-8">
+                          No hay documentos vencidos
+                        </div>
+                      ) : (
+                        documentosVencidos.map((empresa) => (
+                          <div
+                            key={empresa.rut}
+                            className="border-b border-white/10 last:border-b-0"
+                          >
+                            {/* Provider header row */}
+                            <button
+                              onClick={() => toggleVencidoCollapse(empresa.rut)}
+                              className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-200 ${
+                                isLightTheme ? 'hover:bg-red-50' : 'hover:bg-red-900/20'
+                              }`}
+                            >
+                              <span
+                                className={`text-red-400 transition-transform duration-300 ${
+                                  isVencidoExpanded(empresa.rut) ? 'rotate-90' : ''
+                                }`}
+                              >
+                                ▶
+                              </span>
+                              <div className="flex-1 text-left">
+                                <p
+                                  className={`font-semibold text-sm ${
+                                    isLightTheme ? 'text-gray-800' : 'text-white'
+                                  }`}
+                                >
+                                  {empresa.razon}
+                                </p>
+                                <p
+                                  className={`text-xs ${
+                                    isLightTheme ? 'text-gray-500' : 'text-slate-400'
+                                  }`}
+                                >
+                                  RUT: {formatRUT(empresa.rut)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p
+                                  className={`text-xs ${
+                                    isLightTheme ? 'text-gray-500' : 'text-slate-400'
+                                  }`}
+                                >
+                                  {empresa.documentos.length} doc(s)
+                                </p>
+                                <p
+                                  className={`font-semibold ${
+                                    isLightTheme ? 'text-red-600' : 'text-red-400'
+                                  }`}
+                                >
+                                  {formatCLP(empresa.total)}
+                                </p>
+                              </div>
+                            </button>
+
+                            {/* Expandable documents list */}
+                            <div
+                              className={`grid transition-all duration-300 ease-in-out ${
+                                isVencidoExpanded(empresa.rut)
+                                  ? 'grid-rows-[1fr] opacity-100'
+                                  : 'grid-rows-[0fr] opacity-0'
+                              }`}
+                            >
+                              <div className="overflow-hidden">
+                                <div
+                                  className={`px-4 pb-3 ${
+                                    isLightTheme ? 'bg-gray-50' : 'bg-black/30'
+                                  }`}
+                                >
+                                  {empresa.documentos.map((doc, idx) => (
+                                    <div
+                                      key={`${doc.tipoDoc}-${doc.numeroDoc}-${idx}`}
+                                      className={`flex justify-between items-center py-2 text-sm border-b last:border-b-0 ${
+                                        isLightTheme ? 'border-gray-200' : 'border-white/10'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-4">
+                                        <span
+                                          className={`${
+                                            isLightTheme ? 'text-gray-700' : 'text-white'
+                                          }`}
+                                        >
+                                          N° {doc.numeroDoc}
+                                        </span>
+                                        <span
+                                          className={`text-xs ${
+                                            isLightTheme ? 'text-gray-500' : 'text-slate-400'
+                                          }`}
+                                        >
+                                          Venc:{' '}
+                                          {doc.fechaV
+                                            ? doc.fechaV.toLocaleDateString('es-CL')
+                                            : '-'}
+                                        </span>
+                                      </div>
+                                      <span
+                                        className={`font-medium ${
+                                          isLightTheme ? 'text-red-600' : 'text-red-400'
+                                        }`}
+                                      >
+                                        {formatCLP(doc.total)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Columna PENDIENTES (Neutral themed) */}
+                  <div className="flex-1 flex flex-col">
+                    <div
+                      className={`rounded-t-lg px-4 py-3 ${
+                        isLightTheme
+                          ? 'bg-gray-100 border border-gray-200'
+                          : 'bg-white/10 border border-white/20'
+                      }`}
+                    >
+                      <h3
+                        className={`text-lg font-bold ${
+                          isLightTheme ? 'text-gray-700' : 'text-white'
+                        }`}
+                      >
+                        Documentos Pendientes
+                      </h3>
+                      <p
+                        className={`text-sm ${
+                          isLightTheme ? 'text-gray-500' : 'text-slate-300'
+                        }`}
+                      >
+                        Total:{' '}
+                        {formatCLP(
+                          documentosPendientes.reduce((acc, emp) => acc + emp.total, 0)
+                        )}
+                      </p>
+                    </div>
+                    <div
+                      className={`flex-1 overflow-y-auto scrollbar-custom rounded-b-lg border-x border-b max-h-[50vh] ${
+                        isLightTheme
+                          ? 'border-gray-200 bg-white'
+                          : 'border-white/20 bg-black/20'
+                      }`}
+                    >
+                      {documentosPendientes.length === 0 ? (
+                        <div className="text-center text-gray-400 py-8">
+                          No hay documentos pendientes
+                        </div>
+                      ) : (
+                        documentosPendientes.map((empresa) => (
+                          <div
+                            key={empresa.rut}
+                            className="border-b border-white/10 last:border-b-0"
+                          >
+                            {/* Provider header row */}
+                            <button
+                              onClick={() => togglePendienteCollapse(empresa.rut)}
+                              className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-200 ${
+                                isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'
+                              }`}
+                            >
+                              <span
+                                className={`text-accent-blue transition-transform duration-300 ${
+                                  isPendienteExpanded(empresa.rut) ? 'rotate-90' : ''
+                                }`}
+                              >
+                                ▶
+                              </span>
+                              <div className="flex-1 text-left">
+                                <p
+                                  className={`font-semibold text-sm ${
+                                    isLightTheme ? 'text-gray-800' : 'text-white'
+                                  }`}
+                                >
+                                  {empresa.razon}
+                                </p>
+                                <p
+                                  className={`text-xs ${
+                                    isLightTheme ? 'text-gray-500' : 'text-slate-400'
+                                  }`}
+                                >
+                                  RUT: {formatRUT(empresa.rut)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p
+                                  className={`text-xs ${
+                                    isLightTheme ? 'text-gray-500' : 'text-slate-400'
+                                  }`}
+                                >
+                                  {empresa.documentos.length} doc(s)
+                                </p>
+                                <p
+                                  className={`font-semibold ${
+                                    isLightTheme ? 'text-gray-700' : 'text-white'
+                                  }`}
+                                >
+                                  {formatCLP(empresa.total)}
+                                </p>
+                              </div>
+                            </button>
+
+                            {/* Expandable documents list */}
+                            <div
+                              className={`grid transition-all duration-300 ease-in-out ${
+                                isPendienteExpanded(empresa.rut)
+                                  ? 'grid-rows-[1fr] opacity-100'
+                                  : 'grid-rows-[0fr] opacity-0'
+                              }`}
+                            >
+                              <div className="overflow-hidden">
+                                <div
+                                  className={`px-4 pb-3 ${
+                                    isLightTheme ? 'bg-gray-50' : 'bg-black/30'
+                                  }`}
+                                >
+                                  {empresa.documentos.map((doc, idx) => (
+                                    <div
+                                      key={`${doc.tipoDoc}-${doc.numeroDoc}-${idx}`}
+                                      className={`flex justify-between items-center py-2 text-sm border-b last:border-b-0 ${
+                                        isLightTheme ? 'border-gray-200' : 'border-white/10'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-4">
+                                        <span
+                                          className={`${
+                                            isLightTheme ? 'text-gray-700' : 'text-white'
+                                          }`}
+                                        >
+                                          N° {doc.numeroDoc}
+                                        </span>
+                                        <span
+                                          className={`text-xs ${
+                                            isLightTheme ? 'text-gray-500' : 'text-slate-400'
+                                          }`}
+                                        >
+                                          Venc:{' '}
+                                          {doc.fechaV
+                                            ? doc.fechaV.toLocaleDateString('es-CL')
+                                            : '-'}
+                                        </span>
+                                      </div>
+                                      <span
+                                        className={`font-medium ${
+                                          isLightTheme ? 'text-gray-700' : 'text-white'
+                                        }`}
+                                      >
+                                        {formatCLP(doc.total)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Close button */}
+              <div className="flex justify-center mt-6">
+                <XButton
+                  text="Cerrar"
+                  onClick={() => {
+                    setEstadoCuentaModal(false);
+                    setCollapsedVencidos({});
+                    setCollapsedPendientes({});
                   }}
                 />
               </div>

@@ -29,7 +29,7 @@ const NAME_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 const CCuenta = () => {
   const navigate = useNavigate();
-  const { user, userData, tienePermiso } = useAuth();
+  const { user, userData, tienePermiso, getRol } = useAuth();
   const { isLightTheme } = useTheme();
   const { currentCompanyRUT } = useCompany();
 
@@ -411,23 +411,23 @@ const CCuenta = () => {
 
                 {/* Role */}
                 <div>
-                  <label className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Rol</label>
+                  <label className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>Rol en esta empresa</label>
                   <div className={`mt-1 px-3 py-2 rounded-lg ${
                     isLightTheme
                       ? 'bg-gray-50 border border-gray-200'
                       : 'bg-white/5 border border-white/10'
                   }`}>
                     <span className={`inline-block px-2 py-0.5 rounded text-sm font-medium ${
-                      userData?.rol === 'super_admin' ? 'bg-red-500/20 text-red-400' :
-                      userData?.rol === 'admin' ? 'bg-purple-500/20 text-purple-400' :
-                      userData?.rol === 'gestor' ? 'bg-accent-blue/20 text-accent-blue' :
-                      userData?.rol === 'digitador' ? 'bg-green-500/20 text-green-400' :
+                      getRol() === 'super_admin' ? 'bg-red-500/20 text-red-400' :
+                      getRol() === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                      getRol() === 'gestor' ? 'bg-accent-blue/20 text-accent-blue' :
+                      getRol() === 'digitador' ? 'bg-green-500/20 text-green-400' :
                       'bg-slate-500/20 text-slate-400'
                     }`}>
-                      {ROLES_LABELS[userData?.rol] || userData?.rol || '--'}
+                      {ROLES_LABELS[getRol()] || getRol() || '--'}
                     </span>
                     <p className={`text-xs mt-2 ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>
-                      {ROLES_DESCRIPCION[userData?.rol] || ''}
+                      {ROLES_DESCRIPCION[getRol()] || ''}
                     </p>
                   </div>
                 </div>

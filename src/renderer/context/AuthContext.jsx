@@ -1,7 +1,10 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, deleteField } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
+
+// Key for selected company in localStorage (must match CompanyContext)
+const SELECTED_COMPANY_KEY = 'facto_selected_company';
 
 // Definición de roles y sus permisos
 export const ROLES = {
@@ -108,9 +111,37 @@ export function AuthProvider({ children }) {
         // Suscribirse a cambios en el documento del usuario
         const userDocRef = doc(db, 'usuarios', firebaseUser.email);
 
-        unsubscribeUserData = onSnapshot(userDocRef, (docSnap) => {
+        unsubscribeUserData = onSnapshot(userDocRef, async (docSnap) => {
           if (docSnap.exists()) {
-            setUserData(docSnap.data());
+            const data = docSnap.data();
+
+            // Auto-migration: Check if old structure (empresas as array + global rol)
+            if (Array.isArray(data.empresas) && data.rol) {
+              console.log('Migrating user to per-company roles structure...');
+              try {
+                // Convert array to object with roles
+                const newEmpresas = {};
+                data.empresas.forEach(rut => {
+                  newEmpresas[rut] = data.rol;
+                });
+
+                // Update Firestore with new structure
+                await updateDoc(userDocRef, {
+                  empresas: newEmpresas,
+                  rol: deleteField()
+                });
+
+                // Use migrated data locally
+                setUserData({ ...data, empresas: newEmpresas, rol: undefined });
+                console.log('User migration completed successfully');
+              } catch (migrationError) {
+                console.error('Error migrating user structure:', migrationError);
+                // Fall back to using old structure if migration fails
+                setUserData(data);
+              }
+            } else {
+              setUserData(data);
+            }
             setError(null);
           } else {
             // Usuario autenticado pero sin documento en Firestore
@@ -177,40 +208,57 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Helper to get current company RUT from localStorage
+  const getCurrentCompanyRUT = () => {
+    return localStorage.getItem(SELECTED_COMPANY_KEY);
+  };
+
+  // Get role for a specific company (or current company if not specified)
+  const getRol = (companyRUT = null) => {
+    const rut = companyRUT || getCurrentCompanyRUT();
+    if (!userData?.empresas || !rut) return null;
+
+    // Handle both old structure (for backwards compatibility during migration) and new structure
+    if (typeof userData.empresas === 'object' && !Array.isArray(userData.empresas)) {
+      return userData.empresas[rut] || null;
+    }
+    // Fallback to old global rol if empresas is still an array
+    return userData.rol || null;
+  };
+
   // Verificar si el usuario tiene un permiso específico
-  const tienePermiso = (permiso) => {
-    if (!userData || !userData.rol || !userData.activo) return false;
-    return PERMISOS[permiso]?.includes(userData.rol) || false;
+  const tienePermiso = (permiso, companyRUT = null) => {
+    if (!userData || !userData.activo) return false;
+    const rol = getRol(companyRUT);
+    if (!rol) return false;
+    return PERMISOS[permiso]?.includes(rol) || false;
   };
 
   // Verificar si el usuario tiene alguno de los permisos indicados
-  const tieneAlgunPermiso = (permisos) => {
-    return permisos.some(p => tienePermiso(p));
+  const tieneAlgunPermiso = (permisos, companyRUT = null) => {
+    return permisos.some(p => tienePermiso(p, companyRUT));
   };
 
-  // Obtener el rol del usuario
-  const getRol = () => {
-    return userData?.rol || null;
+  // Verificar si es super admin (for current company)
+  const esSuperAdmin = (companyRUT = null) => {
+    return getRol(companyRUT) === ROLES.SUPER_ADMIN;
   };
 
-  // Verificar si es super admin
-  const esSuperAdmin = () => {
-    return userData?.rol === ROLES.SUPER_ADMIN;
+  // Verificar si es admin o super admin (for current company)
+  const esAdmin = (companyRUT = null) => {
+    const rol = getRol(companyRUT);
+    return rol === ROLES.ADMIN || rol === ROLES.SUPER_ADMIN;
   };
 
-  // Verificar si es admin o super admin
-  const esAdmin = () => {
-    return userData?.rol === ROLES.ADMIN || userData?.rol === ROLES.SUPER_ADMIN;
-  };
-
-  // Obtener los roles que el usuario puede asignar
-  const getRolesAsignables = () => {
+  // Obtener los roles que el usuario puede asignar (based on current company role)
+  const getRolesAsignables = (companyRUT = null) => {
     if (!userData || !userData.activo) return [];
 
-    if (userData.rol === ROLES.SUPER_ADMIN) {
+    const rol = getRol(companyRUT);
+    if (rol === ROLES.SUPER_ADMIN) {
       // Super admin puede asignar todos los roles
       return Object.values(ROLES);
-    } else if (userData.rol === ROLES.ADMIN) {
+    } else if (rol === ROLES.ADMIN) {
       // Admin puede asignar todos excepto admin y super_admin
       return [ROLES.GESTOR, ROLES.DIGITADOR, ROLES.VISOR];
     }
