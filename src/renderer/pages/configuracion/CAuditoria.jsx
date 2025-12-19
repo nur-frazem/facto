@@ -8,6 +8,7 @@ import { DatepickerField } from "../../components/Textfield";
 import { Card } from "../../components/Container";
 import { Modal, LoadingModal } from "../../components/modal";
 import { useTheme } from "../../context/ThemeContext";
+import { useCompany } from "../../context/CompanyContext";
 
 import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
@@ -45,6 +46,7 @@ const REVERSION_ACCION_LABELS = {
 const CAuditoria = () => {
   const navigate = useNavigate();
   const { isLightTheme } = useTheme();
+  const { currentCompanyRUT } = useCompany();
 
   // State
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
@@ -82,14 +84,14 @@ const CAuditoria = () => {
   // Fetch logs when date changes
   useEffect(() => {
     const fetchLogs = async () => {
-      if (!fechaSeleccionada) {
+      if (!fechaSeleccionada || !currentCompanyRUT) {
         setLogs([]);
         return;
       }
 
       setLoading(true);
       try {
-        const auditoriaRef = collection(db, "auditoria");
+        const auditoriaRef = collection(db, currentCompanyRUT, "_root", "auditoria");
         const querySnapshot = await getDocs(auditoriaRef);
 
         const selectedDateStr = getDateString(fechaSeleccionada);
@@ -121,7 +123,7 @@ const CAuditoria = () => {
     };
 
     fetchLogs();
-  }, [fechaSeleccionada]);
+  }, [fechaSeleccionada, currentCompanyRUT]);
 
   // Get action label
   const getAccionLabel = (log) => {

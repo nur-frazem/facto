@@ -96,3 +96,7 @@ yarn.lock
 
 # Electron-Forge
 out/
+
+# Firebase service account key (sensitive credentials)
+serviceAccountKey.json
+scripts/serviceAccountKey.json

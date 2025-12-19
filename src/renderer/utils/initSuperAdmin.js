@@ -22,13 +22,17 @@
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "../../firebaseConfig";
 
+// Default company RUT for initial setup
+const DEFAULT_COMPANY_RUT = "761836722";
+
 /**
  * Inicializa el usuario como Super Admin
  * @param {string} email - Email del usuario (REQUERIDO)
  * @param {string} nombre - Nombre del usuario (REQUERIDO)
+ * @param {string} companyRut - RUT de la empresa (opcional, usa DEFAULT_COMPANY_RUT si no se proporciona)
  * @returns {Promise<{success: boolean, message: string}>}
  */
-export async function initSuperAdmin(email, nombre) {
+export async function initSuperAdmin(email, nombre, companyRut = DEFAULT_COMPANY_RUT) {
   // Validar parámetros requeridos
   if (!email || typeof email !== "string" || !email.includes("@")) {
     return {
@@ -59,9 +63,14 @@ export async function initSuperAdmin(email, nombre) {
       }
 
       // Actualizar a super admin
+      const empresasArray = existingData.empresas || [];
+      if (!empresasArray.includes(companyRut)) {
+        empresasArray.push(companyRut);
+      }
       await setDoc(userDocRef, {
         ...existingData,
         rol: "super_admin",
+        empresas: empresasArray,
         fechaModificacion: serverTimestamp(),
         modificadoPor: "sistema"
       }, { merge: true });
@@ -78,6 +87,7 @@ export async function initSuperAdmin(email, nombre) {
       nombre: nombre,
       rol: "super_admin",
       activo: true,
+      empresas: [companyRut],
       fechaCreacion: serverTimestamp(),
       creadoPor: "sistema"
     });

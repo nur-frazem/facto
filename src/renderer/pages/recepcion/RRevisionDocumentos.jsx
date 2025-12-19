@@ -29,6 +29,7 @@ import { db } from '../../../firebaseConfig';
 import { Card } from '../../components/Container';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useCompany } from '../../context/CompanyContext';
 import { cleanRUT, formatRUT } from '../../utils/formatRUT';
 import { formatCLP } from '../../utils/formatCurrency';
 import { generarPDF } from '../../utils/generarPDF';
@@ -43,6 +44,7 @@ const RRevisionDocumentos = () => {
   const navigate = useNavigate();
   const { tienePermiso, esAdmin, user } = useAuth();
   const { isLightTheme } = useTheme();
+  const { currentCompanyRUT } = useCompany();
 
   // Permisos del usuario
   const puedeEditar = tienePermiso('EDITAR_DOCUMENTOS');
@@ -358,7 +360,7 @@ const RRevisionDocumentos = () => {
       unsubscribeRef.current();
     }
 
-    const empresasRef = collection(db, 'empresas');
+    const empresasRef = collection(db, currentCompanyRUT, '_root', 'empresas');
 
     const unsubscribe = onSnapshot(
       empresasRef,
@@ -380,7 +382,7 @@ const RRevisionDocumentos = () => {
 
           const listeners = subcolecciones.map((sub) => {
             return new Promise((resolve) => {
-              const subRef = collection(db, 'empresas', rut, sub);
+              const subRef = collection(db, currentCompanyRUT, '_root', 'empresas', rut, sub);
 
               onSnapshot(
                 subRef,
@@ -397,7 +399,7 @@ const RRevisionDocumentos = () => {
                       data.fechaV?.toDate &&
                       data.fechaV.toDate() < hoy
                     ) {
-                      const docRef = doc(db, 'empresas', rut, sub, d.id);
+                      const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut, sub, d.id);
                       updatePromises.push(updateDoc(docRef, { estado: 'vencido' }));
                     }
                   }
@@ -542,19 +544,20 @@ const RRevisionDocumentos = () => {
 
   // traer valores estáticos
   useEffect(() => {
+    if (!currentCompanyRUT) return;
     const fetchValues = async () => {
       try {
-        const tipoDocSnap = await getDoc(doc(db, 'values', 'tipo-doc'));
+        const tipoDocSnap = await getDoc(doc(db, currentCompanyRUT, '_root', 'values', 'tipo-doc'));
         if (tipoDocSnap.exists()) {
           setRowTipoDoc(Object.values(tipoDocSnap.data()));
         }
 
-        const formaPagoSnap = await getDoc(doc(db, 'values', 'formas-pago'));
+        const formaPagoSnap = await getDoc(doc(db, currentCompanyRUT, '_root', 'values', 'formas-pago'));
         if (formaPagoSnap.exists()) {
           setRowFormaPago(Object.values(formaPagoSnap.data()));
         }
 
-        const estadoPagoSnap = await getDoc(doc(db, 'values', 'estado-pago'));
+        const estadoPagoSnap = await getDoc(doc(db, currentCompanyRUT, '_root', 'values', 'estado-pago'));
         if (estadoPagoSnap.exists()) {
           setRowEstadoDoc(Object.values(estadoPagoSnap.data()));
         }
@@ -563,13 +566,14 @@ const RRevisionDocumentos = () => {
       }
     };
     fetchValues();
-  }, []);
+  }, [currentCompanyRUT]);
 
   // Cargar lista de empresas para el dropdown
   useEffect(() => {
+    if (!currentCompanyRUT) return;
     const fetchEmpresas = async () => {
       try {
-        const empresasRef = collection(db, 'empresas');
+        const empresasRef = collection(db, currentCompanyRUT, '_root', 'empresas');
         const snapshot = await getDocs(empresasRef);
         const listaEmpresas = snapshot.docs.map((doc) => ({
           rut: doc.id,
@@ -583,7 +587,7 @@ const RRevisionDocumentos = () => {
       }
     };
     fetchEmpresas();
-  }, []);
+  }, [currentCompanyRUT]);
 
   const handleGenerarPDF = async (rut, numeroDoc, docTipo) => {
     try {
@@ -628,6 +632,8 @@ const RRevisionDocumentos = () => {
         esAbono: f.esAbono || false,
         // montoPagado is the field stored in pago_recepcion, montoAPagar is passed during processing
         montoAPagar: f.montoPagado || f.montoAPagar || f.totalDescontado || f.total,
+        // Include the flag to show credit notes (stored in pago_recepcion when processing)
+        includeNotaCredito: f.includeNotaCredito ?? true, // Default to true for backwards compatibility
       })),
     }));
 
@@ -635,7 +641,8 @@ const RRevisionDocumentos = () => {
       egreso.numeroEgreso,
       facturasPorEmpresa,
       egreso.totalEgreso,
-      egreso.fechaPago || null
+      egreso.fechaPago || null,
+      currentCompanyRUT
     );
   };
 
@@ -765,7 +772,7 @@ const RRevisionDocumentos = () => {
     try {
       setLoadingModal(true);
       handleResetParams();
-      const docRef = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+      const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
@@ -794,7 +801,7 @@ const RRevisionDocumentos = () => {
     handleResetParams();
 
     try {
-      const docRef = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+      const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
@@ -923,7 +930,7 @@ const RRevisionDocumentos = () => {
   // Buscar el egreso que contiene un documento específico
   const findEgresoForDocument = async (rut, numeroDoc, tipoDoc) => {
     try {
-      const pagoRef = collection(db, 'pago_recepcion');
+      const pagoRef = collection(db, currentCompanyRUT, '_root', 'pago_recepcion');
       const snapshot = await getDocs(pagoRef);
 
       for (const docSnap of snapshot.docs) {
@@ -946,10 +953,12 @@ const RRevisionDocumentos = () => {
             }
 
             // Buscar en notas de crédito dentro de cada factura
+            // Only include egresos where the NC was actually applied (includeNotaCredito === true)
             if (tipoDoc === 'notasCredito') {
               const found = empresa.facturas.some((f) => {
                 if (!Array.isArray(f.notasCredito)) return false;
-                return f.notasCredito.some((nc) => String(nc.numeroDoc) === String(numeroDoc));
+                const ncExists = f.notasCredito.some((nc) => String(nc.numeroDoc) === String(numeroDoc));
+                return ncExists && f.includeNotaCredito === true;
               });
               if (found) return { id: docSnap.id, ...data };
             }
@@ -966,7 +975,7 @@ const RRevisionDocumentos = () => {
   // Buscar TODOS los egresos que contienen un documento específico (para documentos con abonos)
   const findAllEgresosForDocument = async (rut, numeroDoc, tipoDoc) => {
     try {
-      const pagoRef = collection(db, 'pago_recepcion');
+      const pagoRef = collection(db, currentCompanyRUT, '_root', 'pago_recepcion');
       const snapshot = await getDocs(pagoRef);
       const egresosEncontrados = [];
 
@@ -1000,10 +1009,14 @@ const RRevisionDocumentos = () => {
             }
 
             // Buscar en notas de crédito dentro de cada factura
+            // Only include egresos where the NC was actually applied (includeNotaCredito === true)
             if (tipoDoc === 'notasCredito') {
               const found = empresa.facturas.some((f) => {
                 if (!Array.isArray(f.notasCredito)) return false;
-                return f.notasCredito.some((nc) => String(nc.numeroDoc) === String(numeroDoc));
+                // Check if NC is in this factura AND if it was actually included in this payment
+                const ncExists = f.notasCredito.some((nc) => String(nc.numeroDoc) === String(numeroDoc));
+                // Only count this egreso if the NC was actually applied (includeNotaCredito is true)
+                return ncExists && f.includeNotaCredito === true;
               });
               if (found) {
                 egresosEncontrados.push({
@@ -1133,11 +1146,11 @@ const RRevisionDocumentos = () => {
       if (accionReversar === 'revertir') {
         // Opción 1: Solo revertir el pago (cambiar estados, eliminar egreso)
         await revertirDocumentosEgreso(egresoData, []);
-        await deleteDoc(doc(db, 'pago_recepcion', egresoId));
+        await deleteDoc(doc(db, currentCompanyRUT, '_root', 'pago_recepcion', egresoId));
 
         // Registrar en auditoría
         try {
-          const auditoriaRef = collection(db, 'auditoria');
+          const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
           await addDoc(auditoriaRef, {
             tipo: 'reversion_pago',
             accion: 'revertir',
@@ -1161,11 +1174,11 @@ const RRevisionDocumentos = () => {
       } else if (accionReversar === 'eliminar') {
         // Opción 2: Eliminar todo (documentos y egreso)
         await eliminarDocumentosEgreso(egresoData);
-        await deleteDoc(doc(db, 'pago_recepcion', egresoId));
+        await deleteDoc(doc(db, currentCompanyRUT, '_root', 'pago_recepcion', egresoId));
 
         // Registrar en auditoría
         try {
-          const auditoriaRef = collection(db, 'auditoria');
+          const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
           await addDoc(auditoriaRef, {
             tipo: 'reversion_pago',
             accion: 'eliminar_todo',
@@ -1187,7 +1200,7 @@ const RRevisionDocumentos = () => {
       } else if (accionReversar === 'parcial') {
         // Opción 3: Eliminar algunos documentos, revertir otros
         await revertirDocumentosEgreso(egresoData, documentosAEliminar);
-        await deleteDoc(doc(db, 'pago_recepcion', egresoId));
+        await deleteDoc(doc(db, currentCompanyRUT, '_root', 'pago_recepcion', egresoId));
 
         // Separar documentos eliminados y revertidos para auditoría
         const docsEliminados = documentosAfectados.filter((doc) =>
@@ -1199,7 +1212,7 @@ const RRevisionDocumentos = () => {
 
         // Registrar en auditoría
         try {
-          const auditoriaRef = collection(db, 'auditoria');
+          const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
           await addDoc(auditoriaRef, {
             tipo: 'reversion_pago',
             accion: 'parcial',
@@ -1249,7 +1262,7 @@ const RRevisionDocumentos = () => {
       const { rut, numeroDoc, tipoDoc } = documentoActualAbono;
 
       // Obtener el documento actual de la base de datos para tener datos actualizados
-      const docRef = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+      const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
@@ -1279,11 +1292,45 @@ const RRevisionDocumentos = () => {
         }
 
         // Actualizar el egreso en pago_recepcion
-        const egresoRef = doc(db, 'pago_recepcion', egresoId);
+        const egresoRef = doc(db, currentCompanyRUT, '_root', 'pago_recepcion', egresoId);
         const egresoSnap = await getDoc(egresoRef);
 
         if (egresoSnap.exists()) {
           const egresoData = egresoSnap.data();
+
+          // Find the factura entry to check if it included NC
+          let facturaConNC = null;
+          for (const empresa of egresoData.facturas) {
+            if (empresa.rut !== rut) continue;
+            for (const f of empresa.facturas) {
+              const facturaTipo = f.tipoDoc || 'facturas';
+              if (String(f.numeroDoc) === String(numeroDoc) && facturaTipo === tipoDoc) {
+                facturaConNC = f;
+                break;
+              }
+            }
+            if (facturaConNC) break;
+          }
+
+          // If this abono included NC, revert the credit note status
+          if (facturaConNC && facturaConNC.includeNotaCredito === true && Array.isArray(facturaConNC.notasCredito)) {
+            for (const nc of facturaConNC.notasCredito) {
+              const ncNumero = typeof nc === 'object' ? nc.numeroDoc : nc;
+              if (!ncNumero) continue;
+
+              const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut, 'notasCredito', String(ncNumero));
+              try {
+                await updateDoc(ncRef, {
+                  estado: 'pendiente',
+                  pagoUsuario: deleteField(),
+                  fechaPago: deleteField(),
+                  fechaProceso: deleteField(),
+                });
+              } catch (ncError) {
+                console.warn(`No se pudo revertir NC ${ncNumero}:`, ncError);
+              }
+            }
+          }
 
           // Buscar y remover el documento de este egreso
           const nuevasFacturas = egresoData.facturas
@@ -1320,7 +1367,7 @@ const RRevisionDocumentos = () => {
 
         // Registrar en auditoría
         try {
-          const auditoriaRef = collection(db, 'auditoria');
+          const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
           await addDoc(auditoriaRef, {
             tipo: 'reversion_abono',
             accion: 'revertir_abono',
@@ -1390,8 +1437,11 @@ const RRevisionDocumentos = () => {
   };
 
   // Revertir documentos del egreso (cambiar estado a pendiente/vencido)
+  // Now properly handles multiple egresos - only removes the specific abono for this egreso
   const revertirDocumentosEgreso = async (egreso, idsAEliminar) => {
     if (!egreso || !Array.isArray(egreso.facturas)) return;
+
+    const numeroEgresoRevertido = egreso.numeroEgreso;
 
     for (const empresa of egreso.facturas) {
       if (!Array.isArray(empresa.facturas)) continue;
@@ -1403,6 +1453,8 @@ const RRevisionDocumentos = () => {
         if (idsAEliminar.includes(facturaId)) {
           const facturaRef = doc(
             db,
+            currentCompanyRUT,
+            '_root',
             'empresas',
             empresa.rut,
             factura.tipoDoc,
@@ -1413,14 +1465,16 @@ const RRevisionDocumentos = () => {
           // Eliminar notas de crédito asociadas si las hay
           if (Array.isArray(factura.notasCredito)) {
             for (const nc of factura.notasCredito) {
-              const ncRef = doc(db, 'empresas', empresa.rut, 'notasCredito', String(nc.numeroDoc));
+              const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', empresa.rut, 'notasCredito', String(nc.numeroDoc));
               await deleteDoc(ncRef);
             }
           }
         } else {
-          // Revertir la factura a pendiente/vencido
+          // Revertir la factura - but only remove the abono for THIS egreso
           const facturaRef = doc(
             db,
+            currentCompanyRUT,
+            '_root',
             'empresas',
             empresa.rut,
             factura.tipoDoc,
@@ -1430,24 +1484,83 @@ const RRevisionDocumentos = () => {
 
           if (facturaSnap.exists()) {
             const facturaData = facturaSnap.data();
-            const nuevoEstado = calcularNuevoEstado(facturaData.fechaV);
+            const currentAbonos = facturaData.abonos || [];
 
-            await updateDoc(facturaRef, {
-              estado: nuevoEstado,
-              pagoUsuario: deleteField(),
-              fechaPago: deleteField(),
-              fechaProceso: deleteField(),
-            });
+            // Filter out only the abono for this specific egreso
+            const remainingAbonos = currentAbonos.filter(
+              (abono) => abono.numeroEgreso !== numeroEgresoRevertido
+            );
+
+            if (remainingAbonos.length > 0) {
+              // There are still other abonos - recalculate and keep partial payment status
+              const nuevoTotalAbonado = remainingAbonos.reduce((sum, abono) => sum + (abono.monto || 0), 0);
+              const montoOriginal = facturaData.totalDescontado ?? facturaData.total ?? 0;
+              const nuevoSaldoPendiente = montoOriginal - nuevoTotalAbonado;
+
+              // Determine status based on remaining balance and due date
+              const hoy = new Date();
+              hoy.setHours(0, 0, 0, 0);
+              const fechaV = facturaData.fechaV?.toDate ? facturaData.fechaV.toDate() : null;
+              const isOverdue = fechaV && fechaV < hoy;
+
+              let nuevoEstado;
+              if (nuevoSaldoPendiente <= 0) {
+                nuevoEstado = 'pagado';
+              } else if (isOverdue) {
+                nuevoEstado = 'parcialmente_vencido';
+              } else {
+                nuevoEstado = 'parcialmente_pagado';
+              }
+
+              // Get the last remaining abono for tracking fields
+              const ultimoAbono = remainingAbonos[remainingAbonos.length - 1];
+
+              await updateDoc(facturaRef, {
+                estado: nuevoEstado,
+                abonos: remainingAbonos,
+                totalAbonado: nuevoTotalAbonado,
+                saldoPendiente: nuevoSaldoPendiente,
+                ultimoAbonoUsuario: ultimoAbono.usuario || deleteField(),
+                ultimoAbonoFecha: ultimoAbono.fecha || deleteField(),
+                ultimoAbonoProceso: ultimoAbono.fechaProceso || deleteField(),
+                // Clear full payment fields since it's no longer fully paid
+                pagoUsuario: deleteField(),
+                fechaPago: deleteField(),
+                fechaProceso: deleteField(),
+              });
+            } else {
+              // No remaining abonos - fully revert to pending/overdue
+              const nuevoEstado = calcularNuevoEstado(facturaData.fechaV);
+
+              await updateDoc(facturaRef, {
+                estado: nuevoEstado,
+                pagoUsuario: deleteField(),
+                fechaPago: deleteField(),
+                fechaProceso: deleteField(),
+                // Clean up all abono-related fields
+                abonos: deleteField(),
+                totalAbonado: deleteField(),
+                saldoPendiente: deleteField(),
+                ultimoAbonoUsuario: deleteField(),
+                ultimoAbonoFecha: deleteField(),
+                ultimoAbonoProceso: deleteField(),
+              });
+            }
           }
 
-          // Revertir notas de crédito asociadas
-          if (Array.isArray(factura.notasCredito)) {
+          // Only revert notas de crédito if they were included in THIS egreso
+          // Check the includeNotaCredito flag from the egreso data
+          const shouldRevertNC = factura.includeNotaCredito === true;
+
+          if (shouldRevertNC && Array.isArray(factura.notasCredito)) {
             for (const nc of factura.notasCredito) {
               const ncId = `${empresa.rut}-notasCredito-${nc.numeroDoc}`;
 
               if (idsAEliminar.includes(ncId)) {
                 const ncRef = doc(
                   db,
+                  currentCompanyRUT,
+                  '_root',
                   'empresas',
                   empresa.rut,
                   'notasCredito',
@@ -1457,6 +1570,8 @@ const RRevisionDocumentos = () => {
               } else {
                 const ncRef = doc(
                   db,
+                  currentCompanyRUT,
+                  '_root',
                   'empresas',
                   empresa.rut,
                   'notasCredito',
@@ -1487,7 +1602,7 @@ const RRevisionDocumentos = () => {
         // Eliminar notas de crédito primero
         if (Array.isArray(factura.notasCredito)) {
           for (const nc of factura.notasCredito) {
-            const ncRef = doc(db, 'empresas', empresa.rut, 'notasCredito', String(nc.numeroDoc));
+            const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', empresa.rut, 'notasCredito', String(nc.numeroDoc));
             try {
               await deleteDoc(ncRef);
             } catch (err) {
@@ -1499,6 +1614,8 @@ const RRevisionDocumentos = () => {
         // Eliminar factura
         const facturaRef = doc(
           db,
+          currentCompanyRUT,
+          '_root',
           'empresas',
           empresa.rut,
           factura.tipoDoc,
@@ -1564,6 +1681,8 @@ const RRevisionDocumentos = () => {
         // Verificar que el nuevo número no exista
         const nuevoDocRef = doc(
           db,
+          currentCompanyRUT,
+          '_root',
           'empresas',
           String(rut),
           String(tipoDoc),
@@ -1581,7 +1700,7 @@ const RRevisionDocumentos = () => {
       // Si es una nota de crédito y cambió el total, validar que no exceda el saldo de la factura
       if (tipoDoc === 'notasCredito' && Number(iTotalNuevo) !== Number(iTotal)) {
         // Obtener la nota de crédito actual para saber la factura asociada
-        const ncRef = doc(db, 'empresas', String(rut), 'notasCredito', String(numeroDoc));
+        const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', String(numeroDoc));
         const ncSnap = await getDoc(ncRef);
 
         if (ncSnap.exists()) {
@@ -1589,6 +1708,8 @@ const RRevisionDocumentos = () => {
           const tipoFactura = ncData.tipoFacturaAsociada || 'facturas';
           const facturaRef = doc(
             db,
+            currentCompanyRUT,
+            '_root',
             'empresas',
             String(rut),
             tipoFactura,
@@ -1644,13 +1765,15 @@ const RRevisionDocumentos = () => {
 
       if (numeroDocCambio) {
         // Si cambió el número, crear nuevo doc y eliminar el antiguo
-        const docRefAntiguo = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+        const docRefAntiguo = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
         const docSnapAntiguo = await getDoc(docRefAntiguo);
 
         if (docSnapAntiguo.exists()) {
           const datosOriginales = docSnapAntiguo.data();
           const nuevoDocRef = doc(
             db,
+            currentCompanyRUT,
+            '_root',
             'empresas',
             String(rut),
             String(tipoDoc),
@@ -1688,6 +1811,8 @@ const RRevisionDocumentos = () => {
             const tipoFactura = datosOriginales.tipoFacturaAsociada || 'facturas';
             const facturaRef = doc(
               db,
+              currentCompanyRUT,
+              '_root',
               'empresas',
               String(rut),
               tipoFactura,
@@ -1723,7 +1848,7 @@ const RRevisionDocumentos = () => {
                 const ncNumero = typeof nc === 'object' ? nc.numeroDoc : nc;
                 if (!ncNumero) return;
 
-                const ncRef = doc(db, 'empresas', String(rut), 'notasCredito', String(ncNumero));
+                const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', String(ncNumero));
                 try {
                   await updateDoc(ncRef, { numeroDocNc: iNumeroDocNuevo });
                 } catch (err) {
@@ -1735,7 +1860,7 @@ const RRevisionDocumentos = () => {
         }
       } else {
         // Si no cambió el número, obtener datos actuales para historial y actualizar
-        const docRef = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+        const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
         const docSnapActual = await getDoc(docRef);
 
         if (docSnapActual.exists()) {
@@ -1771,7 +1896,7 @@ const RRevisionDocumentos = () => {
       // Si es una nota de crédito y cambió el total, actualizar la factura asociada
       if (tipoDoc === 'notasCredito' && Number(iTotalNuevo) !== Number(iTotal)) {
         try {
-          const ncRef = doc(db, 'empresas', String(rut), 'notasCredito', String(iNumeroDocNuevo));
+          const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', String(iNumeroDocNuevo));
           const ncSnap = await getDoc(ncRef);
 
           if (ncSnap.exists()) {
@@ -1779,6 +1904,8 @@ const RRevisionDocumentos = () => {
             const tipoFactura = ncData.tipoFacturaAsociada || 'facturas';
             const facturaRef = doc(
               db,
+              currentCompanyRUT,
+              '_root',
               'empresas',
               String(rut),
               tipoFactura,
@@ -1810,7 +1937,7 @@ const RRevisionDocumentos = () => {
 
       // Registrar edición en auditoría (con fallback si falla)
       try {
-        const auditoriaRef = collection(db, 'auditoria');
+        const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
         await addDoc(auditoriaRef, {
           tipo: 'edicion',
           tipoDocumento: tipoDoc,
@@ -1874,7 +2001,7 @@ const RRevisionDocumentos = () => {
       setConfirmDeleteModal(false); // cerramos el modal primario
       setLoadingModal(true);
 
-      const docRef = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+      const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
@@ -1901,13 +2028,15 @@ const RRevisionDocumentos = () => {
       if (tipoDoc === 'notasCredito' && docData.numeroDocNc) {
         // Buscar la factura en facturas o facturasExentas
         const tipoFactura = docData.tipoFacturaAsociada || 'facturas';
-        let facturaRef = doc(db, 'empresas', String(rut), tipoFactura, String(docData.numeroDocNc));
+        let facturaRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), tipoFactura, String(docData.numeroDocNc));
         let facturaSnap = await getDoc(facturaRef);
 
         // Si no existe en el tipo guardado, buscar en el otro
         if (!facturaSnap.exists() && tipoFactura === 'facturas') {
           facturaRef = doc(
             db,
+            currentCompanyRUT,
+            '_root',
             'empresas',
             String(rut),
             'facturasExentas',
@@ -1915,7 +2044,7 @@ const RRevisionDocumentos = () => {
           );
           facturaSnap = await getDoc(facturaRef);
         } else if (!facturaSnap.exists() && tipoFactura === 'facturasExentas') {
-          facturaRef = doc(db, 'empresas', String(rut), 'facturas', String(docData.numeroDocNc));
+          facturaRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'facturas', String(docData.numeroDocNc));
           facturaSnap = await getDoc(facturaRef);
         }
 
@@ -1956,7 +2085,7 @@ const RRevisionDocumentos = () => {
 
       // Registrar en auditoría antes de eliminar (con fallback si falla)
       try {
-        const auditoriaRef = collection(db, 'auditoria');
+        const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
         // Sanitizar datos para evitar problemas con Timestamps
         const datosParaAuditoria = JSON.parse(JSON.stringify(docData));
         await addDoc(auditoriaRef, {
@@ -1993,7 +2122,7 @@ const RRevisionDocumentos = () => {
   const handleEliminarConNotasCredito = async () => {
     const { rut, tipoDoc, numeroDoc } = deleteInfo;
     const fechaEliminacion = new Date().toISOString();
-    const auditoriaRef = collection(db, 'auditoria');
+    const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
 
     // Helper para registrar en auditoría con fallback
     const registrarAuditoria = async (datos) => {
@@ -2015,7 +2144,7 @@ const RRevisionDocumentos = () => {
           const ncNumero =
             typeof nc === 'object' && nc.numeroDoc ? String(nc.numeroDoc) : String(nc);
           if (!ncNumero) continue;
-          const ncRef = doc(db, 'empresas', String(rut), 'notasCredito', ncNumero);
+          const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', ncNumero);
           try {
             const ncSnap = await getDoc(ncRef);
             if (ncSnap.exists()) {
@@ -2039,7 +2168,7 @@ const RRevisionDocumentos = () => {
       }
 
       // 2) Obtener datos de la factura para auditoría
-      const facturaRef = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+      const facturaRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
       const facturaSnap = await getDoc(facturaRef);
 
       if (facturaSnap.exists()) {
@@ -2087,7 +2216,7 @@ const RRevisionDocumentos = () => {
       setLoadingModal(true);
 
       // 1) Validar existencia del documento destino
-      const destinoRef = doc(db, 'empresas', String(rut), destinoTipo, destinoNumero);
+      const destinoRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), destinoTipo, destinoNumero);
       const destinoSnap = await getDoc(destinoRef);
 
       if (!destinoSnap.exists()) {
@@ -2137,7 +2266,7 @@ const RRevisionDocumentos = () => {
         const ncNum = typeof nc === 'object' && nc.numeroDoc ? String(nc.numeroDoc) : String(nc);
         if (!ncNum) continue;
 
-        const ncRef = doc(db, 'empresas', String(rut), 'notasCredito', ncNum);
+        const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', ncNum);
         const ncSnap = await getDoc(ncRef);
 
         if (ncSnap.exists()) {
@@ -2173,7 +2302,7 @@ const RRevisionDocumentos = () => {
         const ncNum = typeof nc === 'object' && nc.numeroDoc ? String(nc.numeroDoc) : String(nc);
         if (!ncNum) continue;
 
-        const ncRef = doc(db, 'empresas', String(rut), 'notasCredito', ncNum);
+        const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', ncNum);
         try {
           await updateDoc(ncRef, { numeroDocNc: destinoNumero });
         } catch (err) {
@@ -2182,13 +2311,13 @@ const RRevisionDocumentos = () => {
       }
 
       // 7) Obtener datos de la factura antes de eliminar para auditoría
-      const facturaRef = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+      const facturaRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
       const facturaSnap = await getDoc(facturaRef);
       const facturaData = facturaSnap.exists() ? facturaSnap.data() : null;
 
       // 8) Registrar en auditoría antes de eliminar
       try {
-        const auditoriaRef = collection(db, 'auditoria');
+        const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
         const datosParaAuditoria = facturaData ? JSON.parse(JSON.stringify(facturaData)) : {};
         await addDoc(auditoriaRef, {
           tipo: 'eliminacion',
@@ -2237,7 +2366,7 @@ const RRevisionDocumentos = () => {
       setLoadingModal(true);
 
       // 1) Obtener factura origen
-      const facturaRef = doc(db, 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
+      const facturaRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), String(tipoDoc), String(numeroDoc));
       const facturaSnap = await getDoc(facturaRef);
       if (!facturaSnap.exists()) {
         setLoadingModal(false);
@@ -2264,7 +2393,7 @@ const RRevisionDocumentos = () => {
       }
 
       // 4) Validar destino
-      const destinoRef = doc(db, 'empresas', String(rut), destinoTipo, destinoNumero);
+      const destinoRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), destinoTipo, destinoNumero);
       const destinoSnap = await getDoc(destinoRef);
       if (!destinoSnap.exists()) {
         setLoadingModal(false);
@@ -2304,7 +2433,7 @@ const RRevisionDocumentos = () => {
         const ncNum = typeof nc === 'object' && nc.numeroDoc ? String(nc.numeroDoc) : String(nc);
         if (!ncNum) continue;
 
-        const ncRef = doc(db, 'empresas', String(rut), 'notasCredito', ncNum);
+        const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', ncNum);
         const ncSnap = await getDoc(ncRef);
         if (ncSnap.exists()) {
           const ncData = ncSnap.data();
@@ -2337,7 +2466,7 @@ const RRevisionDocumentos = () => {
         const ncNum = typeof nc === 'object' && nc.numeroDoc ? String(nc.numeroDoc) : String(nc);
         if (!ncNum) continue;
 
-        const ncRef = doc(db, 'empresas', String(rut), 'notasCredito', ncNum);
+        const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', ncNum);
         await updateDoc(ncRef, { numeroDocNc: destinoNumero });
       }
 
@@ -2350,7 +2479,7 @@ const RRevisionDocumentos = () => {
 
       // 10) Registrar revinculación en auditoría
       try {
-        const auditoriaRef = collection(db, 'auditoria');
+        const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
         await addDoc(auditoriaRef, {
           tipo: 'revinculacion',
           tipoDocumento: tipoDoc,

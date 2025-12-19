@@ -23,11 +23,13 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { db } from '../../../firebaseConfig';
 
 import { useAuth, ROLES_LABELS, ROLES_DESCRIPCION } from '../../context/AuthContext';
+import { useCompany, formatRut } from '../../context/CompanyContext';
 
 const CRolesUsuarios = () => {
   const navigate = useNavigate();
   const { userData, esSuperAdmin, esAdmin, getRolesAsignables, ROLES } = useAuth();
   const { isLightTheme } = useTheme();
+  const { currentCompanyRUT, companyInfo } = useCompany();
 
   // Estado de usuarios
   const [usuarios, setUsuarios] = useState([]);
@@ -51,6 +53,12 @@ const CRolesUsuarios = () => {
   const [editModal, setEditModal] = useState(false);
   const [eliminarModal, setEliminarModal] = useState(false);
   const [loadingModal, setLoadingModal] = useState(false);
+
+  // Estados para modal de información de empresa
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [companyNombre, setCompanyNombre] = useState('');
+  const [companyGiro, setCompanyGiro] = useState('');
+  const [companyDireccion, setCompanyDireccion] = useState('');
 
   // Estados de errores
   const [errors, setErrors] = useState({});
@@ -173,6 +181,7 @@ const CRolesUsuarios = () => {
           nombre: nuevoNombre,
           rol: nuevoRol,
           activo: true,
+          empresas: [currentCompanyRUT], // Grant access to current company
           fechaCreacion: serverTimestamp(),
           creadoPor: userData?.email || 'sistema',
         });
@@ -319,6 +328,45 @@ const CRolesUsuarios = () => {
     setErrors({});
   };
 
+  // Abrir modal de información de empresa
+  const handleOpenCompanyModal = () => {
+    setCompanyNombre(companyInfo?.nombre || '');
+    setCompanyGiro(companyInfo?.giro || '');
+    setCompanyDireccion(companyInfo?.direccion || '');
+    setShowCompanyModal(true);
+  };
+
+  // Guardar información de empresa
+  const handleSaveCompanyInfo = async () => {
+    try {
+      setLoadingModal(true);
+      const companyDocRef = doc(db, currentCompanyRUT, '_root');
+      await setDoc(companyDocRef, {
+        nombre: companyNombre,
+        giro: companyGiro,
+        direccion: companyDireccion,
+      }, { merge: true });
+
+      setLoadingModal(false);
+      setShowCompanyModal(false);
+      setAlertModal({
+        open: true,
+        title: 'Información actualizada',
+        message: 'La información de la empresa ha sido actualizada',
+        variant: 'success',
+      });
+    } catch (err) {
+      console.error('Error actualizando empresa:', err);
+      setLoadingModal(false);
+      setAlertModal({
+        open: true,
+        title: 'Error',
+        message: 'Error al actualizar la información de la empresa',
+        variant: 'error',
+      });
+    }
+  };
+
   // Abrir modal de edición
   const handleOpenEdit = (usuario) => {
     setEditEmail(usuario.email);
@@ -434,12 +482,22 @@ const CRolesUsuarios = () => {
               value={filtroEmail}
               onChange={(e) => setFiltroEmail(e.target.value)}
             />
-            <TextButton
-              text="Nuevo Usuario"
-              className="h-10 px-5 bg-success hover:bg-success-hover active:bg-success-active transition-colors duration-200 rounded-lg whitespace-nowrap"
-              classNameText="font-semibold text-base text-white"
-              onClick={() => setShowModal(true)}
-            />
+            <div className="flex gap-3">
+              {esAdmin() && (
+                <TextButton
+                  text="Información empresa"
+                  className="h-10 px-5 bg-accent-blue hover:bg-blue-600 active:bg-blue-700 transition-colors duration-200 rounded-lg whitespace-nowrap"
+                  classNameText="font-semibold text-base text-white"
+                  onClick={handleOpenCompanyModal}
+                />
+              )}
+              <TextButton
+                text="Nuevo Usuario"
+                className="h-10 px-5 bg-success hover:bg-success-hover active:bg-success-active transition-colors duration-200 rounded-lg whitespace-nowrap"
+                classNameText="font-semibold text-base text-white"
+                onClick={() => setShowModal(true)}
+              />
+            </div>
           </div>
 
           {/* Leyenda de roles */}
@@ -906,6 +964,55 @@ const CRolesUsuarios = () => {
                     onClick={handleEliminarUsuario}
                   />
                 </div>
+              </div>
+            </Modal>
+          )}
+
+          {/* Modal información de empresa */}
+          {showCompanyModal && (
+            <Modal
+              onClickOutside={() => setShowCompanyModal(false)}
+              className="!absolute !top-20 !max-w-lg"
+            >
+              <h2 className="text-xl font-bold text-center mb-2">Información de la Empresa</h2>
+              <p className={`text-center text-sm mb-6 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                RUT: {formatRut(currentCompanyRUT)}
+              </p>
+
+              <div className="space-y-4">
+                <Textfield
+                  label="Nombre de la empresa:"
+                  placeholder="Nombre comercial o razón social"
+                  value={companyNombre}
+                  onChange={(e) => setCompanyNombre(e.target.value)}
+                />
+
+                <Textfield
+                  label="Giro:"
+                  placeholder="Actividad económica"
+                  value={companyGiro}
+                  onChange={(e) => setCompanyGiro(e.target.value)}
+                />
+
+                <Textfield
+                  label="Dirección:"
+                  placeholder="Dirección de la empresa"
+                  value={companyDireccion}
+                  onChange={(e) => setCompanyDireccion(e.target.value)}
+                />
+              </div>
+
+              <div className={`flex justify-end gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}>
+                <TextButton
+                  text="Cancelar"
+                  className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-lg"
+                  onClick={() => setShowCompanyModal(false)}
+                />
+                <TextButton
+                  text="Guardar"
+                  className="px-5 py-2 bg-success text-white font-medium hover:bg-success-hover active:bg-success-active rounded-lg"
+                  onClick={handleSaveCompanyInfo}
+                />
               </div>
             </Modal>
           )}

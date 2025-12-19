@@ -10,6 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 import { collection, getDocs, doc, updateDoc, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
+import { useCompany } from '../../context/CompanyContext';
 
 import { formatRUT } from '../../utils/formatRUT';
 
@@ -54,6 +55,7 @@ const MONTHS = [
 const RCalendario = () => {
   const navigate = useNavigate();
   const { isLightTheme } = useTheme();
+  const { currentCompanyRUT } = useCompany();
 
   // Current date for reference (memoized to avoid recreating on every render)
   const today = useMemo(() => {
@@ -161,7 +163,7 @@ const RCalendario = () => {
 
       for (const { rut, razon } of empresasDataRef.current) {
         for (const tipo of tiposDoc) {
-          const docsRef = collection(db, 'empresas', rut, tipo);
+          const docsRef = collection(db, currentCompanyRUT, '_root', 'empresas', rut, tipo);
           const docsQuery = query(
             docsRef,
             where('fechaE', '>=', startTimestamp),
@@ -188,7 +190,7 @@ const RCalendario = () => {
             docData.fechaV?.toDate &&
             docData.fechaV.toDate() < hoy
           ) {
-            const docRef = doc(db, 'empresas', rut, tipo, docSnap.id);
+            const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut, tipo, docSnap.id);
             updatePromises.push(updateDoc(docRef, { estado: 'vencido' }));
           }
 
@@ -211,14 +213,14 @@ const RCalendario = () => {
     } finally {
       setLoadingMonth(false);
     }
-  }, [getMonthKey, tiposDoc, processDocData]);
+  }, [getMonthKey, tiposDoc, processDocData, currentCompanyRUT]);
 
   // Initial fetch: load last 12 months
   useEffect(() => {
     const fetchInitialDocuments = async () => {
       setLoadingModal(true);
       try {
-        const empresasSnap = await getDocs(collection(db, 'empresas'));
+        const empresasSnap = await getDocs(collection(db, currentCompanyRUT, '_root', 'empresas'));
         const providers = [];
         const empresasData = [];
 
@@ -246,7 +248,7 @@ const RCalendario = () => {
           }
 
           for (const tipo of tiposDoc) {
-            const docsRef = collection(db, 'empresas', rut, tipo);
+            const docsRef = collection(db, currentCompanyRUT, '_root', 'empresas', rut, tipo);
             const docsQuery = query(docsRef, where('fechaE', '>=', twelveMonthsAgoTimestamp));
 
             fetchPromises.push(
@@ -271,7 +273,7 @@ const RCalendario = () => {
               docData.fechaV?.toDate &&
               docData.fechaV.toDate() < hoy
             ) {
-              const docRef = doc(db, 'empresas', rut, tipo, docSnap.id);
+              const docRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut, tipo, docSnap.id);
               updatePromises.push(updateDoc(docRef, { estado: 'vencido' }));
             }
 
@@ -303,7 +305,7 @@ const RCalendario = () => {
     };
 
     fetchInitialDocuments();
-  }, [tiposDoc, initialLoadCutoff, getMonthKey, processDocData]);
+  }, [tiposDoc, initialLoadCutoff, getMonthKey, processDocData, currentCompanyRUT]);
 
   // Lazy load when navigating to an unloaded month
   useEffect(() => {

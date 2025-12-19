@@ -11,6 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 import { doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig'; // ajusta la ruta a tu config
+import { useCompany } from '../../context/CompanyContext';
 
 import { formatRUT } from '../../utils/formatRUT';
 import { validateRUT } from '../../utils/validation';
@@ -18,6 +19,7 @@ import { validateRUT } from '../../utils/validation';
 const RProcesar = () => {
   const navigate = useNavigate();
   const { isLightTheme } = useTheme();
+  const { currentCompanyRUT } = useCompany();
 
   {
     /* Variables de textfields */
@@ -52,8 +54,9 @@ const RProcesar = () => {
   };
 
   useEffect(() => {
+    if (!currentCompanyRUT) return;
     // Referencia a la colección "empresas"
-    const empresasRef = collection(db, 'empresas');
+    const empresasRef = collection(db, currentCompanyRUT, '_root', 'empresas');
 
     // Suscribirse a los cambios en tiempo real
     const unsubscribe = onSnapshot(
@@ -71,7 +74,7 @@ const RProcesar = () => {
 
     // Cleanup cuando el componente se desmonte
     return () => unsubscribe();
-  }, []);
+  }, [currentCompanyRUT]);
 
   // Estado de errores
   const [errorRut, setErrorRut] = useState('');
@@ -115,7 +118,7 @@ const RProcesar = () => {
 
       try {
         setLoadingModal(true);
-        const empresaRef = doc(db, 'empresas', rut);
+        const empresaRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut);
         const docSnap = await getDoc(empresaRef);
 
         if (docSnap.exists()) {
@@ -165,7 +168,7 @@ const RProcesar = () => {
 
       try {
         setLoadingModal(true);
-        const empresaRef = doc(db, 'empresas', rut);
+        const empresaRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut);
         await setDoc(empresaRef, empresa);
         setLoadingModal(false);
         setEditModal(false);
@@ -186,7 +189,7 @@ const RProcesar = () => {
 
     try {
       setLoadingModal(true);
-      const empresaRef = doc(db, 'empresas', rutEmpresa);
+      const empresaRef = doc(db, currentCompanyRUT, '_root', 'empresas', rutEmpresa);
       await deleteDoc(empresaRef);
       setLoadingModal(false);
       setEliminarModal(false);

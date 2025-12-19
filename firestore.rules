@@ -28,6 +28,11 @@ service cloud.firestore {
       return getUserData().rol;
     }
 
+    // Check if user has access to a specific company
+    function hasCompanyAccess(companyRut) {
+      return isActive() && companyRut in getUserData().empresas;
+    }
+
     // Role checks
     function isSuperAdmin() {
       return isActive() && getUserRole() == 'super_admin';
@@ -49,8 +54,25 @@ service cloud.firestore {
       return isActive(); // All active users can at least view
     }
 
+    // Role checks with company access
+    function isAdminWithAccess(companyRut) {
+      return hasCompanyAccess(companyRut) && isAdmin();
+    }
+
+    function isGestorWithAccess(companyRut) {
+      return hasCompanyAccess(companyRut) && isGestor();
+    }
+
+    function isDigitadorWithAccess(companyRut) {
+      return hasCompanyAccess(companyRut) && isDigitador();
+    }
+
+    function isVisorWithAccess(companyRut) {
+      return hasCompanyAccess(companyRut) && isVisor();
+    }
+
     // ═══════════════════════════════════════════════════════════════
-    // USUARIOS - User management
+    // USUARIOS - User management (global collection)
     // ═══════════════════════════════════════════════════════════════
     match /usuarios/{email} {
       // Users can read their own document
@@ -62,55 +84,67 @@ service cloud.firestore {
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // EMPRESAS - Companies and documents
+    // COMPANY STRUCTURE - /{companyRut}/_root/ holds company data
+    // This structure uses _root as a document within the company collection
+    // to comply with Firestore's path requirements (even number of segments)
     // ═══════════════════════════════════════════════════════════════
-    match /empresas/{rut} {
-      // Visor+ can read companies
-      allow read: if isVisor();
-      // Gestor+ can write companies
-      allow write: if isGestor();
+    match /{companyRut}/_root {
+      // Allow read to authenticated users for login validation (company info)
+      allow read: if isAuthenticated();
+      // Only admins with access can update company info
+      allow write: if isAdminWithAccess(companyRut);
 
-      // Subcollections (facturas, facturasExentas, notasCredito, boletas)
-      match /{subcollection}/{docId} {
-        // Visor+ can read
-        allow read: if isVisor();
-        // Digitador+ can create
-        allow create: if isDigitador();
-        // Gestor+ can update/delete
-        allow update, delete: if isGestor();
+      // ═════════════════════════════════════════════════════════════
+      // EMPRESAS - Companies/providers within this company
+      // ═════════════════════════════════════════════════════════════
+      match /empresas/{rut} {
+        // Visor+ with access can read companies
+        allow read: if isVisorWithAccess(companyRut);
+        // Gestor+ with access can write companies
+        allow write: if isGestorWithAccess(companyRut);
+
+        // Subcollections (facturas, facturasExentas, notasCredito, boletas)
+        match /{subcollection}/{docId} {
+          // Visor+ with access can read
+          allow read: if isVisorWithAccess(companyRut);
+          // Digitador+ with access can create
+          allow create: if isDigitadorWithAccess(companyRut);
+          // Gestor+ with access can update/delete
+          allow update, delete: if isGestorWithAccess(companyRut);
+        }
       }
-    }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PAGO_RECEPCION - Payment records
-    // ═══════════════════════════════════════════════════════════════
-    match /pago_recepcion/{pagoId} {
-      // Visor+ can read
-      allow read: if isVisor();
-      // Gestor+ can create/update/delete (process payments)
-      allow write: if isGestor();
-    }
+      // ═════════════════════════════════════════════════════════════
+      // PAGO_RECEPCION - Payment records
+      // ═════════════════════════════════════════════════════════════
+      match /pago_recepcion/{pagoId} {
+        // Visor+ with access can read
+        allow read: if isVisorWithAccess(companyRut);
+        // Gestor+ with access can create/update/delete (process payments)
+        allow write: if isGestorWithAccess(companyRut);
+      }
 
-    // ═══════════════════════════════════════════════════════════════
-    // AUDITORIA - Audit trail for document changes/deletions
-    // ═══════════════════════════════════════════════════════════════
-    match /auditoria/{logId} {
-      // Only admins can read audit logs
-      allow read: if isAdmin();
-      // Gestor+ can create audit entries (logged when editing/deleting documents)
-      allow create: if isGestor();
-      // No one can update or delete audit logs (immutable)
-      allow update, delete: if false;
-    }
+      // ═════════════════════════════════════════════════════════════
+      // AUDITORIA - Audit trail for document changes/deletions
+      // ═════════════════════════════════════════════════════════════
+      match /auditoria/{logId} {
+        // Only admins with access can read audit logs
+        allow read: if isAdminWithAccess(companyRut);
+        // Gestor+ with access can create audit entries
+        allow create: if isGestorWithAccess(companyRut);
+        // No one can update or delete audit logs (immutable)
+        allow update, delete: if false;
+      }
 
-    // ═══════════════════════════════════════════════════════════════
-    // VALUES - Configuration values
-    // ═══════════════════════════════════════════════════════════════
-    match /values/{valueId} {
-      // All active users can read
-      allow read: if isVisor();
-      // Only admins can modify
-      allow write: if isAdmin();
+      // ═════════════════════════════════════════════════════════════
+      // VALUES - Configuration values
+      // ═════════════════════════════════════════════════════════════
+      match /values/{valueId} {
+        // All active users with access can read
+        allow read: if isVisorWithAccess(companyRut);
+        // Only admins with access can modify
+        allow write: if isAdminWithAccess(companyRut);
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════

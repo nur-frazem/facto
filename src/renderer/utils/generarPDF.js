@@ -34,7 +34,12 @@ const drawRoundedRect = (pdf, x, y, width, height, fill = false, fillColor = COL
 };
 
 // Función para generar PDF
-export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, fechaPago = null) => {
+export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, fechaPago = null, companyRUT = null) => {
+  // Validate companyRUT is provided
+  if (!companyRUT) {
+    console.error("generarPDF: companyRUT is required");
+    throw new Error("Company RUT is required to generate PDF");
+  }
   const pdf = new jsPDF();
   const pageWidth = 210;
   const marginLeft = 20;
@@ -82,8 +87,24 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
   // DOCUMENT INFO SECTION
   // ═══════════════════════════════════════════════════════════════
 
-  const fechaPagoStr = fechaPago
-    ? (fechaPago instanceof Date ? fechaPago : new Date(fechaPago)).toLocaleDateString("es-CL")
+  // Handle fechaPago which could be: Date, Firestore Timestamp, or {seconds} object
+  let fechaPagoDate;
+  if (fechaPago) {
+    if (fechaPago instanceof Date) {
+      fechaPagoDate = fechaPago;
+    } else if (fechaPago.toDate && typeof fechaPago.toDate === 'function') {
+      // Firestore Timestamp
+      fechaPagoDate = fechaPago.toDate();
+    } else if (fechaPago.seconds) {
+      // Plain object with seconds (from Firestore)
+      fechaPagoDate = new Date(fechaPago.seconds * 1000);
+    } else {
+      // Try to parse as date string
+      fechaPagoDate = new Date(fechaPago);
+    }
+  }
+  const fechaPagoStr = fechaPagoDate && !isNaN(fechaPagoDate.getTime())
+    ? fechaPagoDate.toLocaleDateString("es-CL")
     : new Date().toLocaleDateString("es-CL");
 
   pdf.setFont("helvetica", "normal");
@@ -96,6 +117,9 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
 
   let y = 60;
 
+  // Track grand total from subtotals (more accurate than passed totalEgreso when NC are involved)
+  let grandTotal = 0;
+
   // ═══════════════════════════════════════════════════════════════
   // PROVIDER SECTIONS (iterate per company)
   // ═══════════════════════════════════════════════════════════════
@@ -107,8 +131,8 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
       y = 20;
     }
 
-    // Fetch company info from Firestore
-    const empresaRef = doc(db, "empresas", empresa.rut);
+    // Fetch company info from Firestore (multi-tenant path)
+    const empresaRef = doc(db, companyRUT, "_root", "empresas", empresa.rut);
     const empresaSnap = await getDoc(empresaRef);
     const empresaData = empresaSnap.exists() ? empresaSnap.data() : {};
 
@@ -195,8 +219,8 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
       const facturaNum = typeof facturaItem === "object" ? facturaItem.numeroDoc : facturaItem;
       const tipoDoc = typeof facturaItem === "object" ? (facturaItem.tipoDoc || "facturas") : "facturas";
 
-      // Determine the collection to fetch from
-      const facturaRef = doc(db, "empresas", empresa.rut, tipoDoc, String(facturaNum));
+      // Determine the collection to fetch from (multi-tenant path)
+      const facturaRef = doc(db, companyRUT, "_root", "empresas", empresa.rut, tipoDoc, String(facturaNum));
       const facturaSnap = await getDoc(facturaRef);
       if (!facturaSnap.exists()) continue;
       const factura = facturaSnap.data();
@@ -221,12 +245,38 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
 
       // Get abono information from facturaItem (if passed)
       const esAbono = typeof facturaItem === "object" && facturaItem.esAbono;
-      // Check for montoAPagar first, then montoPagado (stored in pago_recepcion), then fallback to factura.total
-      const montoAPagar = typeof facturaItem === "object" && facturaItem.montoAPagar != null
+      const includeNC = typeof facturaItem === "object" && facturaItem.includeNotaCredito === true;
+
+      // Get the raw payment amount
+      const montoAPagarRaw = typeof facturaItem === "object" && facturaItem.montoAPagar != null
         ? facturaItem.montoAPagar
         : typeof facturaItem === "object" && facturaItem.montoPagado != null
         ? facturaItem.montoPagado
         : factura.total;
+
+      // Determine what amount to display
+      // - For first full payment with NC: use factura.total, NC will be subtracted below
+      // - For abonos with NC or completing payment after previous abonos: use payment + NC amount
+      // - For other cases: use raw amount
+      const hasNCToShow = includeNC && factura.notasCredito && factura.notasCredito.length > 0;
+
+      // Check if this is truly the first full payment (no previous abonos)
+      // by comparing montoAPagarRaw with totalDescontado (or total if no NC discount)
+      const totalDescontadoOrTotal = factura.totalDescontado ?? factura.total;
+      const isFirstFullPayment = !esAbono && montoAPagarRaw >= totalDescontadoOrTotal;
+
+      let montoAPagar;
+      if (isFirstFullPayment && hasNCToShow) {
+        // First full payment with NC - show original total
+        montoAPagar = factura.total;
+      } else if (hasNCToShow) {
+        // Abono with NC OR completing payment after previous abonos
+        // Show payment + NC so the subtraction makes visual sense
+        montoAPagar = montoAPagarRaw + (factura.abonoNc || 0);
+      } else {
+        // No NC to show
+        montoAPagar = montoAPagarRaw;
+      }
 
       // Determine the label based on document type
       let tipoLabel = "Factura";
@@ -280,11 +330,17 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
       y += rowHeight;
 
       // Credit notes associated
-      if (factura.notasCredito && factura.notasCredito.length > 0) {
+      // Show credit notes if includeNotaCredito is explicitly true
+      // For abonos with NC: NC is shown for documentation (it's being marked as pagado), but NOT subtracted from subtotal
+      // For full payments with NC: NC is shown AND subtracted from subtotal
+      const shouldShowNC = typeof facturaItem === "object"
+        ? facturaItem.includeNotaCredito === true
+        : true; // For backwards compatibility with old format (string/number)
+      if (shouldShowNC && factura.notasCredito && factura.notasCredito.length > 0) {
         for (const ncNum of factura.notasCredito) {
           // Handle both object format ({numeroDoc: "123"}) and string/number format
           const ncNumero = typeof ncNum === "object" ? ncNum.numeroDoc : ncNum;
-          const ncRef = doc(db, "empresas", empresa.rut, "notasCredito", String(ncNumero));
+          const ncRef = doc(db, companyRUT, "_root", "empresas", empresa.rut, "notasCredito", String(ncNumero));
           const ncSnap = await getDoc(ncRef);
           if (!ncSnap.exists()) continue;
           const ncData = ncSnap.data();
@@ -319,6 +375,9 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
           pdf.setLineWidth(0.1);
           pdf.line(marginLeft + 5, y + rowHeight - 1, marginRight, y + rowHeight - 1);
 
+          // Always subtract NC from subtotal when it's shown
+          // For abonos with NC: montoAPagar already includes NC (abono + NC), so we subtract it
+          // For full payments with NC: montoAPagar is the original total, so we subtract NC
           subtotalEmpresa -= ncData.total || 0;
           y += rowHeight - 1;
         }
@@ -339,6 +398,9 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
     pdf.setFont("helvetica", "bold");
     pdf.setTextColor(...COLORS.black);
     pdf.text(formatCLP(subtotalEmpresa), marginRight - 5, y, { align: "right" });
+
+    // Add to grand total
+    grandTotal += subtotalEmpresa;
 
     y += 15; // Space before next provider
   }
@@ -372,7 +434,8 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(12);
   pdf.setTextColor(...COLORS.black);
-  pdf.text(formatCLP(totalEgreso), totalBoxX + totalBoxWidth - 5, totalBoxY + 14, { align: "right" });
+  // Use calculated grandTotal (sum of subtotals) which correctly accounts for credit notes
+  pdf.text(formatCLP(grandTotal), totalBoxX + totalBoxWidth - 5, totalBoxY + 14, { align: "right" });
 
   y += totalBoxHeight + 20;
 

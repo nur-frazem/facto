@@ -5,13 +5,18 @@ import { Textfield } from '../components/Textfield';
 import { Modal } from '../components/modal';
 import Footer from '../components/Footer';
 import { useTheme } from '../context/ThemeContext';
+import { useCompany, validateRut, formatRut, cleanRut } from '../context/CompanyContext';
 
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
 
 const IniciarSesion = () => {
     const { isLightTheme } = useTheme();
     const navigate = useNavigate();
+    const { setCurrentCompany, validateCompanyExists } = useCompany();
+
+    const [companyRut, setCompanyRut] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [showErrorModal, setShowErrorModal] = useState(false);
@@ -25,10 +30,74 @@ const IniciarSesion = () => {
     const [resetSuccess, setResetSuccess] = useState(false);
     const [resetError, setResetError] = useState("");
 
+    // Handle RUT input with formatting
+    const handleRutChange = (e) => {
+        const value = e.target.value;
+        // Allow only valid RUT characters
+        const cleaned = value.replace(/[^0-9kK.-]/g, '');
+        // Format as user types
+        if (cleaned.length <= 12) {
+            setCompanyRut(formatRut(cleaned));
+        }
+    };
+
     const handleLogin = async () => {
         try {
             setLoadingModal(true);
+
+            // Validate RUT format first (no auth needed)
+            if (!companyRut) {
+                setErrorMessage("Ingrese el RUT de la empresa");
+                setLoadingModal(false);
+                setShowErrorModal(true);
+                return;
+            }
+
+            if (!validateRut(companyRut)) {
+                setErrorMessage("El RUT de empresa ingresado no es válido");
+                setLoadingModal(false);
+                setShowErrorModal(true);
+                return;
+            }
+
+            const cleanedRut = cleanRut(companyRut);
+
+            // Authenticate FIRST (needed before checking Firestore)
             await signInWithEmailAndPassword(auth, email, password);
+
+            // Now that user is authenticated, check if company exists
+            const companyExists = await validateCompanyExists(cleanedRut);
+            if (!companyExists) {
+                setErrorMessage("La empresa no existe en el sistema");
+                setLoadingModal(false);
+                setShowErrorModal(true);
+                return;
+            }
+
+            // Verify user has access to this company
+            const userDocRef = doc(db, 'usuarios', email.toLowerCase());
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+                setErrorMessage("Usuario no tiene permisos en el sistema");
+                setLoadingModal(false);
+                setShowErrorModal(true);
+                return;
+            }
+
+            const userData = userDoc.data();
+            const userCompanies = userData.empresas || [];
+
+            if (!userCompanies.includes(cleanedRut)) {
+                setErrorMessage("No tiene acceso a esta empresa");
+                setLoadingModal(false);
+                setShowErrorModal(true);
+                return;
+            }
+
+            // Set the current company in context
+            setCurrentCompany(cleanedRut);
+
             // Status updates (pendiente -> vencido) are now handled per-page when documents are loaded
             setLoadingModal(false);
             navigate("/home");
@@ -134,6 +203,15 @@ const IniciarSesion = () => {
 
                         {/* Form Fields */}
                         <div className="space-y-4">
+                            <Textfield
+                                label="RUT Empresa"
+                                type='text'
+                                className='w-full'
+                                placeholder="76.183.672-2"
+                                value={companyRut}
+                                onChange={handleRutChange}
+                                onKeyPress={handleKeyPress}
+                            />
                             <Textfield
                                 label="Correo electrónico"
                                 type='email'

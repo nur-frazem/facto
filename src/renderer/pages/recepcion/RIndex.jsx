@@ -6,6 +6,7 @@ import { VolverButton } from '../../components/Button';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useCompany } from '../../context/CompanyContext';
 import { collection, getDocs, query, where, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 import { formatCLP } from '../../utils/formatCurrency';
@@ -159,6 +160,7 @@ const RIndex = () => {
   const navigate = useNavigate();
   const { tienePermiso } = useAuth();
   const { isLightTheme } = useTheme();
+  const { currentCompanyRUT } = useCompany();
 
   // Permissions
   const puedeIngresar = tienePermiso('INGRESAR_DOCUMENTOS');
@@ -207,9 +209,11 @@ const RIndex = () => {
       }
     }
 
+    if (!currentCompanyRUT) return;
+
     setLoading(true);
     try {
-      const empresasRef = collection(db, 'empresas');
+      const empresasRef = collection(db, currentCompanyRUT, '_root', 'empresas');
       const empresasSnapshot = await getDocs(empresasRef);
 
       // Filter providers first
@@ -232,7 +236,7 @@ const RIndex = () => {
         const rut = empresaDoc.id;
 
         return DOC_TYPES.map(async (docType) => {
-          const docsRef = collection(db, 'empresas', rut, docType.subcol);
+          const docsRef = collection(db, currentCompanyRUT, '_root', 'empresas', rut, docType.subcol);
           // Query only documents from the last 6 months
           const docsQuery = query(docsRef, where('fechaE', '>=', sixMonthsAgoTimestamp));
           const docsSnapshot = await getDocs(docsQuery);
@@ -296,7 +300,7 @@ const RIndex = () => {
       // Update overdue documents in Firestore (in parallel, silently)
       if (documentsToUpdate.length > 0) {
         const updatePromises = documentsToUpdate.map(({ rut, subcol, docId, newEstado }) =>
-          updateDoc(doc(db, 'empresas', rut, subcol, docId), { estado: newEstado })
+          updateDoc(doc(db, currentCompanyRUT, '_root', 'empresas', rut, subcol, docId), { estado: newEstado })
             .catch(err => console.warn(`Could not update ${docId}:`, err))
         );
         await Promise.all(updatePromises);
@@ -321,7 +325,7 @@ const RIndex = () => {
     } finally {
       setLoading(false);
     }
-  }, [lastRefreshTime]);
+  }, [lastRefreshTime, currentCompanyRUT]);
 
   // Load cached data on mount or fetch fresh data
   useEffect(() => {

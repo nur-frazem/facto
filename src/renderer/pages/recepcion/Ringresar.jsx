@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { Textfield, DropdownMenu, DatepickerField } from "../../components/Textfield";
 import { Modal, LoadingModal, AlertModal } from "../../components/modal";
 import { useTheme } from "../../context/ThemeContext";
+import { useCompany } from "../../context/CompanyContext";
 
 import { doc, setDoc, getDoc, collection, onSnapshot, runTransaction, addDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
@@ -19,6 +20,7 @@ import { getAuth } from "firebase/auth";
 const RIngresar = () => {
   const navigate = useNavigate();
   const { isLightTheme } = useTheme();
+  const { currentCompanyRUT } = useCompany();
 
   const [userId, setUserId] = useState("");
 
@@ -38,7 +40,9 @@ const RIngresar = () => {
 
   // Referencia a la colección "empresas"
   useEffect(() => {
-      const empresasRef = collection(db, "empresas");
+      if (!currentCompanyRUT) return;
+
+      const empresasRef = collection(db, currentCompanyRUT, "_root", "empresas");
 
       // Suscribirse a los cambios en tiempo real
       const unsubscribe = onSnapshot(empresasRef, (snapshot) => {
@@ -52,13 +56,15 @@ const RIngresar = () => {
 
       // Cleanup cuando el componente se desmonte
       return () => unsubscribe();
-  }, []);
+  }, [currentCompanyRUT]);
   const [rows, setRows] = useState([]);
 
   // Referencia a la coleccion "Values"
   useEffect(() => {
-    const tipoDocRef = doc(db, "values", "tipo-doc");
-  
+    if (!currentCompanyRUT) return;
+
+    const tipoDocRef = doc(db, currentCompanyRUT, "_root", "values", "tipo-doc");
+
     const fetchTipoDoc = async () => {
       try {
         const tipoDocSnap = await getDoc(tipoDocRef);
@@ -77,7 +83,7 @@ const RIngresar = () => {
     };
     fetchTipoDoc();
 
-    const formaPagoRef = doc(db, "values", "formas-pago");
+    const formaPagoRef = doc(db, currentCompanyRUT, "_root", "values", "formas-pago");
     const fetchFormaPago = async () => {
       try {
         const formaPagoSnap = await getDoc(formaPagoRef);
@@ -94,7 +100,7 @@ const RIngresar = () => {
       }
     };
     fetchFormaPago();
-  }, []);
+  }, [currentCompanyRUT]);
   const [rowTipoDoc, setRowTipoDoc] = useState([]);
   const [rowFormaPago, setRowFormaPago] = useState([]);
 
@@ -345,7 +351,7 @@ const RIngresar = () => {
     // Factura electrónica
     if(selectedDoc === "Factura electrónica"){
       try {
-        const documentoRef = doc(db, "empresas", String(giroRut), "facturas", String(numeroDoc));
+        const documentoRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), "facturas", String(numeroDoc));
         const docSnap = await getDoc(documentoRef);
 
         if (docSnap.exists()) {
@@ -358,7 +364,7 @@ const RIngresar = () => {
 
         // Registrar en auditoría
         try {
-          await addDoc(collection(db, "auditoria"), {
+          await addDoc(collection(db, currentCompanyRUT, "_root", "auditoria"), {
             tipo: "creacion",
             tipoDocumento: "facturas",
             numeroDocumento: numeroDoc,
@@ -391,7 +397,7 @@ const RIngresar = () => {
     // Factura exenta - va a colección facturasExentas
     if(selectedDoc === "Factura exenta"){
       try {
-        const documentoRef = doc(db, "empresas", String(giroRut), "facturasExentas", String(numeroDoc));
+        const documentoRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), "facturasExentas", String(numeroDoc));
         const docSnap = await getDoc(documentoRef);
 
         if (docSnap.exists()) {
@@ -404,7 +410,7 @@ const RIngresar = () => {
 
         // Registrar en auditoría
         try {
-          await addDoc(collection(db, "auditoria"), {
+          await addDoc(collection(db, currentCompanyRUT, "_root", "auditoria"), {
             tipo: "creacion",
             tipoDocumento: "facturasExentas",
             numeroDocumento: numeroDoc,
@@ -437,7 +443,7 @@ const RIngresar = () => {
     // Boleta
     if(selectedDoc === "Boleta"){
       try {
-        const documentoRef = doc(db, "empresas", String(giroRut), "boletas", String(numeroDoc));
+        const documentoRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), "boletas", String(numeroDoc));
         const docSnap = await getDoc(documentoRef);
 
         if (docSnap.exists()) {
@@ -450,7 +456,7 @@ const RIngresar = () => {
 
         // Registrar en auditoría
         try {
-          await addDoc(collection(db, "auditoria"), {
+          await addDoc(collection(db, currentCompanyRUT, "_root", "auditoria"), {
             tipo: "creacion",
             tipoDocumento: "boletas",
             numeroDocumento: numeroDoc,
@@ -481,9 +487,9 @@ const RIngresar = () => {
     // Nota de crédito
     if(selectedDoc === "Nota de crédito"){
       try {
-        const documentoRef = doc(db, "empresas", String(giroRut), "notasCredito", String(numeroDoc));
+        const documentoRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), "notasCredito", String(numeroDoc));
         const tipoFacturaAsociada = tipoDocNc === "Factura exenta" ? "facturasExentas" : "facturas";
-        const facturaRef = doc(db, "empresas", String(giroRut), tipoFacturaAsociada, String(numeroDocNc));
+        const facturaRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), tipoFacturaAsociada, String(numeroDocNc));
 
         // Use transaction to prevent race conditions
         await runTransaction(db, async (transaction) => {
@@ -532,7 +538,7 @@ const RIngresar = () => {
 
         // Registrar en auditoría
         try {
-          await addDoc(collection(db, "auditoria"), {
+          await addDoc(collection(db, currentCompanyRUT, "_root", "auditoria"), {
             tipo: "creacion",
             tipoDocumento: "notasCredito",
             numeroDocumento: numeroDoc,
@@ -649,7 +655,7 @@ const RIngresar = () => {
                     const rutLimpio = cleanRUT(rutSolo);
                     setGiroRut(rutLimpio);
 
-                    const empresaRef = doc(db, "empresas", rutLimpio);
+                    const empresaRef = doc(db, currentCompanyRUT, "_root", "empresas", rutLimpio);
                     const empresaSnap = await getDoc(empresaRef);
                     if (empresaSnap.exists()) {
                       const data = empresaSnap.data();

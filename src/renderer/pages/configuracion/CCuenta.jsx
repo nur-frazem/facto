@@ -22,6 +22,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { db, auth } from '../../../firebaseConfig';
 
 import { useAuth, ROLES_LABELS, ROLES_DESCRIPCION } from '../../context/AuthContext';
+import { useCompany } from '../../context/CompanyContext';
 
 // Cooldown for name change: 1 day in milliseconds
 const NAME_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -30,6 +31,7 @@ const CCuenta = () => {
   const navigate = useNavigate();
   const { user, userData, tienePermiso } = useAuth();
   const { isLightTheme } = useTheme();
+  const { currentCompanyRUT } = useCompany();
 
   // State for name change
   const [nuevoNombre, setNuevoNombre] = useState('');
@@ -88,11 +90,11 @@ const CCuenta = () => {
   // Load activity stats from audit logs
   useEffect(() => {
     const loadActivityStats = async () => {
-      if (!user?.email) return;
+      if (!user?.email || !currentCompanyRUT) return;
 
       setLoadingStats(true);
       try {
-        const auditoriaRef = collection(db, 'auditoria');
+        const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
         const q = query(auditoriaRef);
         const snapshot = await getDocs(q);
 
@@ -145,7 +147,7 @@ const CCuenta = () => {
     };
 
     loadActivityStats();
-  }, [user]);
+  }, [user, currentCompanyRUT]);
 
   // Handle name change
   const handleNameChange = async () => {

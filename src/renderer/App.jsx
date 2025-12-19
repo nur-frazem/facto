@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { CompanyProvider } from './context/CompanyContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import Home from './pages/Home';
 import IniciarSesion from './pages/IniciarSesion';
@@ -50,8 +51,9 @@ function AppContent() {
       {/* Contenido principal - flex-1 para ocupar el espacio disponible */}
       <div className="relative z-10 flex-1 flex flex-col">
         <AuthProvider>
-          <HashRouter>
-            <Routes>
+          <CompanyProvider>
+            <HashRouter>
+              <Routes>
               {/* Ruta pública - Login */}
               <Route path="/" element={<IniciarSesion/>} />
 
@@ -109,8 +111,9 @@ function AppContent() {
                   <RCalendario/>
                 </ProtectedRoute>
               } />
-            </Routes>
-          </HashRouter>
+              </Routes>
+            </HashRouter>
+          </CompanyProvider>
         </AuthProvider>
       </div>
     </div>
