@@ -151,10 +151,12 @@ const DOC_TYPES = [
 ];
 
 // Cache configuration (outside component)
-const CACHE_KEY = 'recepcion_documents_cache';
-const CACHE_TIMESTAMP_KEY = 'recepcion_cache_timestamp';
 const CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const REFRESH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
+// Helper to get company-specific cache keys
+const getCacheKey = (companyRUT) => `recepcion_documents_cache_${companyRUT}`;
+const getCacheTimestampKey = (companyRUT) => `recepcion_cache_timestamp_${companyRUT}`;
 
 const RIndex = () => {
   const navigate = useNavigate();
@@ -180,13 +182,9 @@ const RIndex = () => {
 
   // State for document data
   const [allDocuments, setAllDocuments] = useState([]);
-  const [lastRefreshTime, setLastRefreshTime] = useState(() => {
-    // Initialize from localStorage if available
-    const cached = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-    return cached ? parseInt(cached, 10) : 0;
-  });
+  const [lastRefreshTime, setLastRefreshTime] = useState(0);
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const initialLoadDone = useRef(false);
+  const lastCompanyRUT = useRef(null);
 
   // Update current time every second for smooth countdown
   useEffect(() => {
@@ -308,11 +306,11 @@ const RIndex = () => {
 
       setAllDocuments(allDocs);
 
-      // Save to cache
+      // Save to cache (company-specific)
       const now = Date.now();
       try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(allDocs));
-        localStorage.setItem(CACHE_TIMESTAMP_KEY, now.toString());
+        localStorage.setItem(getCacheKey(currentCompanyRUT), JSON.stringify(allDocs));
+        localStorage.setItem(getCacheTimestampKey(currentCompanyRUT), now.toString());
       } catch (e) {
         console.warn('Could not save to cache:', e);
       }
@@ -327,40 +325,50 @@ const RIndex = () => {
     }
   }, [lastRefreshTime, currentCompanyRUT]);
 
-  // Load cached data on mount or fetch fresh data
+  // Load cached data on mount or when company changes
   useEffect(() => {
-    if (initialLoadDone.current) return;
-    initialLoadDone.current = true;
+    if (!currentCompanyRUT) return;
 
-    const loadCachedData = () => {
-      try {
-        const cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-        const cachedData = localStorage.getItem(CACHE_KEY);
+    // Detect company change
+    if (lastCompanyRUT.current !== currentCompanyRUT) {
+      lastCompanyRUT.current = currentCompanyRUT;
 
-        if (cachedTimestamp && cachedData) {
-          const timestamp = parseInt(cachedTimestamp, 10);
-          const age = Date.now() - timestamp;
+      // Reset state for new company
+      setAllDocuments([]);
+      setLastRefreshTime(0);
+      setLoading(true);
 
-          // If cache is still valid (less than 30 minutes old)
-          if (age < CACHE_DURATION_MS) {
-            const parsedData = JSON.parse(cachedData);
-            setAllDocuments(parsedData);
-            setLastRefreshTime(timestamp);
-            setLoading(false);
-            return true; // Cache was valid and loaded
+      // Try to load company-specific cache
+      const loadCachedData = () => {
+        try {
+          const cachedTimestamp = localStorage.getItem(getCacheTimestampKey(currentCompanyRUT));
+          const cachedData = localStorage.getItem(getCacheKey(currentCompanyRUT));
+
+          if (cachedTimestamp && cachedData) {
+            const timestamp = parseInt(cachedTimestamp, 10);
+            const age = Date.now() - timestamp;
+
+            // If cache is still valid (less than 30 minutes old)
+            if (age < CACHE_DURATION_MS) {
+              const parsedData = JSON.parse(cachedData);
+              setAllDocuments(parsedData);
+              setLastRefreshTime(timestamp);
+              setLoading(false);
+              return true; // Cache was valid and loaded
+            }
           }
+        } catch (error) {
+          console.error('Error loading cache:', error);
         }
-      } catch (error) {
-        console.error('Error loading cache:', error);
-      }
-      return false; // No valid cache
-    };
+        return false; // No valid cache
+      };
 
-    const cacheLoaded = loadCachedData();
-    if (!cacheLoaded) {
-      fetchAllDocuments();
+      const cacheLoaded = loadCachedData();
+      if (!cacheLoaded) {
+        fetchAllDocuments();
+      }
     }
-  }, [fetchAllDocuments]);
+  }, [currentCompanyRUT, fetchAllDocuments]);
 
   // Measure chart containers when available
   useEffect(() => {

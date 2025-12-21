@@ -59,50 +59,18 @@ const RIngresar = () => {
   }, [currentCompanyRUT]);
   const [rows, setRows] = useState([]);
 
-  // Referencia a la coleccion "Values"
-  useEffect(() => {
-    if (!currentCompanyRUT) return;
+  // Tipos de documento y formas de pago (valores estándar SII Chile)
+  const TIPOS_DOCUMENTO = [
+    "Factura electrónica",
+    "Factura exenta",
+    "Boleta",
+    "Nota de crédito"
+  ];
 
-    const tipoDocRef = doc(db, currentCompanyRUT, "_root", "values", "tipo-doc");
-
-    const fetchTipoDoc = async () => {
-      try {
-        const tipoDocSnap = await getDoc(tipoDocRef);
-        if (tipoDocSnap.exists()) {
-          // tipoDocSnap.data() devuelve un objeto {0: "Todos", 1: "Factura electrónica", ...}
-          const data = tipoDocSnap.data();
-          // Convertimos a array de strings
-          const arrayData = Object.values(data);
-          setRowTipoDoc(arrayData);
-        } else {
-          console.warn("Documento 'tipo-doc' no existe");
-        }
-      } catch (error) {
-        console.error("Error obteniendo tipo de documentos:", error);
-      }
-    };
-    fetchTipoDoc();
-
-    const formaPagoRef = doc(db, currentCompanyRUT, "_root", "values", "formas-pago");
-    const fetchFormaPago = async () => {
-      try {
-        const formaPagoSnap = await getDoc(formaPagoRef);
-        if (formaPagoSnap.exists()) {
-          const data = formaPagoSnap.data();
-          // Convertimos a array de strings
-          const arrayFormaPagoData = Object.values(data);
-          setRowFormaPago(arrayFormaPagoData);
-        } else {
-          console.warn("Documento 'formas-pago' no existe");
-        }
-      } catch (error) {
-        console.error("Error obteniendo formas de pago:", error);
-      }
-    };
-    fetchFormaPago();
-  }, [currentCompanyRUT]);
-  const [rowTipoDoc, setRowTipoDoc] = useState([]);
-  const [rowFormaPago, setRowFormaPago] = useState([]);
+  const FORMAS_PAGO = [
+    "Contado",
+    "Crédito"
+  ];
 
   // Valores de los campos
   const [selectedDoc, setSelectedDoc] = useState(null);
@@ -678,7 +646,7 @@ const RIngresar = () => {
                         )}
                       </>
                     }
-                    items={rowTipoDoc.slice(1).filter((item) => item !== "Guía electrónica")}
+                    items={TIPOS_DOCUMENTO}
                     value={selectedDoc}
                     onSelect={(item) => {
                       setSelectedDoc(item);
@@ -737,7 +705,7 @@ const RIngresar = () => {
                         )}
                       </>
                     }
-                    items={rowFormaPago.slice(1)}
+                    items={FORMAS_PAGO}
                     value={formaPago}
                     onSelect={(item) => {
                       setFormaPago(item);
