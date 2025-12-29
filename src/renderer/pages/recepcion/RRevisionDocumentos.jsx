@@ -812,8 +812,18 @@ const RRevisionDocumentos = () => {
 
       const docData = docSnap.data();
 
+      // "Contado" documents are marked as "pagado" immediately when entered,
+      // but they don't go through the payment process (no egreso created).
+      // These should be editable/deletable like boletas.
+      const esContadoSinEgreso =
+        (tipoDoc === 'facturas' || tipoDoc === 'facturasExentas') &&
+        docData.formaPago === 'Contado' &&
+        docData.estado === 'pagado' &&
+        !docData.pagoUsuario; // If pagoUsuario is set, it was processed through payment system
+
       // Solo permitir editar documentos no pagados (excepto boletas que siempre son pagadas)
       const puedeEditarDoc =
+        esContadoSinEgreso || // Allow editing "Contado" documents without egreso
         (tipoDoc === 'facturas' &&
           docData.estado !== 'pagado' &&
           docData.estado !== 'parcialmente_pagado' &&
