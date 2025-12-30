@@ -29,6 +29,7 @@ const getDocTypeShort = (tipo) => {
     facturasExentas: 'Fact. Ex.',
     notasCredito: 'NC',
     boletas: 'Boleta',
+    boletasExentas: 'Bol. Ex.',
   };
   return labels[tipo] || tipo;
 };
@@ -103,7 +104,7 @@ const RCalendario = () => {
   const empresasDataRef = useRef([]);
 
   // Document types to fetch
-  const tiposDoc = useMemo(() => ['facturas', 'facturasExentas', 'notasCredito', 'boletas'], []);
+  const tiposDoc = useMemo(() => ['facturas', 'facturasExentas', 'notasCredito', 'boletas', 'boletasExentas'], []);
 
   // Calculate the cutoff date for initial load (12 months ago)
   const initialLoadCutoff = useMemo(() => {
@@ -458,6 +459,18 @@ const RCalendario = () => {
           displayTotal: doc.total,
           isAbonoEntry: false,
         });
+      } else if ((doc.tipo === 'boletas' || doc.tipo === 'boletasExentas') && doc.estado === 'pagado' && doc.fechaE) {
+        // Boletas and Boletas exentas are always paid on emission date (fechaE)
+        // They don't have fechaPago, so we use fechaE as the payment date
+        const dateKey = doc.fechaE.toDateString();
+        if (!map.paid[dateKey]) {
+          map.paid[dateKey] = [];
+        }
+        map.paid[dateKey].push({
+          ...doc,
+          displayTotal: doc.total,
+          isAbonoEntry: false,
+        });
       }
     });
 
@@ -520,6 +533,14 @@ const RCalendario = () => {
         // Full payment without abonos array
         const docMonth = doc.fechaPago.getMonth();
         const docYear = doc.fechaPago.getFullYear();
+        if (docMonth === currentMonth && docYear === currentYear) {
+          paidCount++;
+          paidTotal += doc.total || 0;
+        }
+      } else if ((doc.tipo === 'boletas' || doc.tipo === 'boletasExentas') && doc.estado === 'pagado' && doc.fechaE) {
+        // Boletas and Boletas exentas are paid on emission date (fechaE)
+        const docMonth = doc.fechaE.getMonth();
+        const docYear = doc.fechaE.getFullYear();
         if (docMonth === currentMonth && docYear === currentYear) {
           paidCount++;
           paidTotal += doc.total || 0;

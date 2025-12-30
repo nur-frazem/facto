@@ -21,7 +21,8 @@ const TIPO_DOC_LABELS = {
   facturas: "Factura",
   facturasExentas: "Factura Exenta",
   notasCredito: "Nota de Crédito",
-  boletas: "Boleta"
+  boletas: "Boleta",
+  boletasExentas: "Boleta Exenta"
 };
 
 // Labels for action types

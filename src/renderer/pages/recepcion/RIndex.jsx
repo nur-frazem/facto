@@ -147,6 +147,7 @@ const DOC_TYPES = [
   { subcol: 'facturas', tipo: 'Factura', isAdditive: true },
   { subcol: 'facturasExentas', tipo: 'Factura Exenta', isAdditive: true },
   { subcol: 'boletas', tipo: 'Boleta', isAdditive: true },
+  { subcol: 'boletasExentas', tipo: 'Boleta Exenta', isAdditive: true },
   { subcol: 'notasCredito', tipo: 'Nota de Crédito', isAdditive: false },
 ];
 
@@ -461,10 +462,10 @@ const RIndex = () => {
     };
   }, [currentMonthDocs, getEffectiveEstado]);
 
-  // Calculate totals (facturas/boletas add, notas de crédito subtract)
-  const calculateTotal = useCallback((docs) => {
+  // Calculate totals using NETO values (facturas/boletas add, notas de crédito subtract)
+  const calculateTotalNeto = useCallback((docs) => {
     return docs.reduce((acc, doc) => {
-      const amount = doc.total || 0;
+      const amount = doc.neto || 0;
       return acc + (doc.isAdditive ? amount : -amount);
     }, 0);
   }, []);
@@ -505,7 +506,7 @@ const RIndex = () => {
     }, 0);
   }, [stats.vencido]);
 
-  // Get data for last 6 months chart - now only showing NET
+  // Get data for last 6 months chart - showing NET (neto values, not total with IVA)
   const getMonthlyChartData = useCallback(() => {
     const data = [];
     for (let i = 5; i >= 0; i--) {
@@ -515,52 +516,53 @@ const RIndex = () => {
       const facturas = monthDocs.filter((d) => d.isAdditive);
       const notasCredito = monthDocs.filter((d) => !d.isAdditive);
 
-      const totalFacturas = facturas.reduce((acc, d) => acc + (d.total || 0), 0);
-      const totalNC = notasCredito.reduce((acc, d) => acc + (d.total || 0), 0);
+      // Use neto (before tax) instead of total (with tax)
+      const netoFacturas = facturas.reduce((acc, d) => acc + (d.neto || 0), 0);
+      const netoNC = notasCredito.reduce((acc, d) => acc + (d.neto || 0), 0);
 
       data.push({
         name: getShortMonthName(date),
-        neto: totalFacturas - totalNC,
+        neto: netoFacturas - netoNC,
       });
     }
     return data;
   }, [currentDate, getDocumentsForMonth]);
 
-  // Get document type distribution for current month
+  // Get document type distribution for current month (using neto values)
   const getTypeDistribution = useCallback(() => {
     const typeCounts = {};
     currentMonthDocs.forEach((doc) => {
       if (!typeCounts[doc.tipoDoc]) {
-        typeCounts[doc.tipoDoc] = { count: 0, total: 0, isAdditive: doc.isAdditive };
+        typeCounts[doc.tipoDoc] = { count: 0, neto: 0, isAdditive: doc.isAdditive };
       }
       typeCounts[doc.tipoDoc].count++;
-      typeCounts[doc.tipoDoc].total += doc.total || 0;
+      typeCounts[doc.tipoDoc].neto += doc.neto || 0;
     });
 
     return Object.entries(typeCounts)
       .map(([tipo, data]) => ({
         name: tipo,
         cantidad: data.count,
-        total: data.total,
+        neto: data.neto,
         isAdditive: data.isAdditive,
       }))
-      .sort((a, b) => b.total - a.total);
+      .sort((a, b) => b.neto - a.neto);
   }, [currentMonthDocs]);
 
   const monthlyData = getMonthlyChartData();
   const typeDistribution = getTypeDistribution();
 
-  // Get provider spending data for current month (top 8)
+  // Get provider spending data for current month (using neto values)
   const getProviderData = useCallback(() => {
     const providerTotals = {};
 
     currentMonthDocs.forEach((doc) => {
       const providerName = doc.razon || doc.rut;
       if (!providerTotals[providerName]) {
-        providerTotals[providerName] = { total: 0, docs: 0 };
+        providerTotals[providerName] = { neto: 0, docs: 0 };
       }
-      const amount = doc.total || 0;
-      providerTotals[providerName].total += doc.isAdditive ? amount : -amount;
+      const amount = doc.neto || 0;
+      providerTotals[providerName].neto += doc.isAdditive ? amount : -amount;
       providerTotals[providerName].docs++;
     });
 
@@ -568,7 +570,7 @@ const RIndex = () => {
       .map(([name, data]) => ({
         name: name.length > 25 ? name.substring(0, 25) + '...' : name,
         fullName: name,
-        neto: data.total,
+        neto: data.neto,
         docs: data.docs,
       }))
       .sort((a, b) => b.neto - a.neto); // No limit - show all providers
@@ -576,7 +578,7 @@ const RIndex = () => {
 
   const providerData = getProviderData();
 
-  // Export to Excel function
+  // Export to Excel function (using neto values)
   const exportToExcel = useCallback(() => {
     const workbook = XLSX.utils.book_new();
     const monthName = getMonthName(currentDate);
@@ -588,10 +590,10 @@ const RIndex = () => {
       ['Fecha de exportación:', new Date().toLocaleDateString('es-CL')],
       [],
       ['Estadísticas Generales'],
-      ['Concepto', 'Cantidad', 'Monto'],
-      ['Total Documentos', stats.total, calculateTotal(currentMonthDocs)],
-      ['Facturas/Boletas', currentMonthDocs.filter(d => d.isAdditive).length, currentMonthDocs.filter(d => d.isAdditive).reduce((acc, d) => acc + (d.total || 0), 0)],
-      ['Notas de Crédito', currentMonthDocs.filter(d => !d.isAdditive).length, currentMonthDocs.filter(d => !d.isAdditive).reduce((acc, d) => acc + (d.total || 0), 0)],
+      ['Concepto', 'Cantidad', 'Monto Neto'],
+      ['Total Documentos', stats.total, calculateTotalNeto(currentMonthDocs)],
+      ['Facturas/Boletas', currentMonthDocs.filter(d => d.isAdditive).length, currentMonthDocs.filter(d => d.isAdditive).reduce((acc, d) => acc + (d.neto || 0), 0)],
+      ['Notas de Crédito', currentMonthDocs.filter(d => !d.isAdditive).length, currentMonthDocs.filter(d => !d.isAdditive).reduce((acc, d) => acc + (d.neto || 0), 0)],
       [],
       ['Por Estado'],
       ['Pendiente', stats.pendiente.length, totalPendiente],
@@ -607,8 +609,8 @@ const RIndex = () => {
       ['Distribución por Tipo de Documento'],
       ['Período:', monthName],
       [],
-      ['Tipo', 'Cantidad', 'Total'],
-      ...typeDistribution.map(item => [item.name, item.cantidad, item.total])
+      ['Tipo', 'Cantidad', 'Neto'],
+      ...typeDistribution.map(item => [item.name, item.cantidad, item.neto])
     ];
     const wsTipo = XLSX.utils.aoa_to_sheet(tipoData);
     wsTipo['!cols'] = [{ wch: 20 }, { wch: 12 }, { wch: 18 }];
@@ -642,7 +644,7 @@ const RIndex = () => {
       ['Detalle de Documentos'],
       ['Período:', monthName],
       [],
-      ['Proveedor', 'RUT', 'Tipo', 'Folio', 'Fecha Emisión', 'Estado', 'Total'],
+      ['Proveedor', 'RUT', 'Tipo', 'Folio', 'Fecha Emisión', 'Estado', 'Neto'],
       ...currentMonthDocs.map(doc => [
         doc.razon || '-',
         doc.rut || '-',
@@ -650,7 +652,7 @@ const RIndex = () => {
         doc.numeroDoc || '-',
         doc.fechaE ? new Date(doc.fechaE.seconds * 1000).toLocaleDateString('es-CL') : '-',
         doc.estado || '-',
-        doc.isAdditive ? (doc.total || 0) : -(doc.total || 0)
+        doc.isAdditive ? (doc.neto || 0) : -(doc.neto || 0)
       ])
     ];
     const wsDetalle = XLSX.utils.aoa_to_sheet(detalleData);
@@ -660,7 +662,7 @@ const RIndex = () => {
     // Download file
     const fileName = `Recepcion_${currentDate.getFullYear()}_${String(currentDate.getMonth() + 1).padStart(2, '0')}.xlsx`;
     XLSX.writeFile(workbook, fileName);
-  }, [currentDate, stats, currentMonthDocs, totalPendiente, totalPagado, totalVencido, typeDistribution, providerData, monthlyData, calculateTotal]);
+  }, [currentDate, stats, currentMonthDocs, totalPendiente, totalPagado, totalVencido, typeDistribution, providerData, monthlyData, calculateTotalNeto]);
 
   // Month navigation
   const goToPreviousMonth = () => {
@@ -847,7 +849,7 @@ const RIndex = () => {
             }`}>
               <span className={`text-xs uppercase tracking-wide ${isLightTheme ? 'text-gray-600' : 'text-slate-400'}`}>Total Neto</span>
               <div className={`text-xl font-bold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
-                {loading ? '...' : formatCLP(calculateTotal(currentMonthDocs))}
+                {loading ? '...' : formatCLP(calculateTotalNeto(currentMonthDocs))}
               </div>
             </div>
           </div>
@@ -911,8 +913,8 @@ const RIndex = () => {
                   </div>
                 ) : (
                   typeDistribution.map((item, index) => {
-                    const maxTotal = Math.max(...typeDistribution.map((t) => t.total));
-                    const percentage = maxTotal > 0 ? (item.total / maxTotal) * 100 : 0;
+                    const maxNeto = Math.max(...typeDistribution.map((t) => t.neto));
+                    const percentage = maxNeto > 0 ? (item.neto / maxNeto) * 100 : 0;
 
                     return (
                       <div key={item.name} className="space-y-0.5">
@@ -921,7 +923,7 @@ const RIndex = () => {
                             {item.name}
                           </span>
                           <span className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
-                            {formatCLP(item.total)} ({item.cantidad})
+                            {formatCLP(item.neto)} ({item.cantidad})
                           </span>
                         </div>
                         <div className={`h-1.5 rounded-full overflow-hidden ${isLightTheme ? 'bg-gray-200' : 'bg-white/5'}`}>

@@ -258,7 +258,9 @@ const RRevisionDocumentos = () => {
                 ? 'factura exenta'
                 : doc.tipo === 'boletas'
                   ? 'boleta'
-                  : 'nota de crédito';
+                  : doc.tipo === 'boletasExentas'
+                    ? 'boleta exenta'
+                    : 'nota de crédito';
 
           // Format total for comparison (both raw and formatted)
           const totalStr = String(doc.total || '');
@@ -371,10 +373,11 @@ const RRevisionDocumentos = () => {
 
           // Mapear opción del filtro a subcolecciones
           const mapTipoDocToSubcol = {
-            Todos: ['facturas', 'facturasExentas', 'boletas', 'notasCredito'],
+            Todos: ['facturas', 'facturasExentas', 'boletas', 'boletasExentas', 'notasCredito'],
             'Factura electrónica': ['facturas'],
             'Factura exenta': ['facturasExentas'],
             Boleta: ['boletas'],
+            'Boleta exenta': ['boletasExentas'],
             'Nota de crédito': ['notasCredito'],
           };
 
@@ -506,7 +509,8 @@ const RRevisionDocumentos = () => {
               facturas: 1,
               facturasExentas: 2,
               boletas: 3,
-              notasCredito: 4,
+              boletasExentas: 4,
+              notasCredito: 5,
             };
 
             documentos.sort((a, b) => {
@@ -766,6 +770,20 @@ const RRevisionDocumentos = () => {
       setIFechaIngreso(toDateString(docData.fechaIngreso));
       setSeObtuvoTipo(true);
     }
+
+    // Boleta exenta
+    if (tipoDoc === 'boletasExentas') {
+      setIEstado(docData.estado);
+      setIFechaE(toDate(docData.fechaE));
+      setIIva(0); // Boleta exenta no tiene IVA
+      setINeto(docData.neto);
+      setINumeroDoc(docData.numeroDoc);
+      setITotal(docData.total);
+      setITipoDoc('Boleta exenta');
+      setIUsuarioIngreso(docData.ingresoUsuario);
+      setIFechaIngreso(toDateString(docData.fechaIngreso));
+      setSeObtuvoTipo(true);
+    }
   };
 
   const handleRevisionDoc = async (rut, numeroDoc, tipoDoc) => {
@@ -821,7 +839,7 @@ const RRevisionDocumentos = () => {
         docData.estado === 'pagado' &&
         !docData.pagoUsuario; // If pagoUsuario is set, it was processed through payment system
 
-      // Solo permitir editar documentos no pagados (excepto boletas que siempre son pagadas)
+      // Solo permitir editar documentos no pagados (excepto boletas/boletasExentas que siempre son pagadas)
       const puedeEditarDoc =
         esContadoSinEgreso || // Allow editing "Contado" documents without egreso
         (tipoDoc === 'facturas' &&
@@ -833,7 +851,8 @@ const RRevisionDocumentos = () => {
           docData.estado !== 'parcialmente_pagado' &&
           docData.estado !== 'parcialmente_vencido') ||
         (tipoDoc === 'notasCredito' && docData.estado !== 'pagado') ||
-        tipoDoc === 'boletas';
+        tipoDoc === 'boletas' ||
+        tipoDoc === 'boletasExentas';
 
       if (puedeEditarDoc) {
         handleSetParams(docData, tipoDoc);
@@ -2863,7 +2882,9 @@ const RRevisionDocumentos = () => {
                                       ? 'Fact. exenta'
                                       : doc.tipo === 'boletas'
                                         ? 'Boleta'
-                                        : 'Nota crédito'}
+                                        : doc.tipo === 'boletasExentas'
+                                          ? 'Boleta exenta'
+                                          : 'Nota crédito'}
                                 </div>
                                 <div className="w-[10%] text-center text-xs font-medium">
                                   {doc.numeroDoc ?? '-'}

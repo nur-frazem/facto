@@ -64,6 +64,7 @@ const RIngresar = () => {
     "Factura electrónica",
     "Factura exenta",
     "Boleta",
+    "Boleta exenta",
     "Nota de crédito"
   ];
 
@@ -94,7 +95,7 @@ const RIngresar = () => {
 
   // Calcular IVA automáticamente (solo para documentos que tienen IVA)
   useEffect(() => {
-    if (selectedDoc === "Factura exenta") {
+    if (selectedDoc === "Factura exenta" || selectedDoc === "Boleta exenta") {
       setIva(0);
     } else {
       const netoNumber = Number(neto) || 0;
@@ -103,9 +104,9 @@ const RIngresar = () => {
     }
   }, [neto, flete, selectedDoc]);
 
-  // Total calculado (Factura exenta no incluye IVA)
+  // Total calculado (Factura exenta y Boleta exenta no incluyen IVA)
   // Retención es aditiva por defecto, pero puede ser negativa si el usuario lo especifica
-  const ivaParaTotal = selectedDoc === "Factura exenta" ? 0 : (Number(iva) || 0);
+  const ivaParaTotal = (selectedDoc === "Factura exenta" || selectedDoc === "Boleta exenta") ? 0 : (Number(iva) || 0);
   const total = (Number(neto) || 0) + ivaParaTotal + (Number(otros) || 0) + (Number(flete) || 0) + (Number(retencion) || 0);
 
   useEffect(() => {
@@ -208,7 +209,7 @@ const RIngresar = () => {
     const netoResult = validateNeto(neto);
     if (!netoResult.valid) validationErrors.push(netoResult.error);
 
-    if (selectedDoc !== "Factura exenta") {
+    if (selectedDoc !== "Factura exenta" && selectedDoc !== "Boleta exenta") {
       const ivaResult = validateAmount(iva, "IVA");
       if (!ivaResult.valid) validationErrors.push(ivaResult.error);
     }
@@ -293,6 +294,17 @@ const RIngresar = () => {
       fechaE,
       neto: Number(neto),
       iva: Number(iva),
+      total,
+      estado: "pagado",
+      ingresoUsuario: userId,
+      fechaIngreso: fechaActual
+    };
+
+    // Boleta exenta no tiene IVA
+    const boletaExenta = {
+      numeroDoc,
+      fechaE,
+      neto: Number(neto),
       total,
       estado: "pagado",
       ingresoUsuario: userId,
@@ -449,6 +461,50 @@ const RIngresar = () => {
         console.error("Error guardando boleta:", err);
         setLoadingModal(false);
         setErrorDoc("Error al guardar la boleta");
+      }
+    }
+
+    // Boleta exenta - va a colección boletasExentas
+    if(selectedDoc === "Boleta exenta"){
+      try {
+        const documentoRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), "boletasExentas", String(numeroDoc));
+        const docSnap = await getDoc(documentoRef);
+
+        if (docSnap.exists()) {
+            setLoadingModal(false);
+            setErrorDoc("Este documento ya está ingresado");
+            return;
+        }
+
+        await setDoc(documentoRef, boletaExenta);
+
+        // Registrar en auditoría
+        try {
+          await addDoc(collection(db, currentCompanyRUT, "_root", "auditoria"), {
+            tipo: "creacion",
+            tipoDocumento: "boletasExentas",
+            numeroDocumento: numeroDoc,
+            empresaRut: giroRut,
+            creadoPor: userId,
+            fechaCreacion: new Date().toISOString(),
+            datos: {
+              total: total,
+              neto: Number(neto)
+            }
+          });
+        } catch (auditErr) {
+          console.warn("No se pudo registrar en auditoría:", auditErr);
+        }
+
+        setLoadingModal(false);
+        setIsModalOpen(false);
+        handleResetParams();
+        lastDocTime.current = Date.now();
+        setSuccessDoc(`Boleta exenta N° ${numeroDoc} ingresada exitosamente`);
+      } catch (err) {
+        console.error("Error guardando boleta exenta:", err);
+        setLoadingModal(false);
+        setErrorDoc("Error al guardar la boleta exenta");
       }
     }
 
@@ -909,26 +965,26 @@ const RIngresar = () => {
                   />
                 </div>
 
-                {/* IVA - No mostrar para Factura exenta */}
-                <div className={!selectedDoc || selectedDoc === "Factura exenta" ? "opacity-50 pointer-events-none" : ""}>
+                {/* IVA - No mostrar para documentos exentos */}
+                <div className={!selectedDoc || selectedDoc === "Factura exenta" || selectedDoc === "Boleta exenta" ? "opacity-50 pointer-events-none" : ""}>
                   <Textfield
                     label={
                       <>
                         IVA (19%)
-                        {errors.iva && selectedDoc !== "Factura exenta" && (
+                        {errors.iva && selectedDoc !== "Factura exenta" && selectedDoc !== "Boleta exenta" && (
                           <span className="text-red-300 font-black"> - {errors.iva}</span>
                         )}
                       </>
                     }
-                    value={selectedDoc === "Factura exenta" ? 0 : iva}
+                    value={selectedDoc === "Factura exenta" || selectedDoc === "Boleta exenta" ? 0 : iva}
                     onChange={(e) => {
                       setIva(e.target.value);
                       setErrors((prev) => ({ ...prev, iva: undefined }));
                     }}
                     placeholder="$0"
                     currency
-                    readOnly={!selectedDoc || selectedDoc === "Factura exenta"}
-                    classNameInput={errors.iva && selectedDoc !== "Factura exenta" ? "ring-red-400 ring-2" : ""}
+                    readOnly={!selectedDoc || selectedDoc === "Factura exenta" || selectedDoc === "Boleta exenta"}
+                    classNameInput={errors.iva && selectedDoc !== "Factura exenta" && selectedDoc !== "Boleta exenta" ? "ring-red-400 ring-2" : ""}
                   />
                 </div>
               </div>
