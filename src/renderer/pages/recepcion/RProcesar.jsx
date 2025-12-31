@@ -6,8 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { VolverButton, YButton, TextButton, XButton } from '../../components/Button';
 import { DropdownMenu, DatepickerField } from '../../components/Textfield';
 import { Card } from '../../components/Container';
-import { Modal, LoadingModal } from '../../components/modal';
+import { Modal, LoadingModal, AlertModal } from '../../components/modal';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 
 import {
   doc,
@@ -36,6 +37,13 @@ const RProcesar = () => {
   const navigate = useNavigate();
   const { isLightTheme } = useTheme();
   const { currentCompanyRUT } = useCompany();
+  const { tieneAccion } = useAuth();
+
+  // Permisos del usuario
+  const puedeProcesar = tieneAccion('PROCESAR_PAGO');
+
+  // Estado para modal de permisos insuficientes
+  const [permissionErrorModal, setPermissionErrorModal] = useState(false);
 
   const [userId, setUserId] = useState('');
 
@@ -1380,7 +1388,13 @@ const RProcesar = () => {
                 <YButton
                   className="h-8 text-xl"
                   text="Procesar"
-                  onClick={() => setProcesarModal(true)}
+                  onClick={() => {
+                    if (!puedeProcesar) {
+                      setPermissionErrorModal(true);
+                      return;
+                    }
+                    setProcesarModal(true);
+                  }}
                   disabled={documentosAgregados.length === 0}
                 />
               </div>
@@ -1973,6 +1987,15 @@ const RProcesar = () => {
           )}
 
           <LoadingModal isOpen={loadingModal} message="Procesando documentos..." />
+
+          {/* Modal de permisos insuficientes */}
+          <AlertModal
+            isOpen={permissionErrorModal}
+            onClose={() => setPermissionErrorModal(false)}
+            title="Permisos insuficientes"
+            message="No tiene permisos para procesar pagos de documentos."
+            variant="error"
+          />
         </div>
 
         {/* Footer */}

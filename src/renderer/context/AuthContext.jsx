@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, onSnapshot, updateDoc, deleteField } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, deleteField, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
+import { DEFAULT_ROLES, ROLES_LABELS as NEW_ROLES_LABELS } from '../constants/permissions';
 
 // Key for selected company in localStorage (must match CompanyContext)
 const SELECTED_COMPANY_KEY = 'facto_selected_company';
@@ -73,6 +74,10 @@ export function AuthProvider({ children }) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const isLoggingOutRef = useRef(false);
   const sessionCheckIntervalRef = useRef(null);
+
+  // Cache for company roles (keyed by companyRUT)
+  const [companyRolesCache, setCompanyRolesCache] = useState({});
+  const [rolesLoading, setRolesLoading] = useState(false);
 
   // Función para verificar si la sesión ha expirado
   const checkSessionExpiration = () => {
@@ -194,6 +199,9 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  // State to track when company changes for auto-loading roles
+  const [currentCompanyForRoles, setCurrentCompanyForRoles] = useState(null);
+
   // Función de logout centralizada que maneja la limpieza correctamente
   const logout = async () => {
     setIsLoggingOut(true);
@@ -265,6 +273,228 @@ export function AuthProvider({ children }) {
     return [];
   };
 
+  // ==========================================
+  // NEW PERMISSION SYSTEM FUNCTIONS
+  // ==========================================
+
+  // Ensure default roles exist in Firestore for a company
+  const ensureDefaultRolesExist = useCallback(async (companyRUT) => {
+    if (!companyRUT) return;
+
+    try {
+      const rolesCollectionRef = collection(db, companyRUT, '_root', 'roles');
+      const rolesSnapshot = await getDocs(rolesCollectionRef);
+
+      // If collection is empty, create all default roles
+      if (rolesSnapshot.empty) {
+        console.log(`Creating default roles for company ${companyRUT}...`);
+        const createPromises = Object.entries(DEFAULT_ROLES).map(([roleId, roleData]) => {
+          const roleDocRef = doc(db, companyRUT, '_root', 'roles', roleId);
+          return setDoc(roleDocRef, {
+            ...roleData,
+            fechaCreacion: serverTimestamp(),
+            creadoPor: 'system',
+            fechaModificacion: serverTimestamp(),
+            modificadoPor: 'system'
+          });
+        });
+        await Promise.all(createPromises);
+        console.log('Default roles created successfully');
+      }
+    } catch (err) {
+      console.error('Error ensuring default roles exist:', err);
+    }
+  }, []);
+
+  // Load roles for a specific company from Firestore
+  const loadCompanyRoles = useCallback(async (companyRUT) => {
+    if (!companyRUT) return {};
+
+    // Return cached roles if available
+    if (companyRolesCache[companyRUT]) {
+      return companyRolesCache[companyRUT];
+    }
+
+    setRolesLoading(true);
+    try {
+      // First ensure default roles exist
+      await ensureDefaultRolesExist(companyRUT);
+
+      // Then load all roles
+      const rolesCollectionRef = collection(db, companyRUT, '_root', 'roles');
+      const rolesSnapshot = await getDocs(rolesCollectionRef);
+
+      const roles = {};
+      rolesSnapshot.forEach((doc) => {
+        roles[doc.id] = { ...doc.data(), id: doc.id };
+      });
+
+      // Cache the roles
+      setCompanyRolesCache(prev => ({ ...prev, [companyRUT]: roles }));
+      setRolesLoading(false);
+      return roles;
+    } catch (err) {
+      console.error('Error loading company roles:', err);
+      setRolesLoading(false);
+      // Return default roles as fallback
+      return DEFAULT_ROLES;
+    }
+  }, [companyRolesCache, ensureDefaultRolesExist]);
+
+  // Get full role data for a role ID
+  const getRoleData = useCallback((roleId, companyRUT = null) => {
+    const rut = companyRUT || getCurrentCompanyRUT();
+    if (!rut) return DEFAULT_ROLES[roleId] || null;
+
+    const cachedRoles = companyRolesCache[rut];
+    if (cachedRoles && cachedRoles[roleId]) {
+      return cachedRoles[roleId];
+    }
+
+    // Fallback to default roles
+    return DEFAULT_ROLES[roleId] || null;
+  }, [companyRolesCache]);
+
+  // Check if user has access permission (view access)
+  const tieneAcceso = useCallback((permisoKey, companyRUT = null) => {
+    if (!userData || !userData.activo) return false;
+
+    const roleId = getRol(companyRUT);
+    if (!roleId) return false;
+
+    const roleData = getRoleData(roleId, companyRUT);
+    if (!roleData || !roleData.permisos) {
+      // Check if this is a default role - only fall back to old system for default roles
+      const isDefaultRole = Object.values(ROLES).includes(roleId);
+      if (isDefaultRole) {
+        // Fallback to old permission system for backward compatibility with default roles
+        return tienePermiso(permisoKey, companyRUT);
+      }
+      // Custom role but not loaded yet - return false (will re-render when roles load)
+      return false;
+    }
+
+    return roleData.permisos[permisoKey] === true;
+  }, [userData, getRoleData]);
+
+  // Check if user has action permission
+  const tieneAccion = useCallback((accionKey, companyRUT = null) => {
+    if (!userData || !userData.activo) return false;
+
+    const roleId = getRol(companyRUT);
+    if (!roleId) return false;
+
+    const roleData = getRoleData(roleId, companyRUT);
+    if (!roleData || !roleData.permisos) {
+      // Check if this is a default role - only fall back to old system for default roles
+      const isDefaultRole = Object.values(ROLES).includes(roleId);
+      if (isDefaultRole) {
+        // Fallback to old permission system for backward compatibility
+        const oldPermissionMap = {
+          'REVISION_VER': 'VER_DOCUMENTOS',
+          'REVISION_EDITAR': 'EDITAR_DOCUMENTOS',
+          'REVISION_ELIMINAR': 'ELIMINAR_DOCUMENTOS',
+          'REVISION_DESCARGAR': 'VER_DOCUMENTOS',
+          'PROCESAR_PAGO': 'PROCESAR_PAGOS'
+        };
+        const oldPermiso = oldPermissionMap[accionKey];
+        if (oldPermiso) {
+          return tienePermiso(oldPermiso, companyRUT);
+        }
+      }
+      // Custom role but not loaded yet - return false (will re-render when roles load)
+      return false;
+    }
+
+    return roleData.permisos[accionKey] === true;
+  }, [userData, getRoleData]);
+
+  // Get all roles for current company (for role management UI)
+  const getCompanyRoles = useCallback((companyRUT = null) => {
+    const rut = companyRUT || getCurrentCompanyRUT();
+    if (!rut) return DEFAULT_ROLES;
+    return companyRolesCache[rut] || DEFAULT_ROLES;
+  }, [companyRolesCache]);
+
+  // Invalidate roles cache (call after role updates)
+  const invalidateRolesCache = useCallback((companyRUT = null) => {
+    const rut = companyRUT || getCurrentCompanyRUT();
+    if (rut) {
+      setCompanyRolesCache(prev => {
+        const updated = { ...prev };
+        delete updated[rut];
+        return updated;
+      });
+    }
+  }, []);
+
+  // Get roles that can be assigned by the current user (NEW - includes custom roles)
+  const getAssignableRoles = useCallback((companyRUT = null) => {
+    if (!userData || !userData.activo) return [];
+
+    const rut = companyRUT || getCurrentCompanyRUT();
+    const currentRoleId = getRol(companyRUT);
+    const allRoles = companyRolesCache[rut] || DEFAULT_ROLES;
+
+    if (currentRoleId === ROLES.SUPER_ADMIN) {
+      // Super admin can assign all roles
+      return Object.values(allRoles);
+    } else if (currentRoleId === ROLES.ADMIN) {
+      // Admin can assign all except admin and super_admin
+      return Object.values(allRoles).filter(
+        role => role.id !== 'super_admin' && role.id !== 'admin'
+      );
+    }
+    return [];
+  }, [userData, companyRolesCache]);
+
+  // Watch for company changes and auto-load roles
+  useEffect(() => {
+    if (!userData || !userData.activo) return;
+
+    let isMounted = true;
+
+    const checkAndLoadRoles = async () => {
+      const companyRUT = localStorage.getItem(SELECTED_COMPANY_KEY);
+      if (companyRUT && !companyRolesCache[companyRUT]) {
+        // Use loadCompanyRoles which handles loading state properly
+        try {
+          await loadCompanyRoles(companyRUT);
+          if (isMounted) {
+            setCurrentCompanyForRoles(companyRUT);
+          }
+        } catch (err) {
+          console.error('Error auto-loading roles:', err);
+        }
+      }
+    };
+
+    // Initial check - run immediately
+    checkAndLoadRoles();
+
+    // Listen for storage changes (for company selection changes)
+    const handleStorageChange = (e) => {
+      if (e.key === SELECTED_COMPANY_KEY) {
+        // Reset current company tracking to force reload
+        if (isMounted) {
+          setCurrentCompanyForRoles(null);
+        }
+        checkAndLoadRoles();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    // Also poll periodically to catch same-tab changes (reduced frequency since loadCompanyRoles checks cache)
+    const intervalId = setInterval(checkAndLoadRoles, 250);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(intervalId);
+    };
+  }, [userData, loadCompanyRoles]);
+
   const value = {
     user,
     userData,
@@ -281,7 +511,17 @@ export function AuthProvider({ children }) {
     ROLES,
     PERMISOS,
     ROLES_LABELS,
-    ROLES_DESCRIPCION
+    ROLES_DESCRIPCION,
+    // New permission system
+    tieneAcceso,
+    tieneAccion,
+    loadCompanyRoles,
+    getCompanyRoles,
+    getRoleData,
+    invalidateRolesCache,
+    getAssignableRoles,
+    rolesLoading,
+    companyRolesCache
   };
 
   return (

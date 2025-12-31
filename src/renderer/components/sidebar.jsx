@@ -73,7 +73,7 @@ export function SidebarWithContentSeparator() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { userData, tienePermiso, getRol } = useAuth();
+  const { userData, tienePermiso, tieneAcceso, getRol, getRoleData } = useAuth();
   const { theme, setTheme, isLightTheme, textSize, setTextSize, resetTextSize } = useTheme();
 
   const toggleAccordion = (name) => {
@@ -147,18 +147,27 @@ export function SidebarWithContentSeparator() {
     rounded-lg text-sm
   `;
 
-  // Verificar permisos para mostrar items del menú
-  const puedeVerRecepcion = tienePermiso("VER_DOCUMENTOS") || tienePermiso("INGRESAR_DOCUMENTOS") || tienePermiso("PROCESAR_PAGOS");
-  const puedeIngresarDocumentos = tienePermiso("INGRESAR_DOCUMENTOS");
-  const puedeProcesarPagos = tienePermiso("PROCESAR_PAGOS");
-  const puedeVerDocumentos = tienePermiso("VER_DOCUMENTOS");
-  const puedeVerCalendario = tienePermiso("VER_CALENDARIO");
-  const puedeVerInformes = tienePermiso("VER_INFORMES");
-  const puedeVerConfiguracion = tienePermiso("VER_CONFIGURACION");
+  // Verificar permisos para mostrar items del menú (nuevo sistema de permisos)
+  const puedeVerRecepcion = tieneAcceso("RECEPCION") || tieneAcceso("RECEPCION_INDEX");
+  const puedeIngresarDocumentos = tieneAcceso("RECEPCION_INGRESAR");
+  const puedeProcesarPagos = tieneAcceso("RECEPCION_PROCESAR");
+  const puedeVerDocumentos = tieneAcceso("RECEPCION_REVISION");
+  const puedeVerCalendario = tieneAcceso("RECEPCION_CALENDARIO");
+  const puedeVerEmision = tieneAcceso("EMISION") || tieneAcceso("EMISION_INDEX");
+  const puedeVerInformes = tieneAcceso("INFORMES") || tieneAcceso("INFORMES_INDEX");
+  const puedeVerConfiguracion = tieneAcceso("CONFIGURACION") || tieneAcceso("CONFIGURACION_INDEX");
 
   // Obtener color del badge de rol
   const getRolBadgeColor = () => {
     const rol = getRol();
+    const roleData = getRoleData(rol);
+
+    // Si el rol tiene color personalizado
+    if (roleData?.color) {
+      return "border-2"; // Use inline styles for custom colors
+    }
+
+    // Default role colors (fallback)
     if (isLightTheme) {
       switch (rol) {
         case "super_admin": return "bg-purple-100 text-purple-700 border-purple-300";
@@ -178,6 +187,30 @@ export function SidebarWithContentSeparator() {
         default: return "bg-slate-500/30 text-slate-300 border-slate-500/50";
       }
     }
+  };
+
+  // Get inline style for role badge with custom color
+  const getRolBadgeStyle = () => {
+    const rol = getRol();
+    const roleData = getRoleData(rol);
+    if (roleData?.color) {
+      return {
+        backgroundColor: `${roleData.color}20`,
+        color: roleData.color,
+        borderColor: `${roleData.color}50`
+      };
+    }
+    return {};
+  };
+
+  // Get role label (supports custom roles)
+  const getRoleLabel = () => {
+    const rol = getRol();
+    const roleData = getRoleData(rol);
+    if (roleData?.nombre) {
+      return roleData.nombre;
+    }
+    return ROLES_LABELS[rol] || rol;
   };
 
   return (
@@ -218,9 +251,9 @@ export function SidebarWithContentSeparator() {
       {/* User info badge */}
       {!collapsed && userData && (
         <div className="mb-4 px-2">
-          <div className={`px-3 py-2 rounded-lg border ${getRolBadgeColor()}`}>
+          <div className={`px-3 py-2 rounded-lg border ${getRolBadgeColor()}`} style={getRolBadgeStyle()}>
             <p className="text-xs font-medium truncate">{userData.nombre || userData.email}</p>
-            <p className="text-[10px] opacity-70">{ROLES_LABELS[getRol()] || getRol()}</p>
+            <p className="text-[10px] opacity-70">{getRoleLabel()}</p>
           </div>
         </div>
       )}
@@ -342,70 +375,72 @@ export function SidebarWithContentSeparator() {
           </Accordion>
         )}
 
-        {/* Emisión Accordion */}
-        <Accordion
-          open={openAccordions.emision}
-          icon={
-            <ChevronDownIcon
-              strokeWidth={2.5}
-              className={`h-4 w-4 transition-transform ${isLightTheme ? "text-gray-400" : "text-slate-400"} ${
-                openAccordions.emision ? "rotate-180" : ""
-              } ${collapsed ? "hidden" : "block"}`}
-            />
-          }
-        >
-          <ListItem
-            className={`p-0 ${isActiveSection("emision") && !openAccordions.emision ? activeItemStyles : ""}`}
-            selected={openAccordions.emision}
-            onClick={() => collapsed ? navigate("/emision-index") : toggleAccordion("emision")}
+        {/* Emisión Accordion - Solo si tiene permiso de emisión */}
+        {puedeVerEmision && (
+          <Accordion
+            open={openAccordions.emision}
+            icon={
+              <ChevronDownIcon
+                strokeWidth={2.5}
+                className={`h-4 w-4 transition-transform ${isLightTheme ? "text-gray-400" : "text-slate-400"} ${
+                  openAccordions.emision ? "rotate-180" : ""
+                } ${collapsed ? "hidden" : "block"}`}
+              />
+            }
           >
-            <AccordionHeader
-              className={`
-                border-b-0 p-3 flex items-center gap-2 rounded-lg
-                transition-all duration-200
-                ${isLightTheme
-                  ? "hover:bg-gray-100 active:bg-gray-200"
-                  : "hover:bg-white/10 active:bg-white/15"
-                }
-                ${isActiveSection("emision")
-                  ? (isLightTheme ? "text-blue-700" : "text-white")
-                  : (isLightTheme ? "text-gray-600" : "text-slate-300")
-                }
-              `}
+            <ListItem
+              className={`p-0 ${isActiveSection("emision") && !openAccordions.emision ? activeItemStyles : ""}`}
+              selected={openAccordions.emision}
+              onClick={() => collapsed ? navigate("/emision-index") : toggleAccordion("emision")}
             >
-              <ListItemPrefix>
-                <PaperAirplaneIcon className="h-5 w-5" />
-              </ListItemPrefix>
-              {!collapsed && (
-                <Typography className="mr-auto font-medium text-sm">
-                  Emisión
-                </Typography>
-              )}
-            </AccordionHeader>
-          </ListItem>
+              <AccordionHeader
+                className={`
+                  border-b-0 p-3 flex items-center gap-2 rounded-lg
+                  transition-all duration-200
+                  ${isLightTheme
+                    ? "hover:bg-gray-100 active:bg-gray-200"
+                    : "hover:bg-white/10 active:bg-white/15"
+                  }
+                  ${isActiveSection("emision")
+                    ? (isLightTheme ? "text-blue-700" : "text-white")
+                    : (isLightTheme ? "text-gray-600" : "text-slate-300")
+                  }
+                `}
+              >
+                <ListItemPrefix>
+                  <PaperAirplaneIcon className="h-5 w-5" />
+                </ListItemPrefix>
+                {!collapsed && (
+                  <Typography className="mr-auto font-medium text-sm">
+                    Emisión
+                  </Typography>
+                )}
+              </AccordionHeader>
+            </ListItem>
 
-          {!collapsed && (
-            <AccordionContent isOpen={openAccordions.emision}>
-              <AccordionBody className="py-1">
-                <List className="p-0 pl-4">
-                  <ListItem className={subItemStyles}>
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
-                    </ListItemPrefix>
-                    <span className="ml-1">Revisión de documentos</span>
-                  </ListItem>
+            {!collapsed && (
+              <AccordionContent isOpen={openAccordions.emision}>
+                <AccordionBody className="py-1">
+                  <List className="p-0 pl-4">
+                    <ListItem className={subItemStyles}>
+                      <ListItemPrefix>
+                        <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                      </ListItemPrefix>
+                      <span className="ml-1">Revisión de documentos</span>
+                    </ListItem>
 
-                  <ListItem className={subItemStyles}>
-                    <ListItemPrefix>
-                      <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
-                    </ListItemPrefix>
-                    <span className="ml-1">Estados de pago</span>
-                  </ListItem>
-                </List>
-              </AccordionBody>
-            </AccordionContent>
-          )}
-        </Accordion>
+                    <ListItem className={subItemStyles}>
+                      <ListItemPrefix>
+                        <ChevronRightIcon strokeWidth={2} className="h-3 w-3" />
+                      </ListItemPrefix>
+                      <span className="ml-1">Estados de pago</span>
+                    </ListItem>
+                  </List>
+                </AccordionBody>
+              </AccordionContent>
+            )}
+          </Accordion>
+        )}
 
         {/* Divider */}
         <hr className={`my-3 ${isLightTheme ? "border-gray-200" : "border-white/10"} ${collapsed ? "mx-2" : ""}`} />

@@ -29,7 +29,7 @@ const NAME_CHANGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 const CCuenta = () => {
   const navigate = useNavigate();
-  const { user, userData, tienePermiso, getRol } = useAuth();
+  const { user, userData, tieneAcceso, tieneAccion, getRol } = useAuth();
   const { isLightTheme } = useTheme();
   const { currentCompanyRUT } = useCompany();
 
@@ -306,19 +306,42 @@ const CCuenta = () => {
     return '--';
   };
 
-  // Get permission list for display
+  // Get permission list for display (grouped by module)
   const getPermissions = () => {
-    const permisos = [];
-    if (tienePermiso('VER_DOCUMENTOS')) permisos.push('Ver documentos');
-    if (tienePermiso('INGRESAR_DOCUMENTOS')) permisos.push('Ingresar documentos');
-    if (tienePermiso('EDITAR_DOCUMENTOS')) permisos.push('Editar documentos');
-    if (tienePermiso('ELIMINAR_DOCUMENTOS')) permisos.push('Eliminar documentos');
-    if (tienePermiso('PROCESAR_PAGOS')) permisos.push('Procesar pagos');
-    if (tienePermiso('VER_CALENDARIO')) permisos.push('Ver calendario');
-    if (tienePermiso('VER_INFORMES')) permisos.push('Ver informes');
-    if (tienePermiso('VER_CONFIGURACION')) permisos.push('Ver configuración');
-    if (tienePermiso('GESTIONAR_EMPRESAS')) permisos.push('Gestionar empresas');
-    if (tienePermiso('ASIGNAR_ROLES')) permisos.push('Asignar roles');
+    const permisos = {
+      recepcion: [],
+      emision: [],
+      configuracion: [],
+      informes: [],
+      acciones: [],
+    };
+
+    // Recepción module
+    if (tieneAcceso('RECEPCION') || tieneAcceso('RECEPCION_INDEX')) permisos.recepcion.push('Dashboard de recepción');
+    if (tieneAcceso('RECEPCION_INGRESAR')) permisos.recepcion.push('Ingreso de documentos');
+    if (tieneAcceso('RECEPCION_PROCESAR')) permisos.recepcion.push('Procesar documentos');
+    if (tieneAcceso('RECEPCION_REVISION')) permisos.recepcion.push('Revisión de documentos');
+    if (tieneAcceso('RECEPCION_CALENDARIO')) permisos.recepcion.push('Calendario interactivo');
+
+    // Emisión module
+    if (tieneAcceso('EMISION') || tieneAcceso('EMISION_INDEX')) permisos.emision.push('Dashboard de emisión');
+
+    // Configuración module
+    if (tieneAcceso('CONFIGURACION') || tieneAcceso('CONFIGURACION_INDEX')) permisos.configuracion.push('Panel de configuración');
+    if (tieneAcceso('CONFIGURACION_EMPRESAS')) permisos.configuracion.push('Clientes/Proveedores');
+    if (tieneAcceso('CONFIGURACION_ROLES')) permisos.configuracion.push('Gestión de usuarios y roles');
+    if (tieneAcceso('CONFIGURACION_AUDITORIA')) permisos.configuracion.push('Auditoría');
+
+    // Informes module
+    if (tieneAcceso('INFORMES') || tieneAcceso('INFORMES_INDEX')) permisos.informes.push('Dashboard de informes');
+
+    // Action permissions
+    if (tieneAccion('REVISION_VER')) permisos.acciones.push('Ver detalles de documento');
+    if (tieneAccion('REVISION_DESCARGAR')) permisos.acciones.push('Descargar PDF de egreso');
+    if (tieneAccion('REVISION_EDITAR')) permisos.acciones.push('Editar documento');
+    if (tieneAccion('REVISION_ELIMINAR')) permisos.acciones.push('Eliminar documento / Reversar pagos');
+    if (tieneAccion('PROCESAR_PAGO')) permisos.acciones.push('Procesar pago de documentos');
+
     return permisos;
   };
 
@@ -545,19 +568,69 @@ const CCuenta = () => {
                 Mis Permisos
               </h2>
 
-              <div className="flex flex-wrap gap-2">
-                {getPermissions().map((permiso, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1 bg-accent-blue/10 border border-accent-blue/30 rounded-full text-accent-blue text-sm"
-                  >
-                    {permiso}
-                  </span>
-                ))}
-                {getPermissions().length === 0 && (
-                  <span className={`text-sm ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Sin permisos asignados</span>
-                )}
-              </div>
+              {(() => {
+                const permisos = getPermissions();
+                const hasAnyPermission = Object.values(permisos).some(arr => arr.length > 0);
+
+                if (!hasAnyPermission) {
+                  return (
+                    <span className={`text-sm ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>
+                      Sin permisos asignados
+                    </span>
+                  );
+                }
+
+                const modules = [
+                  { key: 'recepcion', label: 'Recepción', color: 'blue' },
+                  { key: 'emision', label: 'Emisión', color: 'purple' },
+                  { key: 'configuracion', label: 'Configuración', color: 'yellow' },
+                  { key: 'informes', label: 'Informes', color: 'green' },
+                  { key: 'acciones', label: 'Acciones', color: 'cyan' },
+                ];
+
+                const colorClasses = {
+                  blue: isLightTheme
+                    ? 'bg-blue-100 border-blue-300 text-blue-700'
+                    : 'bg-blue-500/10 border-blue-500/30 text-blue-400',
+                  purple: isLightTheme
+                    ? 'bg-purple-100 border-purple-300 text-purple-700'
+                    : 'bg-purple-500/10 border-purple-500/30 text-purple-400',
+                  yellow: isLightTheme
+                    ? 'bg-yellow-100 border-yellow-400 text-yellow-700'
+                    : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400',
+                  green: isLightTheme
+                    ? 'bg-green-100 border-green-300 text-green-700'
+                    : 'bg-green-500/10 border-green-500/30 text-green-400',
+                  cyan: isLightTheme
+                    ? 'bg-cyan-100 border-cyan-300 text-cyan-700'
+                    : 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400',
+                };
+
+                return (
+                  <div className="space-y-3">
+                    {modules.map(({ key, label, color }) => {
+                      if (permisos[key].length === 0) return null;
+                      return (
+                        <div key={key}>
+                          <div className={`text-xs font-medium mb-1.5 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                            {label}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {permisos[key].map((permiso, index) => (
+                              <span
+                                key={index}
+                                className={`px-2 py-0.5 border rounded text-xs ${colorClasses[color]}`}
+                              >
+                                {permiso}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Activity Stats Card */}

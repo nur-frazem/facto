@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 function ProtectedRoute({ children, requiredPermission, requiredPermissions, fallbackPath = "/home" }) {
-  const { user, userData, loading, error, tienePermiso, tieneAlgunPermiso } = useAuth();
+  const { user, userData, loading, error, tieneAcceso } = useAuth();
 
   if (loading) {
     return (
@@ -71,12 +71,12 @@ function ProtectedRoute({ children, requiredPermission, requiredPermissions, fal
   }
 
   // Verificar permiso específico si se requiere
-  if (requiredPermission && !tienePermiso(requiredPermission)) {
+  if (requiredPermission && !tieneAcceso(requiredPermission)) {
     return <Navigate to={fallbackPath} replace />;
   }
 
   // Verificar si tiene alguno de los permisos requeridos
-  if (requiredPermissions && requiredPermissions.length > 0 && !tieneAlgunPermiso(requiredPermissions)) {
+  if (requiredPermissions && requiredPermissions.length > 0 && !requiredPermissions.some(p => tieneAcceso(p))) {
     return <Navigate to={fallbackPath} replace />;
   }
 

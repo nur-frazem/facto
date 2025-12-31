@@ -161,15 +161,15 @@ const getCacheTimestampKey = (companyRUT) => `recepcion_cache_timestamp_${compan
 
 const RIndex = () => {
   const navigate = useNavigate();
-  const { tienePermiso } = useAuth();
+  const { tieneAcceso } = useAuth();
   const { isLightTheme } = useTheme();
   const { currentCompanyRUT } = useCompany();
 
   // Permissions
-  const puedeIngresar = tienePermiso('INGRESAR_DOCUMENTOS');
-  const puedeProcesar = tienePermiso('PROCESAR_PAGOS');
-  const puedeVerDocumentos = tienePermiso('VER_DOCUMENTOS');
-  const puedeVerCalendario = tienePermiso('VER_CALENDARIO');
+  const puedeIngresar = tieneAcceso('RECEPCION_INGRESAR');
+  const puedeProcesar = tieneAcceso('RECEPCION_PROCESAR');
+  const puedeVerDocumentos = tieneAcceso('RECEPCION_REVISION');
+  const puedeVerCalendario = tieneAcceso('RECEPCION_CALENDARIO');
 
   // State for current month view
   const [currentDate, setCurrentDate] = useState(new Date());

@@ -42,14 +42,20 @@ import configIcon from '../../assets/Logos/config.png';
 
 const RRevisionDocumentos = () => {
   const navigate = useNavigate();
-  const { tienePermiso, esAdmin, user } = useAuth();
+  const { tieneAccion, user } = useAuth();
   const { isLightTheme } = useTheme();
   const { currentCompanyRUT } = useCompany();
 
-  // Permisos del usuario
-  const puedeEditar = tienePermiso('EDITAR_DOCUMENTOS');
-  const puedeEliminar = tienePermiso('ELIMINAR_DOCUMENTOS');
-  const puedeReversarPago = esAdmin(); // Solo admin y super_admin pueden reversar pagos
+  // Permisos del usuario (nuevo sistema de permisos)
+  const puedeVer = tieneAccion('REVISION_VER');
+  const puedeDescargar = tieneAccion('REVISION_DESCARGAR');
+  const puedeEditar = tieneAccion('REVISION_EDITAR');
+  const puedeEliminar = tieneAccion('REVISION_ELIMINAR');
+  const puedeReversarPago = tieneAccion('REVISION_ELIMINAR'); // Mismos permisos que eliminar
+
+  // Estado para modal de permisos insuficientes
+  const [permissionErrorModal, setPermissionErrorModal] = useState(false);
+  const [permissionErrorMessage, setPermissionErrorMessage] = useState('');
 
   const [empresasConDocs, setEmpresasConDocs] = useState([]);
   const unsubscribeRef = useRef(null);
@@ -2932,18 +2938,28 @@ const RRevisionDocumentos = () => {
                                     src={searchIcon}
                                     classNameImg="w-4"
                                     className="flex-none p-1"
-                                    onClick={() =>
-                                      handleRevisionDoc(empresa.rut, doc.numeroDoc, doc.tipo)
-                                    }
+                                    onClick={() => {
+                                      if (!puedeVer) {
+                                        setPermissionErrorMessage('ver detalles de documentos');
+                                        setPermissionErrorModal(true);
+                                        return;
+                                      }
+                                      handleRevisionDoc(empresa.rut, doc.numeroDoc, doc.tipo);
+                                    }}
                                     title="Detalles"
                                   />
                                   <ImgButton
                                     src={reportIcon}
                                     classNameImg="w-4"
                                     className="flex-none p-1"
-                                    onClick={() =>
-                                      handleGenerarPDF(empresa.rut, doc.numeroDoc, doc.tipo)
-                                    }
+                                    onClick={() => {
+                                      if (!puedeDescargar) {
+                                        setPermissionErrorMessage('descargar egresos');
+                                        setPermissionErrorModal(true);
+                                        return;
+                                      }
+                                      handleGenerarPDF(empresa.rut, doc.numeroDoc, doc.tipo);
+                                    }}
                                     title="Egreso"
                                   />
                                   {puedeEditar && (
@@ -4264,6 +4280,15 @@ const RRevisionDocumentos = () => {
         />
 
         <LoadingModal isOpen={loadingModal} message="Cargando..." />
+
+        {/* Modal de permisos insuficientes */}
+        <AlertModal
+          isOpen={permissionErrorModal}
+          onClose={() => setPermissionErrorModal(false)}
+          title="Permisos insuficientes"
+          message={`No tiene permisos para ${permissionErrorMessage || 'realizar esta acción'}.`}
+          variant="error"
+        />
 
         {/* Footer */}
         <Footer />

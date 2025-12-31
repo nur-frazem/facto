@@ -24,10 +24,24 @@ import { db } from '../../../firebaseConfig';
 
 import { useAuth, ROLES_LABELS, ROLES_DESCRIPCION } from '../../context/AuthContext';
 import { useCompany, formatRut } from '../../context/CompanyContext';
+import {
+  ROLE_COLORS,
+  createEmptyRole,
+  getAccessPermissionsList,
+  getActionPermissionsGrouped,
+} from '../../constants/permissions';
 
 const CRolesUsuarios = () => {
   const navigate = useNavigate();
-  const { userData, esSuperAdmin, esAdmin, getRolesAsignables, ROLES } = useAuth();
+  const {
+    userData,
+    esSuperAdmin,
+    esAdmin,
+    getRolesAsignables,
+    ROLES,
+    loadCompanyRoles,
+    invalidateRolesCache,
+  } = useAuth();
   const { isLightTheme } = useTheme();
   const { currentCompanyRUT, companyInfo } = useCompany();
 
@@ -53,6 +67,63 @@ const CRolesUsuarios = () => {
   const [editModal, setEditModal] = useState(false);
   const [eliminarModal, setEliminarModal] = useState(false);
   const [loadingModal, setLoadingModal] = useState(false);
+
+  // Estados para gestión de roles
+  const [showRolesModal, setShowRolesModal] = useState(false);
+  const [showRoleEditModal, setShowRoleEditModal] = useState(false);
+  const [editingRole, setEditingRole] = useState(null);
+  const [companyRoles, setCompanyRoles] = useState({});
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({});
+  const [deleteRoleModal, setDeleteRoleModal] = useState(false);
+  const [roleToDelete, setRoleToDelete] = useState(null);
+
+  // Load roles on component mount for user assignment
+  useEffect(() => {
+    const loadRoles = async () => {
+      if (currentCompanyRUT) {
+        try {
+          const roles = await loadCompanyRoles(currentCompanyRUT);
+          setCompanyRoles(roles);
+        } catch (err) {
+          console.error('Error loading roles on mount:', err);
+        }
+      }
+    };
+    loadRoles();
+  }, [currentCompanyRUT, loadCompanyRoles]);
+
+  // Get all available roles for assignment (combines default + custom)
+  const getAvailableRolesForAssignment = () => {
+    // If we have loaded company roles, use them
+    if (Object.keys(companyRoles).length > 0) {
+      return Object.entries(companyRoles).map(([id, role]) => ({
+        id,
+        label: role.nombre || ROLES_LABELS[id] || id,
+        descripcion: role.descripcion || ROLES_DESCRIPCION[id] || '',
+        color: role.color,
+        isDefault: role.isDefault,
+      }));
+    }
+    // Fallback to static roles
+    return Object.entries(ROLES_LABELS).map(([id, label]) => ({
+      id,
+      label,
+      descripcion: ROLES_DESCRIPCION[id] || '',
+      color: null,
+      isDefault: true,
+    }));
+  };
+
+  // Helper to get role label for both default and custom roles
+  const getRoleLabel = (roleId) => {
+    // First check company roles
+    if (companyRoles[roleId]) {
+      return companyRoles[roleId].nombre || ROLES_LABELS[roleId] || roleId;
+    }
+    // Fallback to static labels
+    return ROLES_LABELS[roleId] || roleId;
+  };
 
   // Estados para modal de información de empresa
   const [showCompanyModal, setShowCompanyModal] = useState(false);
@@ -124,7 +195,9 @@ const CRolesUsuarios = () => {
   const usuariosDeEmpresa = usuarios.filter(userHasAccessToCurrentCompany);
 
   // Contar administradores actuales (for current company only)
-  const cantidadAdmins = usuariosDeEmpresa.filter((u) => getUserRoleForCompany(u) === ROLES.ADMIN).length;
+  const cantidadAdmins = usuariosDeEmpresa.filter(
+    (u) => getUserRoleForCompany(u) === ROLES.ADMIN
+  ).length;
 
   // Validar email
   const validarEmail = (email) => {
@@ -165,9 +238,10 @@ const CRolesUsuarios = () => {
           const existingEmpresas = existingUserData.empresas || {};
 
           // Check if user already has access to current company
-          const alreadyHasAccess = typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
-            ? currentCompanyRUT in existingEmpresas
-            : Array.isArray(existingEmpresas) && existingEmpresas.includes(currentCompanyRUT);
+          const alreadyHasAccess =
+            typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
+              ? currentCompanyRUT in existingEmpresas
+              : Array.isArray(existingEmpresas) && existingEmpresas.includes(currentCompanyRUT);
 
           if (alreadyHasAccess) {
             setLoadingModal(false);
@@ -181,9 +255,10 @@ const CRolesUsuarios = () => {
           }
 
           // User exists but doesn't have access to current company - add them
-          const updatedEmpresas = typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
-            ? { ...existingEmpresas, [currentCompanyRUT]: nuevoRol }
-            : { [currentCompanyRUT]: nuevoRol }; // Convert from old array structure
+          const updatedEmpresas =
+            typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
+              ? { ...existingEmpresas, [currentCompanyRUT]: nuevoRol }
+              : { [currentCompanyRUT]: nuevoRol }; // Convert from old array structure
 
           await setDoc(
             userDocRef,
@@ -202,7 +277,7 @@ const CRolesUsuarios = () => {
           setAlertModal({
             open: true,
             title: 'Usuario agregado',
-            message: `El usuario ${nuevoEmail} ya existía y ha sido agregado a esta empresa con rol ${ROLES_LABELS[nuevoRol]}.`,
+            message: `El usuario ${nuevoEmail} ya existía y ha sido agregado a esta empresa con rol ${getRoleLabel(nuevoRol)}.`,
             variant: 'success',
           });
           return;
@@ -347,9 +422,10 @@ const CRolesUsuarios = () => {
         const existingEmpresas = existingData.empresas || {};
 
         // Update role for current company while preserving other companies
-        const updatedEmpresas = typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
-          ? { ...existingEmpresas, [currentCompanyRUT]: editRol }
-          : { [currentCompanyRUT]: editRol }; // If old structure, start fresh with new structure
+        const updatedEmpresas =
+          typeof existingEmpresas === 'object' && !Array.isArray(existingEmpresas)
+            ? { ...existingEmpresas, [currentCompanyRUT]: editRol }
+            : { [currentCompanyRUT]: editRol }; // If old structure, start fresh with new structure
 
         await setDoc(
           userDocRef,
@@ -410,9 +486,12 @@ const CRolesUsuarios = () => {
       const empresas = userData.empresas || {};
 
       // Check how many companies the user has access to
-      const companyCount = typeof empresas === 'object' && !Array.isArray(empresas)
-        ? Object.keys(empresas).length
-        : (Array.isArray(empresas) ? empresas.length : 0);
+      const companyCount =
+        typeof empresas === 'object' && !Array.isArray(empresas)
+          ? Object.keys(empresas).length
+          : Array.isArray(empresas)
+            ? empresas.length
+            : 0;
 
       if (companyCount <= 1) {
         // User only has access to this company - delete entirely
@@ -499,11 +578,15 @@ const CRolesUsuarios = () => {
     try {
       setLoadingModal(true);
       const companyDocRef = doc(db, currentCompanyRUT, '_root');
-      await setDoc(companyDocRef, {
-        nombre: companyNombre,
-        giro: companyGiro,
-        direccion: companyDireccion,
-      }, { merge: true });
+      await setDoc(
+        companyDocRef,
+        {
+          nombre: companyNombre,
+          giro: companyGiro,
+          direccion: companyDireccion,
+        },
+        { merge: true }
+      );
 
       setLoadingModal(false);
       setShowCompanyModal(false);
@@ -546,8 +629,8 @@ const CRolesUsuarios = () => {
   };
 
   // Get count for user being edited
-  const editUserCompanyCount = usuarios.find(u => u.email === editEmail)
-    ? getUserCompanyCount(usuarios.find(u => u.email === editEmail))
+  const editUserCompanyCount = usuarios.find((u) => u.email === editEmail)
+    ? getUserCompanyCount(usuarios.find((u) => u.email === editEmail))
     : 0;
 
   // Verificar si puede editar un usuario
@@ -562,8 +645,7 @@ const CRolesUsuarios = () => {
     if (esSuperAdmin()) return true;
 
     // Admin no puede editar super admins ni otros admins
-    if (esAdmin() && (targetRol === ROLES.SUPER_ADMIN || targetRol === ROLES.ADMIN))
-      return false;
+    if (esAdmin() && (targetRol === ROLES.SUPER_ADMIN || targetRol === ROLES.ADMIN)) return false;
 
     // Admin puede editar otros roles
     if (esAdmin()) return true;
@@ -574,7 +656,19 @@ const CRolesUsuarios = () => {
   // Verificar si puede asignar un rol específico
   const puedeAsignarRol = (rol, esEdicion = false, rolActual = null) => {
     const rolesAsignables = getRolesAsignables();
-    if (!rolesAsignables.includes(rol)) return false;
+
+    // Check if it's a default role that the user can assign
+    const isAssignableDefaultRole = rolesAsignables.includes(rol);
+
+    // Check if it's a custom role (exists in companyRoles and is not a default role)
+    const customRole = companyRoles[rol];
+    const isCustomRole = customRole && !customRole.isDefault;
+
+    // Must be either an assignable default role or a custom role (and user must be admin)
+    if (!isAssignableDefaultRole && !isCustomRole) return false;
+
+    // Custom roles can be assigned by any admin
+    if (isCustomRole && !esAdmin()) return false;
 
     // Si es rol admin, verificar límite
     if (rol === ROLES.ADMIN) {
@@ -599,6 +693,13 @@ const CRolesUsuarios = () => {
 
   // Obtener color de badge según rol
   const getRolBadgeColor = (rol) => {
+    // First check if we have a custom role with a color in companyRoles
+    const customRole = companyRoles[rol];
+    if (customRole?.color) {
+      // Return custom style with the role's color
+      return `border-2`;
+    }
+
     if (isLightTheme) {
       switch (rol) {
         case ROLES.SUPER_ADMIN:
@@ -628,6 +729,235 @@ const CRolesUsuarios = () => {
         return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
       default:
         return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+    }
+  };
+
+  // ==========================================
+  // ROLE MANAGEMENT FUNCTIONS
+  // ==========================================
+
+  // Load roles when opening the roles modal
+  const handleOpenRolesModal = async () => {
+    setRolesLoading(true);
+    setShowRolesModal(true);
+    try {
+      const roles = await loadCompanyRoles(currentCompanyRUT);
+      setCompanyRoles(roles);
+    } catch (err) {
+      console.error('Error loading roles:', err);
+      setAlertModal({
+        open: true,
+        title: 'Error',
+        message: 'Error al cargar los roles',
+        variant: 'error',
+      });
+    } finally {
+      setRolesLoading(false);
+    }
+  };
+
+  // Open role edit modal for new role
+  const handleNewRole = () => {
+    const newRole = createEmptyRole();
+    setEditingRole(newRole);
+    setExpandedSections({});
+    setShowRoleEditModal(true);
+  };
+
+  // Open role edit modal for existing role
+  const handleEditRole = (role) => {
+    setEditingRole({ ...role });
+    setExpandedSections({});
+    setShowRoleEditModal(true);
+  };
+
+  // Toggle permission in editing role
+  const togglePermission = (permKey) => {
+    if (!editingRole) return;
+    setEditingRole((prev) => ({
+      ...prev,
+      permisos: {
+        ...prev.permisos,
+        [permKey]: !prev.permisos[permKey],
+      },
+    }));
+  };
+
+  // Toggle all children permissions when parent is toggled
+  const toggleParentPermission = (parentKey, children) => {
+    if (!editingRole) return;
+    const allChildrenChecked = children.every((c) => editingRole.permisos[c.key]);
+    const newValue = !allChildrenChecked;
+
+    const newPermisos = { ...editingRole.permisos, [parentKey]: newValue };
+    children.forEach((c) => {
+      newPermisos[c.key] = newValue;
+    });
+
+    setEditingRole((prev) => ({
+      ...prev,
+      permisos: newPermisos,
+    }));
+  };
+
+  // Check if parent is indeterminate (some children checked)
+  const isParentIndeterminate = (children) => {
+    if (!editingRole) return false;
+    const checkedCount = children.filter((c) => editingRole.permisos[c.key]).length;
+    return checkedCount > 0 && checkedCount < children.length;
+  };
+
+  // Check if all children are checked
+  const areAllChildrenChecked = (children) => {
+    if (!editingRole) return false;
+    return children.every((c) => editingRole.permisos[c.key]);
+  };
+
+  // Toggle expanded section
+  const toggleSection = (sectionKey) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey],
+    }));
+  };
+
+  // Generate slug from name
+  const generateSlug = (name) => {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '');
+  };
+
+  // Save role
+  const handleSaveRole = async () => {
+    if (!editingRole) return;
+
+    // Validate
+    if (!editingRole.nombre?.trim()) {
+      setAlertModal({
+        open: true,
+        title: 'Error',
+        message: 'El nombre del rol es requerido',
+        variant: 'error',
+      });
+      return;
+    }
+
+    setLoadingModal(true);
+    try {
+      const roleId = editingRole.id || generateSlug(editingRole.nombre);
+
+      // Check if role ID already exists (for new roles)
+      if (!editingRole.id && companyRoles[roleId]) {
+        setLoadingModal(false);
+        setAlertModal({
+          open: true,
+          title: 'Error',
+          message: 'Ya existe un rol con ese nombre',
+          variant: 'error',
+        });
+        return;
+      }
+
+      const roleDocRef = doc(db, currentCompanyRUT, '_root', 'roles', roleId);
+      const roleData = {
+        id: roleId,
+        nombre: editingRole.nombre,
+        descripcion: editingRole.descripcion || '',
+        color: editingRole.color,
+        isDefault: editingRole.isDefault || false,
+        permisos: editingRole.permisos,
+        fechaModificacion: serverTimestamp(),
+        modificadoPor: userData?.email || 'sistema',
+      };
+
+      if (!editingRole.id) {
+        // New role
+        roleData.fechaCreacion = serverTimestamp();
+        roleData.creadoPor = userData?.email || 'sistema';
+      }
+
+      await setDoc(roleDocRef, roleData, { merge: true });
+
+      // Invalidate cache and reload
+      invalidateRolesCache(currentCompanyRUT);
+      const roles = await loadCompanyRoles(currentCompanyRUT);
+      setCompanyRoles(roles);
+
+      setLoadingModal(false);
+      setShowRoleEditModal(false);
+      setEditingRole(null);
+
+      setAlertModal({
+        open: true,
+        title: editingRole.id ? 'Rol actualizado' : 'Rol creado',
+        message: `El rol "${editingRole.nombre}" ha sido ${editingRole.id ? 'actualizado' : 'creado'} exitosamente`,
+        variant: 'success',
+      });
+    } catch (err) {
+      console.error('Error saving role:', err);
+      setLoadingModal(false);
+      setAlertModal({
+        open: true,
+        title: 'Error',
+        message: 'Error al guardar el rol',
+        variant: 'error',
+      });
+    }
+  };
+
+  // Delete role
+  const handleDeleteRole = async () => {
+    if (!roleToDelete) return;
+
+    setLoadingModal(true);
+    try {
+      // Check if any users have this role
+      const usersWithRole = usuariosDeEmpresa.filter(
+        (u) => getUserRoleForCompany(u) === roleToDelete.id
+      );
+      if (usersWithRole.length > 0) {
+        setLoadingModal(false);
+        setDeleteRoleModal(false);
+        setAlertModal({
+          open: true,
+          title: 'No se puede eliminar',
+          message: `Hay ${usersWithRole.length} usuario(s) con este rol asignado. Cambie su rol antes de eliminar.`,
+          variant: 'error',
+        });
+        return;
+      }
+
+      const roleDocRef = doc(db, currentCompanyRUT, '_root', 'roles', roleToDelete.id);
+      await deleteDoc(roleDocRef);
+
+      // Invalidate cache and reload
+      invalidateRolesCache(currentCompanyRUT);
+      const roles = await loadCompanyRoles(currentCompanyRUT);
+      setCompanyRoles(roles);
+
+      setLoadingModal(false);
+      setDeleteRoleModal(false);
+      setRoleToDelete(null);
+
+      setAlertModal({
+        open: true,
+        title: 'Rol eliminado',
+        message: `El rol "${roleToDelete.nombre}" ha sido eliminado`,
+        variant: 'success',
+      });
+    } catch (err) {
+      console.error('Error deleting role:', err);
+      setLoadingModal(false);
+      setAlertModal({
+        open: true,
+        title: 'Error',
+        message: 'Error al eliminar el rol',
+        variant: 'error',
+      });
     }
   };
 
@@ -667,6 +997,14 @@ const CRolesUsuarios = () => {
                   onClick={handleOpenCompanyModal}
                 />
               )}
+              {esAdmin() && (
+                <TextButton
+                  text="Editar roles"
+                  className="h-10 px-5 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 transition-colors duration-200 rounded-lg whitespace-nowrap"
+                  classNameText="font-semibold text-base text-white"
+                  onClick={handleOpenRolesModal}
+                />
+              )}
               <TextButton
                 text="Nuevo Usuario"
                 className="h-10 px-5 bg-success hover:bg-success-hover active:bg-success-active transition-colors duration-200 rounded-lg whitespace-nowrap"
@@ -678,13 +1016,22 @@ const CRolesUsuarios = () => {
 
           {/* Leyenda de roles */}
           <div className="flex flex-wrap gap-2 mb-4">
-            {Object.entries(ROLES_LABELS).map(([rol, label]) => (
+            {getAvailableRolesForAssignment().map((role) => (
               <div
-                key={rol}
-                className={`px-3 py-1 text-xs font-medium rounded-full border ${getRolBadgeColor(rol)}`}
-                title={ROLES_DESCRIPCION[rol]}
+                key={role.id}
+                className={`px-3 py-1 text-xs font-medium rounded-full border ${role.color ? '' : getRolBadgeColor(role.id)}`}
+                style={
+                  role.color
+                    ? {
+                        backgroundColor: `${role.color}20`,
+                        color: role.color,
+                        borderColor: `${role.color}50`,
+                      }
+                    : undefined
+                }
+                title={role.descripcion}
               >
-                {label}
+                {role.label}
               </div>
             ))}
           </div>
@@ -696,11 +1043,11 @@ const CRolesUsuarios = () => {
             content={
               <div>
                 {/* Encabezados */}
-                <div className={`flex font-semibold text-sm mb-3 px-2 py-2 rounded-lg sticky top-0 ${
-                  isLightTheme
-                    ? 'bg-gray-50 text-gray-600'
-                    : 'bg-white/5 text-slate-300'
-                }`}>
+                <div
+                  className={`flex font-semibold text-sm mb-3 px-2 py-2 rounded-lg sticky top-0 ${
+                    isLightTheme ? 'bg-gray-50 text-gray-600' : 'bg-white/5 text-slate-300'
+                  }`}
+                >
                   <div className="w-[25%] text-center">Email</div>
                   <div className="w-[20%] text-center">Nombre</div>
                   <div className="w-[20%] text-center">Rol</div>
@@ -728,11 +1075,27 @@ const CRolesUsuarios = () => {
                       {usuario.nombre || '-'}
                     </div>
                     <div className="w-[20%] flex justify-center">
-                      <span
-                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getRolBadgeColor(getUserRoleForCompany(usuario))}`}
-                      >
-                        {ROLES_LABELS[getUserRoleForCompany(usuario)] || getUserRoleForCompany(usuario) || 'Sin rol'}
-                      </span>
+                      {(() => {
+                        const userRole = getUserRoleForCompany(usuario);
+                        const customRole = companyRoles[userRole];
+                        const hasCustomColor = customRole?.color;
+                        return (
+                          <span
+                            className={`px-3 py-1 text-xs font-medium rounded-full border ${hasCustomColor ? '' : getRolBadgeColor(userRole)}`}
+                            style={
+                              hasCustomColor
+                                ? {
+                                    backgroundColor: `${customRole.color}20`,
+                                    color: customRole.color,
+                                    borderColor: `${customRole.color}50`,
+                                  }
+                                : undefined
+                            }
+                          >
+                            {getRoleLabel(userRole) || 'Sin rol'}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div className="w-[12%] flex justify-center">
                       {usuario.activo !== false ? (
@@ -873,24 +1236,28 @@ const CRolesUsuarios = () => {
                 />
 
                 <div>
-                  <label className={`block text-sm font-medium mb-2 ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}
+                  >
                     Rol:
                     {errors.rol && <span className="text-red-500 font-black"> - {errors.rol}</span>}
                   </label>
                   {limiteAdminsAlcanzado && esSuperAdmin() && (
-                    <p className={`text-xs mb-2 ${isLightTheme ? 'text-yellow-600' : 'text-yellow-400'}`}>
+                    <p
+                      className={`text-xs mb-2 ${isLightTheme ? 'text-yellow-600' : 'text-yellow-400'}`}
+                    >
                       Límite de administradores alcanzado ({cantidadAdmins}/{LIMITE_ADMINS})
                     </p>
                   )}
                   <div className="space-y-2">
-                    {Object.entries(ROLES_LABELS).map(([rol, label]) => {
-                      const puedeAsignar = puedeAsignarRol(rol, false, null);
-                      const esAdminLimitado = rol === ROLES.ADMIN && limiteAdminsAlcanzado;
+                    {getAvailableRolesForAssignment().map((role) => {
+                      const puedeAsignar = puedeAsignarRol(role.id, false, null);
+                      const esAdminLimitado = role.id === ROLES.ADMIN && limiteAdminsAlcanzado;
                       return (
                         <label
-                          key={rol}
+                          key={role.id}
                           className={`flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
-                            nuevoRol === rol
+                            nuevoRol === role.id
                               ? 'border-accent-blue bg-accent-blue/10'
                               : puedeAsignar
                                 ? isLightTheme
@@ -904,8 +1271,8 @@ const CRolesUsuarios = () => {
                           <input
                             type="radio"
                             name="nuevoRol"
-                            value={rol}
-                            checked={nuevoRol === rol}
+                            value={role.id}
+                            checked={nuevoRol === role.id}
                             disabled={!puedeAsignar}
                             onChange={(e) => {
                               setNuevoRol(e.target.value);
@@ -913,14 +1280,39 @@ const CRolesUsuarios = () => {
                             }}
                             className="mt-1 accent-accent-blue"
                           />
-                          <div>
-                            <span
-                              className={`font-medium ${getRolBadgeColor(rol)} px-2 py-0.5 rounded text-sm`}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              {role.color && (
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ backgroundColor: role.color }}
+                                />
+                              )}
+                              <span
+                                className={`font-medium ${role.color ? '' : getRolBadgeColor(role.id)} px-2 py-0.5 rounded text-sm`}
+                                style={
+                                  role.color
+                                    ? {
+                                        backgroundColor: `${role.color}20`,
+                                        color: role.color,
+                                      }
+                                    : undefined
+                                }
+                              >
+                                {role.label}
+                              </span>
+                              {!role.isDefault && (
+                                <span
+                                  className={`text-xs px-1.5 py-0.5 rounded ${isLightTheme ? 'bg-purple-100 text-purple-600' : 'bg-purple-500/20 text-purple-300'}`}
+                                >
+                                  Personalizado
+                                </span>
+                              )}
+                            </div>
+                            <p
+                              className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
                             >
-                              {label}
-                            </span>
-                            <p className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
-                              {ROLES_DESCRIPCION[rol]}
+                              {role.descripcion}
                               {esAdminLimitado && ' (Límite alcanzado)'}
                             </p>
                           </div>
@@ -931,7 +1323,9 @@ const CRolesUsuarios = () => {
                 </div>
               </div>
 
-              <div className={`flex justify-end gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}>
+              <div
+                className={`flex justify-end gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}
+              >
                 <TextButton
                   text="Cancelar"
                   className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-lg"
@@ -987,27 +1381,31 @@ const CRolesUsuarios = () => {
                 />
 
                 <div>
-                  <label className={`block text-sm font-medium mb-2 ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}
+                  >
                     Rol:
                     {errors.rol && <span className="text-red-500 font-black"> - {errors.rol}</span>}
                   </label>
                   {limiteAdminsAlcanzado && esSuperAdmin() && editRolOriginal !== ROLES.ADMIN && (
-                    <p className={`text-xs mb-2 ${isLightTheme ? 'text-yellow-600' : 'text-yellow-400'}`}>
+                    <p
+                      className={`text-xs mb-2 ${isLightTheme ? 'text-yellow-600' : 'text-yellow-400'}`}
+                    >
                       Límite de administradores alcanzado ({cantidadAdmins}/{LIMITE_ADMINS})
                     </p>
                   )}
                   <div className="space-y-2">
-                    {Object.entries(ROLES_LABELS).map(([rol, label]) => {
-                      const puedeAsignar = puedeAsignarRol(rol, true, editRolOriginal);
+                    {getAvailableRolesForAssignment().map((role) => {
+                      const puedeAsignar = puedeAsignarRol(role.id, true, editRolOriginal);
                       const esAdminLimitado =
-                        rol === ROLES.ADMIN &&
+                        role.id === ROLES.ADMIN &&
                         limiteAdminsAlcanzado &&
                         editRolOriginal !== ROLES.ADMIN;
                       return (
                         <label
-                          key={rol}
+                          key={role.id}
                           className={`flex items-start gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
-                            editRol === rol
+                            editRol === role.id
                               ? 'border-accent-blue bg-accent-blue/10'
                               : puedeAsignar
                                 ? isLightTheme
@@ -1021,8 +1419,8 @@ const CRolesUsuarios = () => {
                           <input
                             type="radio"
                             name="editRol"
-                            value={rol}
-                            checked={editRol === rol}
+                            value={role.id}
+                            checked={editRol === role.id}
                             disabled={!puedeAsignar}
                             onChange={(e) => {
                               setEditRol(e.target.value);
@@ -1030,14 +1428,39 @@ const CRolesUsuarios = () => {
                             }}
                             className="mt-1 accent-accent-blue"
                           />
-                          <div>
-                            <span
-                              className={`font-medium ${getRolBadgeColor(rol)} px-2 py-0.5 rounded text-sm`}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              {role.color && (
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{ backgroundColor: role.color }}
+                                />
+                              )}
+                              <span
+                                className={`font-medium ${role.color ? '' : getRolBadgeColor(role.id)} px-2 py-0.5 rounded text-sm`}
+                                style={
+                                  role.color
+                                    ? {
+                                        backgroundColor: `${role.color}20`,
+                                        color: role.color,
+                                      }
+                                    : undefined
+                                }
+                              >
+                                {role.label}
+                              </span>
+                              {!role.isDefault && (
+                                <span
+                                  className={`text-xs px-1.5 py-0.5 rounded ${isLightTheme ? 'bg-purple-100 text-purple-600' : 'bg-purple-500/20 text-purple-300'}`}
+                                >
+                                  Personalizado
+                                </span>
+                              )}
+                            </div>
+                            <p
+                              className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
                             >
-                              {label}
-                            </span>
-                            <p className={`text-xs mt-1 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
-                              {ROLES_DESCRIPCION[rol]}
+                              {role.descripcion}
                               {esAdminLimitado && ' (Límite alcanzado)'}
                             </p>
                           </div>
@@ -1048,13 +1471,15 @@ const CRolesUsuarios = () => {
                 </div>
 
                 {/* Toggle estado activo */}
-                <div className={`flex items-center justify-between p-4 rounded-lg border ${
-                  isLightTheme
-                    ? 'bg-gray-50 border-gray-200'
-                    : 'bg-white/5 border-white/10'
-                }`}>
+                <div
+                  className={`flex items-center justify-between p-4 rounded-lg border ${
+                    isLightTheme ? 'bg-gray-50 border-gray-200' : 'bg-white/5 border-white/10'
+                  }`}
+                >
                   <div>
-                    <p className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>Estado de la cuenta</p>
+                    <p className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
+                      Estado de la cuenta
+                    </p>
                     <p className={`text-xs ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
                       {editActivo
                         ? 'El usuario puede acceder al sistema'
@@ -1076,7 +1501,9 @@ const CRolesUsuarios = () => {
                 </div>
               </div>
 
-              <div className={`flex justify-between items-center gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}>
+              <div
+                className={`flex justify-between items-center gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}
+              >
                 <TextButton
                   text="Eliminar Usuario"
                   className="px-4 py-2 bg-danger text-white font-medium hover:bg-danger-hover active:bg-danger-active rounded-lg"
@@ -1127,19 +1554,33 @@ const CRolesUsuarios = () => {
                   {editUserCompanyCount > 1 ? (
                     <>
                       ¿Está seguro que desea remover a{' '}
-                      <span className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>{editEmail}</span>{' '}
+                      <span
+                        className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                      >
+                        {editEmail}
+                      </span>{' '}
                       de esta empresa?
                     </>
                   ) : (
                     <>
                       ¿Está seguro que desea eliminar a{' '}
-                      <span className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>{editEmail}</span>?
+                      <span
+                        className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                      >
+                        {editEmail}
+                      </span>
+                      ?
                     </>
                   )}
                 </p>
-                <p className={`text-sm font-medium mb-6 ${editUserCompanyCount > 1 ? 'text-yellow-500' : 'text-danger'}`}>
+                <p
+                  className={`text-sm font-medium mb-6 ${editUserCompanyCount > 1 ? 'text-yellow-500' : 'text-danger'}`}
+                >
                   {editUserCompanyCount > 1 ? (
-                    <>El usuario seguirá teniendo acceso a otras {editUserCompanyCount - 1} empresa(s).</>
+                    <>
+                      El usuario seguirá teniendo acceso a otras {editUserCompanyCount - 1}{' '}
+                      empresa(s).
+                    </>
                   ) : (
                     <>Esta acción no se puede deshacer. El usuario perderá acceso al sistema.</>
                   )}
@@ -1167,7 +1608,9 @@ const CRolesUsuarios = () => {
               className="!absolute !top-20 !max-w-lg"
             >
               <h2 className="text-xl font-bold text-center mb-2">Información de la Empresa</h2>
-              <p className={`text-center text-sm mb-6 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+              <p
+                className={`text-center text-sm mb-6 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+              >
                 RUT: {formatRut(currentCompanyRUT)}
               </p>
 
@@ -1194,7 +1637,9 @@ const CRolesUsuarios = () => {
                 />
               </div>
 
-              <div className={`flex justify-end gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}>
+              <div
+                className={`flex justify-end gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}
+              >
                 <TextButton
                   text="Cancelar"
                   className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-lg"
@@ -1205,6 +1650,415 @@ const CRolesUsuarios = () => {
                   className="px-5 py-2 bg-success text-white font-medium hover:bg-success-hover active:bg-success-active rounded-lg"
                   onClick={handleSaveCompanyInfo}
                 />
+              </div>
+            </Modal>
+          )}
+
+          {/* Modal gestión de roles */}
+          {showRolesModal && (
+            <Modal
+              onClickOutside={() => setShowRolesModal(false)}
+              className="!absolute !top-10 !max-w-2xl"
+            >
+              <h2 className="text-xl font-bold text-center mb-6">Gestión de Roles</h2>
+
+              {rolesLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue"></div>
+                </div>
+              ) : (
+                <>
+                  {/* Botón crear nuevo rol */}
+                  <div className="mb-4">
+                    <TextButton
+                      text="+ Crear nuevo rol"
+                      className="w-full py-3 bg-success hover:bg-success-hover active:bg-success-active transition-colors rounded-lg"
+                      classNameText="font-semibold text-base text-white"
+                      onClick={handleNewRole}
+                    />
+                  </div>
+
+                  {/* Lista de roles */}
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto scrollbar-custom">
+                    {Object.values(companyRoles).map((role) => (
+                      <div
+                        key={role.id}
+                        className={`p-4 rounded-lg border transition-colors ${
+                          isLightTheme
+                            ? 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                            : 'bg-white/5 border-white/10 hover:bg-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-5">
+                          <div className="flex items-center gap-3">
+                            {/* Color badge */}
+                            <div
+                              className="w-4 h-4 rounded-full border-2"
+                              style={{ backgroundColor: role.color, borderColor: role.color }}
+                            />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                                >
+                                  {role.nombre}
+                                </span>
+                                {role.isDefault && (
+                                  <span
+                                    className={`text-xs px-2 py-0.5 rounded-full ${
+                                      isLightTheme
+                                        ? 'bg-purple-100 text-purple-700'
+                                        : 'bg-purple-500/20 text-purple-300'
+                                    }`}
+                                  >
+                                    Por defecto
+                                  </span>
+                                )}
+                              </div>
+                              <p
+                                className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+                              >
+                                {role.descripcion || 'Sin descripción'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            {!role.isDefault && (
+                              <>
+                                <TextButton
+                                  text="Editar"
+                                  className="px-4 py-1.5 bg-accent-blue hover:bg-blue-600 active:bg-blue-700 rounded-md"
+                                  classNameText="text-sm font-medium text-white"
+                                  onClick={() => handleEditRole(role)}
+                                />
+                                <TextButton
+                                  text="Eliminar"
+                                  className="px-4 py-1.5 bg-danger hover:bg-danger-hover active:bg-danger-active rounded-md"
+                                  classNameText="text-sm font-medium text-white"
+                                  onClick={() => {
+                                    setRoleToDelete(role);
+                                    setDeleteRoleModal(true);
+                                  }}
+                                />
+                              </>
+                            )}
+                            {role.isDefault && (
+                              <span
+                                className={`text-xs px-3 py-1.5 ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}
+                              >
+                                No editable
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    className={`flex justify-end mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}
+                  >
+                    <TextButton
+                      text="Cerrar"
+                      className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-lg"
+                      onClick={() => setShowRolesModal(false)}
+                    />
+                  </div>
+                </>
+              )}
+            </Modal>
+          )}
+
+          {/* Modal editar/crear rol */}
+          {showRoleEditModal && editingRole && (
+            <Modal
+              onClickOutside={() => {
+                setShowRoleEditModal(false);
+                setEditingRole(null);
+              }}
+              className="!absolute !top-5 !max-w-3xl !max-h-[90vh] overflow-y-auto"
+            >
+              <h2 className="text-xl font-bold text-center mb-6">
+                {editingRole.id ? 'Editar Rol' : 'Crear Nuevo Rol'}
+              </h2>
+
+              <div className="space-y-6">
+                {/* Nombre y descripción */}
+                <div className="grid grid-cols-2 gap-4">
+                  <Textfield
+                    label="Nombre del rol:"
+                    placeholder="Ej: Contador Junior"
+                    value={editingRole.nombre}
+                    onChange={(e) =>
+                      setEditingRole((prev) => ({ ...prev, nombre: e.target.value }))
+                    }
+                  />
+                  <Textfield
+                    label="Descripción:"
+                    placeholder="Descripción breve del rol"
+                    value={editingRole.descripcion}
+                    onChange={(e) =>
+                      setEditingRole((prev) => ({ ...prev, descripcion: e.target.value }))
+                    }
+                  />
+                </div>
+
+                {/* Color picker */}
+                <div>
+                  <label
+                    className={`block text-sm font-medium mb-2 ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}
+                  >
+                    Color del rol:
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex gap-2 flex-wrap">
+                      {ROLE_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => setEditingRole((prev) => ({ ...prev, color }))}
+                          className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 flex items-center justify-center ${
+                            editingRole.color === color
+                              ? 'border-white ring-2 ring-offset-2 ring-offset-gray-800 ring-white'
+                              : 'border-transparent'
+                          }`}
+                          style={{ backgroundColor: color }}
+                        >
+                          {editingRole.color === color && (
+                            <svg
+                              className="w-4 h-4 text-white"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="3"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-sm ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}
+                      >
+                        Vista previa:
+                      </span>
+                      <span
+                        className="px-3 py-1 text-sm font-medium rounded-full border-2"
+                        style={{
+                          backgroundColor: `${editingRole.color}20`,
+                          color: editingRole.color,
+                          borderColor: `${editingRole.color}50`,
+                        }}
+                      >
+                        {editingRole.nombre || 'Nombre del rol'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Permisos de acceso */}
+                <div>
+                  <h3
+                    className={`text-lg font-semibold mb-3 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                  >
+                    Permisos de acceso a vistas
+                  </h3>
+                  <div
+                    className={`rounded-lg border ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}
+                  >
+                    {getAccessPermissionsList().map((parent) => (
+                      <div
+                        key={parent.key}
+                        className={`border-b last:border-b-0 ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}
+                      >
+                        {/* Parent header */}
+                        <div
+                          className={`flex items-center justify-between p-3 cursor-pointer transition-colors ${
+                            isLightTheme ? 'hover:bg-gray-50' : 'hover:bg-white/5'
+                          }`}
+                          onClick={() => toggleSection(parent.key)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={areAllChildrenChecked(parent.children)}
+                              ref={(el) => {
+                                if (el) el.indeterminate = isParentIndeterminate(parent.children);
+                              }}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleParentPermission(parent.key, parent.children);
+                              }}
+                              className="w-4 h-4 accent-accent-blue"
+                            />
+                            <span
+                              className={`font-medium ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                            >
+                              {parent.label}
+                            </span>
+                          </div>
+                          <svg
+                            className={`w-5 h-5 transition-transform ${expandedSections[parent.key] ? 'rotate-180' : ''} ${
+                              isLightTheme ? 'text-gray-500' : 'text-slate-400'
+                            }`}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+
+                        {/* Children */}
+                        {expandedSections[parent.key] && (
+                          <div
+                            className={`pl-10 pb-3 space-y-2 ${isLightTheme ? 'bg-gray-50' : 'bg-white/5'}`}
+                          >
+                            {parent.children.map((child) => (
+                              <label
+                                key={child.key}
+                                className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                                  isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/5'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={editingRole.permisos[child.key] || false}
+                                  onChange={() => togglePermission(child.key)}
+                                  className="w-4 h-4 accent-accent-blue"
+                                />
+                                <span
+                                  className={`text-sm ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}
+                                >
+                                  {child.label}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Permisos de acciones */}
+                <div>
+                  <h3
+                    className={`text-lg font-semibold mb-3 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                  >
+                    Permisos de acciones
+                  </h3>
+                  <div
+                    className={`rounded-lg border p-4 ${isLightTheme ? 'border-gray-200 bg-gray-50' : 'border-white/10 bg-white/5'}`}
+                  >
+                    {Object.entries(getActionPermissionsGrouped()).map(([grupo, permisos]) => (
+                      <div key={grupo} className="mb-4 last:mb-0">
+                        <h4
+                          className={`text-sm font-medium mb-2 ${isLightTheme ? 'text-gray-600' : 'text-slate-400'}`}
+                        >
+                          {grupo}
+                        </h4>
+                        <div className="grid grid-cols-2 gap-2">
+                          {permisos.map((permiso) => (
+                            <label
+                              key={permiso.key}
+                              className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                                isLightTheme ? 'hover:bg-gray-100' : 'hover:bg-white/10'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editingRole.permisos[permiso.key] || false}
+                                onChange={() => togglePermission(permiso.key)}
+                                className="w-4 h-4 accent-accent-blue"
+                              />
+                              <span
+                                className={`text-sm ${isLightTheme ? 'text-gray-700' : 'text-slate-300'}`}
+                              >
+                                {permiso.label}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`flex justify-end gap-3 mt-6 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}
+              >
+                <TextButton
+                  text="Cancelar"
+                  className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-lg"
+                  onClick={() => {
+                    setShowRoleEditModal(false);
+                    setEditingRole(null);
+                  }}
+                />
+                <TextButton
+                  text={editingRole.id ? 'Guardar Cambios' : 'Crear Rol'}
+                  className="px-5 py-2 bg-success text-white font-medium hover:bg-success-hover active:bg-success-active rounded-lg"
+                  onClick={handleSaveRole}
+                />
+              </div>
+            </Modal>
+          )}
+
+          {/* Modal confirmar eliminación de rol */}
+          {deleteRoleModal && roleToDelete && (
+            <Modal onClickOutside={() => setDeleteRoleModal(false)} className="!max-w-md">
+              <div className="text-center">
+                <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-danger/20 flex items-center justify-center">
+                  <svg
+                    className="w-8 h-8 text-danger"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-2.194-.833-2.964 0L3.34 16.5C2.57 17.333 3.532 19 5.072 19z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold mb-2">Eliminar Rol</h3>
+                <p className={`text-sm mb-2 ${isLightTheme ? 'text-gray-600' : 'text-slate-300'}`}>
+                  ¿Está seguro que desea eliminar el rol{' '}
+                  <span
+                    className={`font-semibold ${isLightTheme ? 'text-gray-800' : 'text-white'}`}
+                  >
+                    {roleToDelete.nombre}
+                  </span>
+                  ?
+                </p>
+                <p className="text-sm font-medium text-danger mb-6">
+                  Esta acción no se puede deshacer.
+                </p>
+                <div className="flex justify-center gap-4">
+                  <TextButton
+                    text="Cancelar"
+                    className="px-5 py-2 bg-slate-600 text-white font-medium hover:bg-slate-500 active:bg-slate-700 rounded-full"
+                    onClick={() => {
+                      setDeleteRoleModal(false);
+                      setRoleToDelete(null);
+                    }}
+                  />
+                  <TextButton
+                    text="Eliminar"
+                    className="px-5 py-2 bg-danger text-white font-medium hover:bg-danger-hover active:bg-danger-active rounded-full"
+                    onClick={handleDeleteRole}
+                  />
+                </div>
               </div>
             </Modal>
           )}

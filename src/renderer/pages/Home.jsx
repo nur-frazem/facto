@@ -14,12 +14,13 @@ import { useAuth } from '../context/AuthContext';
 const Home = () => {
 
   const navigate = useNavigate();
-  const { tienePermiso } = useAuth();
+  const { tieneAcceso } = useAuth();
 
-  // Permisos para mostrar/ocultar cards
-  const puedeVerRecepcion = tienePermiso("VER_DOCUMENTOS") || tienePermiso("INGRESAR_DOCUMENTOS") || tienePermiso("PROCESAR_PAGOS");
-  const puedeVerConfiguracion = tienePermiso("VER_CONFIGURACION");
-  const puedeVerInformes = tienePermiso("VER_INFORMES");
+  // Permisos para mostrar/ocultar cards (usando nuevo sistema de permisos)
+  const puedeVerRecepcion = tieneAcceso("RECEPCION") || tieneAcceso("RECEPCION_INDEX");
+  const puedeVerEmision = tieneAcceso("EMISION") || tieneAcceso("EMISION_INDEX");
+  const puedeVerConfiguracion = tieneAcceso("CONFIGURACION") || tieneAcceso("CONFIGURACION_INDEX");
+  const puedeVerInformes = tieneAcceso("INFORMES") || tieneAcceso("INFORMES_INDEX");
 
   return (
     <div className="min-h-screen flex">
@@ -54,6 +55,7 @@ const Home = () => {
             description="Todo lo relacionado a documentos emitidos, configurado para que la emisión
                         de estos se agreguen automáticamente en esta sección al momento de su facturación,
                         donde podrá revisar, modificar estados de pago, anular etc."
+            hidden={!puedeVerEmision}
           />
 
           <Card

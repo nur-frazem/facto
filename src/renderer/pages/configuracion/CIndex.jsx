@@ -9,7 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 
 const CIndex = () => {
     const navigate = useNavigate();
-    const { tienePermiso, esAdmin } = useAuth();
+    const { tieneAcceso } = useAuth();
 
     return(
         <div className="min-h-screen flex">
@@ -30,16 +30,23 @@ const CIndex = () => {
 
                 {/* Contenido principal */}
                 <div className="flex-1 flex flex-col flex-wrap justify-start content-center gap-4 sm:gap-6 px-4 py-6">
-                    <Card title="Cuenta" onClick={() => navigate("/configuracion-cuenta")} />
+                    {tieneAcceso("CONFIGURACION_CUENTA") && (
+                        <Card title="Cuenta" onClick={() => navigate("/configuracion-cuenta")} />
+                    )}
                     <Card title="Papelera temporal" />
-                    <Card title="Configurar Clientes/proveedores" onClick={() => navigate("/configuracion-clientesProveedores")}/>
-                    {tienePermiso("ASIGNAR_ROLES") && (
+                    {tieneAcceso("CONFIGURACION_EMPRESAS") && (
+                        <Card
+                            title="Configurar Clientes/proveedores"
+                            onClick={() => navigate("/configuracion-clientesProveedores")}
+                        />
+                    )}
+                    {tieneAcceso("CONFIGURACION_ROLES") && (
                         <Card
                             title="Gestión de Usuarios y Roles"
                             onClick={() => navigate("/configuracion-roles")}
                         />
                     )}
-                    {esAdmin() && (
+                    {tieneAcceso("CONFIGURACION_AUDITORIA") && (
                         <Card
                             title="Auditoría"
                             onClick={() => navigate("/configuracion-auditoria")}

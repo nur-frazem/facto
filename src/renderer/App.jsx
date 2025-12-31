@@ -62,52 +62,52 @@ function AppContent() {
               <Route path="/recepcion-index" element={<ProtectedRoute><RIndex/></ProtectedRoute>} />
               <Route path="/emision-index" element={<ProtectedRoute><EIndex/></ProtectedRoute>} />
               <Route path="/informes-index" element={
-                <ProtectedRoute requiredPermission="VER_INFORMES">
+                <ProtectedRoute requiredPermission="INFORMES_INDEX">
                   <IIndex/>
                 </ProtectedRoute>
               } />
               <Route path="/configuracion-index" element={
-                <ProtectedRoute requiredPermission="VER_CONFIGURACION">
+                <ProtectedRoute requiredPermission="CONFIGURACION_INDEX">
                   <CIndex/>
                 </ProtectedRoute>
               } />
               <Route path="/configuracion-clientesProveedores" element={
-                <ProtectedRoute requiredPermission="GESTIONAR_EMPRESAS">
+                <ProtectedRoute requiredPermission="CONFIGURACION_EMPRESAS">
                   <CClientesProveedores/>
                 </ProtectedRoute>
               } />
               <Route path="/configuracion-roles" element={
-                <ProtectedRoute requiredPermission="ASIGNAR_ROLES">
+                <ProtectedRoute requiredPermission="CONFIGURACION_ROLES">
                   <CRolesUsuarios/>
                 </ProtectedRoute>
               } />
               <Route path="/configuracion-auditoria" element={
-                <ProtectedRoute requiredPermission="VER_CONFIGURACION">
+                <ProtectedRoute requiredPermission="CONFIGURACION_AUDITORIA">
                   <CAuditoria/>
                 </ProtectedRoute>
               } />
               <Route path="/configuracion-cuenta" element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="CONFIGURACION_CUENTA">
                   <CCuenta/>
                 </ProtectedRoute>
               } />
               <Route path="/recepcion-index/ingresar" element={
-                <ProtectedRoute requiredPermission="INGRESAR_DOCUMENTOS">
+                <ProtectedRoute requiredPermission="RECEPCION_INGRESAR">
                   <RIngresar/>
                 </ProtectedRoute>
               } />
               <Route path="/recepcion-index/procesar" element={
-                <ProtectedRoute requiredPermission="PROCESAR_PAGOS">
+                <ProtectedRoute requiredPermission="RECEPCION_PROCESAR">
                   <RProcesar/>
                 </ProtectedRoute>
               } />
               <Route path="/recepcion-index/revision-documentos" element={
-                <ProtectedRoute requiredPermission="VER_DOCUMENTOS">
+                <ProtectedRoute requiredPermission="RECEPCION_REVISION">
                   <RRevisionDocumentos/>
                 </ProtectedRoute>
               } />
               <Route path="/recepcion-index/calendario" element={
-                <ProtectedRoute requiredPermission="VER_CALENDARIO">
+                <ProtectedRoute requiredPermission="RECEPCION_CALENDARIO">
                   <RCalendario/>
                 </ProtectedRoute>
               } />
