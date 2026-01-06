@@ -4,7 +4,7 @@ import Footer from "../../components/Footer";
 import { H1Tittle } from "../../components/Fonts";
 import { VolverButton, YButton, XButton } from "../../components/Button";
 import { useNavigate } from "react-router-dom";
-import { Textfield, DropdownMenu, DatepickerField } from "../../components/Textfield";
+import { Textfield, DropdownMenu, DatepickerField, ImpuestosAdicionalesSelector } from "../../components/Textfield";
 import { Modal, LoadingModal, AlertModal } from "../../components/modal";
 import { useTheme } from "../../context/ThemeContext";
 import { useCompany } from "../../context/CompanyContext";
@@ -89,9 +89,12 @@ const RIngresar = () => {
   // Valores monto documento textfield
   const [neto, setNeto] = useState("");
   const [iva, setIva] = useState("");
-  const [otros, setOtros] = useState(0);
+  const [impuestosAdicionales, setImpuestosAdicionales] = useState({});
   const [flete, setFlete] = useState(0);
   const [retencion, setRetencion] = useState(0);
+
+  // Calcular "otros" como suma de impuestos adicionales seleccionados
+  const otros = Object.values(impuestosAdicionales).reduce((sum, val) => sum + (val || 0), 0);
 
   // Calcular IVA automáticamente (solo para documentos que tienen IVA)
   useEffect(() => {
@@ -257,6 +260,11 @@ const RIngresar = () => {
       }
     }
 
+    // Filtrar impuestos adicionales con valor > 0 para guardar en Firestore
+    const impuestosAdicionalesParaGuardar = Object.entries(impuestosAdicionales)
+      .filter(([_, valor]) => valor > 0)
+      .reduce((acc, [codigo, valor]) => ({ ...acc, [codigo]: valor }), {});
+
     const factura = {
       numeroDoc,
       formaPago,
@@ -265,7 +273,8 @@ const RIngresar = () => {
       neto: Number(neto),
       flete: Number(flete),
       retencion: Number(retencion),
-      otros: Number(otros),
+      otros: Number(otros), // Suma total de impuestos adicionales (backward compatible)
+      impuestosAdicionales: impuestosAdicionalesParaGuardar, // Detalle por código de impuesto
       iva: Number(iva),
       total,
       estado,
@@ -283,6 +292,7 @@ const RIngresar = () => {
       flete: Number(flete),
       retencion: Number(retencion),
       otros: Number(otros),
+      impuestosAdicionales: impuestosAdicionalesParaGuardar,
       total,
       estado,
       ingresoUsuario: userId,
@@ -294,6 +304,8 @@ const RIngresar = () => {
       fechaE,
       neto: Number(neto),
       iva: Number(iva),
+      otros: Number(otros),
+      impuestosAdicionales: impuestosAdicionalesParaGuardar,
       total,
       estado: "pagado",
       ingresoUsuario: userId,
@@ -305,6 +317,8 @@ const RIngresar = () => {
       numeroDoc,
       fechaE,
       neto: Number(neto),
+      otros: Number(otros),
+      impuestosAdicionales: impuestosAdicionalesParaGuardar,
       total,
       estado: "pagado",
       ingresoUsuario: userId,
@@ -319,6 +333,7 @@ const RIngresar = () => {
       flete: Number(flete),
       retencion: Number(retencion),
       otros: Number(otros),
+      impuestosAdicionales: impuestosAdicionalesParaGuardar,
       iva: Number(iva),
       total,
       estado,
@@ -619,7 +634,7 @@ const RIngresar = () => {
     setNeto(0);
     setFlete(0);
     setRetencion(0);
-    setOtros(0);
+    setImpuestosAdicionales({});
     setIva(0);
 }
 
@@ -954,13 +969,11 @@ const RIngresar = () => {
                 </div>
 
                 {/* Otros impuestos */}
-                <div className={!selectedDoc ? "pointer-events-none" : ""}>
-                  <Textfield
-                    label="Otros impuestos"
-                    value={otros}
-                    onChange={(e) => setOtros(e.target.value)}
-                    placeholder="$0"
-                    currency
+                <div className={!selectedDoc ? "opacity-50 pointer-events-none" : ""}>
+                  <ImpuestosAdicionalesSelector
+                    label="Otros Impuestos"
+                    value={impuestosAdicionales}
+                    onChange={setImpuestosAdicionales}
                     readOnly={!selectedDoc}
                   />
                 </div>

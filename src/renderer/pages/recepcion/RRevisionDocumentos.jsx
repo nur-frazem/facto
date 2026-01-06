@@ -10,6 +10,7 @@ import {
   DatepickerRange,
   DatepickerField,
   Textfield,
+  IMPUESTOS_ADICIONALES_CHILE,
 } from '../../components/Textfield';
 
 import {
@@ -75,6 +76,8 @@ const RRevisionDocumentos = () => {
   const [iRetencion, setIRetencion] = useState('');
   const [iTotal, setITotal] = useState('');
   const [iOtros, setIOtros] = useState('');
+  const [iImpuestosAdicionales, setIImpuestosAdicionales] = useState(null); // Detalle de impuestos adicionales (si existe)
+  const [showImpuestosDetalle, setShowImpuestosDetalle] = useState(false); // Toggle para mostrar detalle
   const [iNotasCredito, setINotasCredito] = useState([]);
   const [iAbonoNc, setIAbonoNc] = useState('');
   const [iTotalDescontado, setITotalDescontado] = useState('');
@@ -696,6 +699,7 @@ const RRevisionDocumentos = () => {
       setINeto(docData.neto);
       setINumeroDoc(docData.numeroDoc);
       setIOtros(docData.otros);
+      setIImpuestosAdicionales(docData.impuestosAdicionales || null);
       setIRetencion(docData.retencion);
       setITotal(docData.total);
       setITipoDoc('Factura electrónica');
@@ -727,6 +731,7 @@ const RRevisionDocumentos = () => {
       setINeto(docData.neto);
       setINumeroDoc(docData.numeroDoc);
       setIOtros(docData.otros);
+      setIImpuestosAdicionales(docData.impuestosAdicionales || null);
       setIRetencion(docData.retencion);
       setITotal(docData.total);
       setITipoDoc('Factura exenta');
@@ -752,6 +757,7 @@ const RRevisionDocumentos = () => {
       setINumeroDoc(docData.numeroDoc);
       setINumeroDocNc(docData.numeroDocNc);
       setIOtros(docData.otros);
+      setIImpuestosAdicionales(docData.impuestosAdicionales || null);
       setIRetencion(docData.retencion);
       setITotal(docData.total);
       setITipoDoc('Nota de crédito');
@@ -770,6 +776,8 @@ const RRevisionDocumentos = () => {
       setIIva(docData.iva);
       setINeto(docData.neto);
       setINumeroDoc(docData.numeroDoc);
+      setIOtros(docData.otros);
+      setIImpuestosAdicionales(docData.impuestosAdicionales || null);
       setITotal(docData.total);
       setITipoDoc('Boleta');
       setIUsuarioIngreso(docData.ingresoUsuario);
@@ -784,6 +792,8 @@ const RRevisionDocumentos = () => {
       setIIva(0); // Boleta exenta no tiene IVA
       setINeto(docData.neto);
       setINumeroDoc(docData.numeroDoc);
+      setIOtros(docData.otros);
+      setIImpuestosAdicionales(docData.impuestosAdicionales || null);
       setITotal(docData.total);
       setITipoDoc('Boleta exenta');
       setIUsuarioIngreso(docData.ingresoUsuario);
@@ -1678,6 +1688,8 @@ const RRevisionDocumentos = () => {
     setIRetencion('');
     setITotal('');
     setIOtros('');
+    setIImpuestosAdicionales(null);
+    setShowImpuestosDetalle(false);
     setINotasCredito('');
     setIAbonoNc('');
     setITotalDescontado('');
@@ -3044,7 +3056,7 @@ const RRevisionDocumentos = () => {
             <div>
               <p className="mt-4 font-bold text-xl">Montos del documento</p>
               <div
-                className={`grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 rounded-xl p-4 ${isLightTheme ? 'bg-gray-100' : 'bg-black/40'}`}
+                className={`grid grid-cols-2 grid-rows-16 gap-x-12 gap-y-2 rounded-xl p-4 min-w-[500px] ${isLightTheme ? 'bg-gray-100' : 'bg-black/40'}`}
               >
                 <div className="flex justify-between gap-x-4">
                   <span>Monto neto:</span>
@@ -3057,9 +3069,32 @@ const RRevisionDocumentos = () => {
                 </div>
 
                 {iOtros ? (
-                  <div className="flex justify-between gap-x-4">
+                  <div
+                    className={`flex justify-between gap-x-4 ${
+                      iImpuestosAdicionales && Object.keys(iImpuestosAdicionales).length > 0
+                        ? 'cursor-pointer hover:text-accent-blue transition-colors'
+                        : ''
+                    }`}
+                    onClick={() => {
+                      if (iImpuestosAdicionales && Object.keys(iImpuestosAdicionales).length > 0) {
+                        setShowImpuestosDetalle(!showImpuestosDetalle);
+                      }
+                    }}
+                  >
                     <span>Otros impuestos:</span>
-                    <span>{formatCLP(iOtros)}</span>
+                    <span className="flex items-center gap-1">
+                      {formatCLP(iOtros)}
+                      {iImpuestosAdicionales && Object.keys(iImpuestosAdicionales).length > 0 && (
+                        <svg
+                          className={`w-4 h-4 transition-transform duration-200 ${showImpuestosDetalle ? 'rotate-180' : ''}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      )}
+                    </span>
                   </div>
                 ) : (
                   <div></div>
@@ -3093,6 +3128,37 @@ const RRevisionDocumentos = () => {
                 ) : (
                   <div></div>
                 )}
+              </div>
+              {/* Detalle de impuestos adicionales - fuera del grid para no afectar el layout */}
+              <div
+                className={`overflow-hidden transition-all duration-200 ease-in-out ${
+                  showImpuestosDetalle && iImpuestosAdicionales && Object.keys(iImpuestosAdicionales).length > 0
+                    ? 'max-h-96 opacity-100 mt-3'
+                    : 'max-h-0 opacity-0'
+                }`}
+              >
+                <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-white border border-gray-200' : 'bg-white/5 border border-white/10'}`}>
+                  <p className={`text-xs font-semibold mb-2 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                    Detalle de impuestos adicionales:
+                  </p>
+                  <div className="space-y-1">
+                    {iImpuestosAdicionales && Object.entries(iImpuestosAdicionales).map(([codigo, monto]) => {
+                      const taxInfo = IMPUESTOS_ADICIONALES_CHILE.find((t) => t.codigo === codigo);
+                      const taxName = taxInfo ? taxInfo.nombre : `Código ${codigo}`;
+                      return (
+                        <div key={codigo} className="flex justify-between gap-x-4 text-sm">
+                          <span className={`${isLightTheme ? 'text-gray-600' : 'text-slate-300'}`}>
+                            {taxName}
+                            {taxInfo?.tasa && <span className={`text-xs ml-1 ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>({taxInfo.tasa}%)</span>}
+                          </span>
+                          <span className={`font-medium flex-shrink-0 ${isLightTheme ? 'text-gray-800' : 'text-white'}`}>
+                            {formatCLP(monto)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
 

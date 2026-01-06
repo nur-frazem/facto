@@ -10,6 +10,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import React from "react";
 import { useTheme } from "../context/ThemeContext";
 
@@ -651,6 +652,252 @@ export function CheckboxDropdown({ label, items, value, onChange }) {
           ))}
         </ul>
       </div>
+    </div>
+  );
+}
+
+// Impuestos adicionales chilenos según SII
+export const IMPUESTOS_ADICIONALES_CHILE = [
+  { codigo: "24", nombre: "ILA Licores (Piscos, whisky, aguardiente, destilados)", tasa: 31.5 },
+  { codigo: "25", nombre: "ILA Vinos", tasa: 20.5 },
+  { codigo: "26", nombre: "ILA Cervezas y bebidas alcohólicas", tasa: 20.5 },
+  { codigo: "27", nombre: "IABA Bebidas analcohólicas", tasa: 10 },
+  { codigo: "271", nombre: "IABA Bebidas azucaradas (alto contenido azúcar)", tasa: 18 },
+  { codigo: "23", nombre: "Artículos suntuarios (Pieles finas, joyas, etc.)", tasa: 15 },
+  { codigo: "44", nombre: "Impuesto Art. 37 letras e, h, i, l", tasa: 15 },
+  { codigo: "45", nombre: "Pirotecnia (1era venta)", tasa: 50 },
+  { codigo: "28", nombre: "Impuesto específico diesel", tasa: null },
+  { codigo: "35", nombre: "Impuesto específico gasolina", tasa: null },
+];
+
+export function ImpuestosAdicionalesSelector({
+  label = "Otros Impuestos",
+  value = {},
+  onChange,
+  readOnly = false,
+  className = "",
+}) {
+  const { isLightTheme } = useTheme();
+  const labelStyles = getLabelStyles(isLightTheme);
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
+  const buttonRef = useRef(null);
+  const dropdownRef = useRef(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+
+  // value is an object like: { "24": 1000, "27": 500 }
+  const [selectedTaxes, setSelectedTaxes] = useState(value || {});
+
+  useEffect(() => {
+    setSelectedTaxes(value || {});
+  }, [value]);
+
+  // Calculate dropdown position when opening
+  useEffect(() => {
+    if (open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.left + window.scrollX,
+        width: Math.max(rect.width, 320),
+      });
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleTax = (codigo) => {
+    setSelectedTaxes((prev) => {
+      const newTaxes = { ...prev };
+      if (codigo in newTaxes) {
+        delete newTaxes[codigo];
+      } else {
+        newTaxes[codigo] = 0;
+      }
+      onChange?.(newTaxes);
+      return newTaxes;
+    });
+  };
+
+  const updateTaxAmount = (codigo, amount) => {
+    const numericAmount = amount === "" ? 0 : parseInt(String(amount).replace(/\D/g, ""), 10) || 0;
+    setSelectedTaxes((prev) => {
+      const newTaxes = { ...prev, [codigo]: numericAmount };
+      onChange?.(newTaxes);
+      return newTaxes;
+    });
+  };
+
+  const formatCurrency = (val) => {
+    if (val === "" || val === null || val === undefined || val === 0) return "";
+    return new Intl.NumberFormat("es-CL", {
+      style: "currency",
+      currency: "CLP",
+      minimumFractionDigits: 0,
+    }).format(val);
+  };
+
+  const totalOtrosImpuestos = Object.values(selectedTaxes).reduce((sum, val) => sum + (val || 0), 0);
+  const selectedCount = Object.keys(selectedTaxes).length;
+
+  const dropdownContent = open && createPortal(
+    <div
+      ref={dropdownRef}
+      className={`
+        fixed z-[99999]
+        rounded-lg shadow-modal
+        max-h-80 overflow-auto scrollbar-custom
+        animate-fade-in
+        ${isLightTheme
+          ? "bg-white border border-gray-200"
+          : "bg-gradient-to-br from-surface-light to-surface border border-white/10"
+        }
+      `}
+      style={{
+        top: dropdownPosition.top,
+        left: dropdownPosition.left,
+        width: dropdownPosition.width,
+      }}
+    >
+      <div className={`px-3 py-2 border-b ${isLightTheme ? "border-gray-200 bg-gray-50" : "border-white/10 bg-white/5"}`}>
+        <span className={`text-xs font-medium ${isLightTheme ? "text-gray-500" : "text-slate-400"}`}>
+          Seleccione los impuestos aplicables e ingrese los montos
+        </span>
+      </div>
+      {IMPUESTOS_ADICIONALES_CHILE.map((tax) => {
+        const isSelected = tax.codigo in selectedTaxes;
+        return (
+          <div
+            key={tax.codigo}
+            className={`
+              px-3 py-2.5 text-sm
+              transition-colors duration-150
+              ${isLightTheme ? "border-b border-gray-100" : "border-b border-white/5"}
+              ${isSelected
+                ? isLightTheme ? "bg-blue-50" : "bg-accent-blue/10"
+                : ""
+              }
+            `}
+          >
+            <div className="flex items-center gap-3">
+              {/* Checkbox */}
+              <div
+                onClick={() => toggleTax(tax.codigo)}
+                className={`
+                  w-5 h-5 rounded border-2 flex items-center justify-center cursor-pointer
+                  transition-colors duration-150 flex-shrink-0
+                  ${isSelected ? 'bg-accent-blue border-accent-blue' : isLightTheme ? 'border-gray-400 hover:border-gray-500' : 'border-slate-500 hover:border-slate-400'}
+                `}
+              >
+                {isSelected && (
+                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+
+              {/* Tax info */}
+              <div className="flex-1 min-w-0">
+                <div
+                  onClick={() => toggleTax(tax.codigo)}
+                  className={`cursor-pointer truncate text-sm ${isLightTheme ? "text-gray-800" : "text-white"}`}
+                  title={tax.nombre}
+                >
+                  {tax.nombre}
+                </div>
+                <div className={`text-xs ${isLightTheme ? "text-gray-500" : "text-slate-400"}`}>
+                  Código: {tax.codigo} {tax.tasa !== null ? `| Tasa: ${tax.tasa}%` : "| Tasa variable"}
+                </div>
+              </div>
+
+              {/* Amount input */}
+              {isSelected && (
+                <input
+                  type="text"
+                  value={formatCurrency(selectedTaxes[tax.codigo])}
+                  onChange={(e) => updateTaxAmount(tax.codigo, e.target.value)}
+                  placeholder="$0"
+                  onClick={(e) => e.stopPropagation()}
+                  className={`
+                    w-28 px-2 py-1.5 text-sm text-right rounded
+                    focus:outline-none focus:ring-2 focus:ring-accent-blue/50
+                    ${isLightTheme
+                      ? "bg-white text-gray-800 border border-gray-300"
+                      : "bg-white/10 text-white border border-white/20"
+                    }
+                  `}
+                />
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Total footer */}
+      <div className={`px-3 py-3 border-t ${isLightTheme ? "border-gray-200 bg-gray-50" : "border-white/10 bg-white/5"}`}>
+        <div className="flex justify-between items-center">
+          <span className={`text-sm font-medium ${isLightTheme ? "text-gray-700" : "text-slate-300"}`}>
+            Total Otros Impuestos:
+          </span>
+          <span className={`text-sm font-bold ${isLightTheme ? "text-gray-800" : "text-white"}`}>
+            {formatCurrency(totalOtrosImpuestos) || "$0"}
+          </span>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+
+  return (
+    <div ref={menuRef} className={`relative ${className}`}>
+      <span className={labelStyles}>{label}</span>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => !readOnly && setOpen(!open)}
+        disabled={readOnly}
+        className={`
+          w-full py-2.5 px-4
+          flex justify-between items-center
+          text-sm
+          rounded-lg
+          focus:outline-none focus:ring-2 focus:ring-accent-blue/50
+          transition-all duration-200
+          ${readOnly ? 'opacity-60 cursor-not-allowed' : ''}
+          ${isLightTheme
+            ? "bg-gray-50 text-gray-800 border border-gray-200 hover:border-gray-300"
+            : "bg-white/5 text-white border border-white/10 hover:border-white/20"
+          }
+        `}
+      >
+        <span className="truncate">
+          {totalOtrosImpuestos > 0
+            ? formatCurrency(totalOtrosImpuestos)
+            : selectedCount > 0
+              ? `${selectedCount} impuesto(s)`
+              : "$0"
+          }
+        </span>
+        <ChevronDownIcon
+          className={`w-4 h-4 transition-transform flex-shrink-0 ml-2 ${
+            isLightTheme ? "text-gray-400" : "text-slate-400"
+          } ${open ? "rotate-180" : "rotate-0"}`}
+        />
+      </button>
+      {dropdownContent}
     </div>
   );
 }

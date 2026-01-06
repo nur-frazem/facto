@@ -4,47 +4,115 @@ export const PERMISOS_ACCESO = {
     key: 'RECEPCION',
     label: 'Recepción',
     children: {
-      RECEPCION_INDEX: { key: 'RECEPCION_INDEX', label: 'Dashboard de recepción', route: '/recepcion-index' },
-      RECEPCION_INGRESAR: { key: 'RECEPCION_INGRESAR', label: 'Ingreso de documentos', route: '/recepcion-index/ingresar' },
-      RECEPCION_PROCESAR: { key: 'RECEPCION_PROCESAR', label: 'Procesar documentos', route: '/recepcion-index/procesar' },
-      RECEPCION_REVISION: { key: 'RECEPCION_REVISION', label: 'Revisión de documentos', route: '/recepcion-index/revision-documentos' },
-      RECEPCION_CALENDARIO: { key: 'RECEPCION_CALENDARIO', label: 'Calendario interactivo', route: '/recepcion-index/calendario' }
-    }
+      RECEPCION_INDEX: {
+        key: 'RECEPCION_INDEX',
+        label: 'Dashboard de recepción',
+        route: '/recepcion-index',
+      },
+      RECEPCION_INGRESAR: {
+        key: 'RECEPCION_INGRESAR',
+        label: 'Ingreso de documentos',
+        route: '/recepcion-index/ingresar',
+      },
+      RECEPCION_PROCESAR: {
+        key: 'RECEPCION_PROCESAR',
+        label: 'Procesar documentos',
+        route: '/recepcion-index/procesar',
+      },
+      RECEPCION_REVISION: {
+        key: 'RECEPCION_REVISION',
+        label: 'Revisión de documentos',
+        route: '/recepcion-index/revision-documentos',
+      },
+      RECEPCION_CALENDARIO: {
+        key: 'RECEPCION_CALENDARIO',
+        label: 'Calendario interactivo',
+        route: '/recepcion-index/calendario',
+      },
+    },
   },
   EMISION: {
     key: 'EMISION',
     label: 'Emisión',
     children: {
-      EMISION_INDEX: { key: 'EMISION_INDEX', label: 'Dashboard de emisión', route: '/emision-index' }
-    }
+      EMISION_INDEX: {
+        key: 'EMISION_INDEX',
+        label: 'Dashboard de emisión',
+        route: '/emision-index',
+      },
+    },
   },
   CONFIGURACION: {
     key: 'CONFIGURACION',
     label: 'Configuración',
     children: {
-      CONFIGURACION_INDEX: { key: 'CONFIGURACION_INDEX', label: 'Panel de configuración', route: '/configuracion-index' },
-      CONFIGURACION_CUENTA: { key: 'CONFIGURACION_CUENTA', label: 'Mi cuenta', route: '/configuracion-cuenta' },
-      CONFIGURACION_EMPRESAS: { key: 'CONFIGURACION_EMPRESAS', label: 'Clientes/Proveedores', route: '/configuracion-clientesProveedores' },
-      CONFIGURACION_ROLES: { key: 'CONFIGURACION_ROLES', label: 'Gestión de usuarios y roles', route: '/configuracion-roles' },
-      CONFIGURACION_AUDITORIA: { key: 'CONFIGURACION_AUDITORIA', label: 'Auditoría', route: '/configuracion-auditoria' }
-    }
+      CONFIGURACION_INDEX: {
+        key: 'CONFIGURACION_INDEX',
+        label: 'Panel de configuración',
+        route: '/configuracion-index',
+      },
+      CONFIGURACION_CUENTA: {
+        key: 'CONFIGURACION_CUENTA',
+        label: 'Mi cuenta',
+        route: '/configuracion-cuenta',
+      },
+      CONFIGURACION_EMPRESAS: {
+        key: 'CONFIGURACION_EMPRESAS',
+        label: 'Clientes/Proveedores',
+        route: '/configuracion-clientesProveedores',
+      },
+      CONFIGURACION_ROLES: {
+        key: 'CONFIGURACION_ROLES',
+        label: 'Gestión de usuarios y roles',
+        route: '/configuracion-roles',
+      },
+      CONFIGURACION_AUDITORIA: {
+        key: 'CONFIGURACION_AUDITORIA',
+        label: 'Auditoría',
+        route: '/configuracion-auditoria',
+      },
+    },
   },
   INFORMES: {
     key: 'INFORMES',
     label: 'Informes',
     children: {
-      INFORMES_INDEX: { key: 'INFORMES_INDEX', label: 'Dashboard de informes', route: '/informes-index' }
-    }
-  }
+      INFORMES_INDEX: {
+        key: 'INFORMES_INDEX',
+        label: 'Dashboard de informes',
+        route: '/informes-index',
+      },
+    },
+  },
 };
 
 // Permisos de acciones (planos, agrupados por sección)
 export const PERMISOS_ACCIONES = {
-  REVISION_VER: { key: 'REVISION_VER', label: 'Ver detalles de documento', grupo: 'Revisión de Documentos' },
-  REVISION_DESCARGAR: { key: 'REVISION_DESCARGAR', label: 'Descargar PDF de egreso', grupo: 'Revisión de Documentos' },
-  REVISION_EDITAR: { key: 'REVISION_EDITAR', label: 'Editar documento', grupo: 'Revisión de Documentos' },
-  REVISION_ELIMINAR: { key: 'REVISION_ELIMINAR', label: 'Eliminar documento / Reversar pagos', grupo: 'Revisión de Documentos' },
-  PROCESAR_PAGO: { key: 'PROCESAR_PAGO', label: 'Procesar pago de documentos', grupo: 'Procesar Documentos' }
+  REVISION_VER: {
+    key: 'REVISION_VER',
+    label: 'Ver detalles de documento',
+    grupo: 'Revisión de Documentos',
+  },
+  REVISION_DESCARGAR: {
+    key: 'REVISION_DESCARGAR',
+    label: 'Descargar PDF de egreso',
+    grupo: 'Revisión de Documentos',
+  },
+  REVISION_EDITAR: {
+    key: 'REVISION_EDITAR',
+    label: 'Editar documento',
+    grupo: 'Revisión de Documentos',
+  },
+  REVISION_ELIMINAR: {
+    key: 'REVISION_ELIMINAR',
+    label: 'Eliminar documento / Reversar pagos',
+    grupo: 'Revisión de Documentos',
+  },
+  PROCESAR_PAGO: {
+    key: 'PROCESAR_PAGO',
+    label: 'Procesar pago de documentos',
+    grupo: 'Procesar Documentos',
+  },
 };
 
 // Paleta de colores predefinidos para roles
@@ -63,10 +131,10 @@ export const ROLE_COLORS = [
 // Helper para obtener todas las keys de permisos de acceso
 const getAllAccessPermissionKeys = () => {
   const keys = [];
-  Object.values(PERMISOS_ACCESO).forEach(parent => {
+  Object.values(PERMISOS_ACCESO).forEach((parent) => {
     keys.push(parent.key);
     if (parent.children) {
-      Object.values(parent.children).forEach(child => {
+      Object.values(parent.children).forEach((child) => {
         keys.push(child.key);
       });
     }
@@ -76,14 +144,18 @@ const getAllAccessPermissionKeys = () => {
 
 // Helper para obtener todas las keys de permisos de acciones
 const getAllActionPermissionKeys = () => {
-  return Object.values(PERMISOS_ACCIONES).map(p => p.key);
+  return Object.values(PERMISOS_ACCIONES).map((p) => p.key);
 };
 
 // Crear objeto de permisos con todos en true
 const allPermissionsTrue = () => {
   const permisos = {};
-  getAllAccessPermissionKeys().forEach(key => { permisos[key] = true; });
-  getAllActionPermissionKeys().forEach(key => { permisos[key] = true; });
+  getAllAccessPermissionKeys().forEach((key) => {
+    permisos[key] = true;
+  });
+  getAllActionPermissionKeys().forEach((key) => {
+    permisos[key] = true;
+  });
   return permisos;
 };
 
@@ -97,8 +169,8 @@ export const DEFAULT_ROLES = {
     isDefault: true,
     permisos: {
       ...allPermissionsTrue(),
-      ASIGNAR_ADMIN: true // Permiso especial solo para super_admin
-    }
+      ASIGNAR_ADMIN: true, // Permiso especial solo para super_admin
+    },
   },
   admin: {
     id: 'admin',
@@ -108,8 +180,8 @@ export const DEFAULT_ROLES = {
     isDefault: true,
     permisos: {
       ...allPermissionsTrue(),
-      ASIGNAR_ADMIN: false
-    }
+      ASIGNAR_ADMIN: false,
+    },
   },
   gestor: {
     id: 'gestor',
@@ -141,8 +213,8 @@ export const DEFAULT_ROLES = {
       REVISION_EDITAR: true,
       REVISION_ELIMINAR: true,
       PROCESAR_PAGO: true,
-      ASIGNAR_ADMIN: false
-    }
+      ASIGNAR_ADMIN: false,
+    },
   },
   digitador: {
     id: 'digitador',
@@ -174,8 +246,8 @@ export const DEFAULT_ROLES = {
       REVISION_EDITAR: false,
       REVISION_ELIMINAR: false,
       PROCESAR_PAGO: false,
-      ASIGNAR_ADMIN: false
-    }
+      ASIGNAR_ADMIN: false,
+    },
   },
   visor: {
     id: 'visor',
@@ -207,9 +279,9 @@ export const DEFAULT_ROLES = {
       REVISION_EDITAR: false,
       REVISION_ELIMINAR: false,
       PROCESAR_PAGO: false,
-      ASIGNAR_ADMIN: false
-    }
-  }
+      ASIGNAR_ADMIN: false,
+    },
+  },
 };
 
 // Labels para mostrar en la UI
@@ -218,14 +290,18 @@ export const ROLES_LABELS = {
   admin: 'Administrador',
   gestor: 'Gestor',
   digitador: 'Digitador',
-  visor: 'Visor'
+  visor: 'Visor',
 };
 
 // Helper para crear un rol vacío (para el formulario de creación)
 export const createEmptyRole = () => {
   const permisos = {};
-  getAllAccessPermissionKeys().forEach(key => { permisos[key] = false; });
-  getAllActionPermissionKeys().forEach(key => { permisos[key] = false; });
+  getAllAccessPermissionKeys().forEach((key) => {
+    permisos[key] = false;
+  });
+  getAllActionPermissionKeys().forEach((key) => {
+    permisos[key] = false;
+  });
   // Siempre permitir acceso a la cuenta propia
   permisos.CONFIGURACION_CUENTA = true;
 
@@ -235,14 +311,14 @@ export const createEmptyRole = () => {
     descripcion: '',
     color: ROLE_COLORS[5], // Azul por defecto
     isDefault: false,
-    permisos
+    permisos,
   };
 };
 
 // Helper para obtener todos los permisos de acceso como lista plana con jerarquía
 export const getAccessPermissionsList = () => {
   const list = [];
-  Object.values(PERMISOS_ACCESO).forEach(parent => {
+  Object.values(PERMISOS_ACCESO).forEach((parent) => {
     list.push({ ...parent, isParent: true, children: Object.values(parent.children) });
   });
   return list;
@@ -251,7 +327,7 @@ export const getAccessPermissionsList = () => {
 // Helper para obtener permisos de acciones agrupados
 export const getActionPermissionsGrouped = () => {
   const groups = {};
-  Object.values(PERMISOS_ACCIONES).forEach(permission => {
+  Object.values(PERMISOS_ACCIONES).forEach((permission) => {
     if (!groups[permission.grupo]) {
       groups[permission.grupo] = [];
     }
