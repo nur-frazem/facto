@@ -93,6 +93,51 @@ const RRevisionDocumentos = () => {
   const [iTotalAbonado, setITotalAbonado] = useState(0);
   const [iSaldoPendiente, setISaldoPendiente] = useState(0);
 
+  // Payment info associated with abonos (keyed by numeroEgreso) - includes bank account and payment method
+  const [abonosPaymentInfo, setAbonosPaymentInfo] = useState({});
+
+  // Fetch payment info (bank account and payment method) for each abono's numeroEgreso
+  useEffect(() => {
+    const fetchPaymentInfo = async () => {
+      if (!iAbonos || iAbonos.length === 0 || !currentCompanyRUT) {
+        setAbonosPaymentInfo({});
+        return;
+      }
+
+      // Get unique numeroEgreso values
+      const uniqueEgresos = [...new Set(iAbonos.map((a) => a.numeroEgreso).filter(Boolean))];
+
+      const paymentInfoMap = {};
+
+      // Fetch pago_recepcion for each egreso
+      for (const numeroEgreso of uniqueEgresos) {
+        try {
+          const pagoRef = doc(
+            db,
+            currentCompanyRUT,
+            '_root',
+            'pago_recepcion',
+            String(numeroEgreso)
+          );
+          const pagoSnap = await getDoc(pagoRef);
+          if (pagoSnap.exists()) {
+            const pagoData = pagoSnap.data();
+            paymentInfoMap[numeroEgreso] = {
+              cuentaBancaria: pagoData.cuentaBancaria || null,
+              metodoPago: pagoData.metodoPago || null,
+            };
+          }
+        } catch (error) {
+          console.error(`Error fetching pago_recepcion for egreso ${numeroEgreso}:`, error);
+        }
+      }
+
+      setAbonosPaymentInfo(paymentInfoMap);
+    };
+
+    fetchPaymentInfo();
+  }, [iAbonos, currentCompanyRUT]);
+
   //Edición de documento
   const [iNumeroDocNuevo, setINumeroDocNuevo] = useState('');
   const [iFechaENuevo, setIFechaENuevo] = useState('');
@@ -655,7 +700,9 @@ const RRevisionDocumentos = () => {
       facturasPorEmpresa,
       egreso.totalEgreso,
       egreso.fechaPago || null,
-      currentCompanyRUT
+      currentCompanyRUT,
+      egreso.cuentaBancaria || null,
+      egreso.metodoPago || null
     );
   };
 
@@ -1705,6 +1752,7 @@ const RRevisionDocumentos = () => {
     setIAbonos([]);
     setITotalAbonado(0);
     setISaldoPendiente(0);
+    setAbonosPaymentInfo({});
   };
 
   // Confirmar edición del documento
@@ -3277,14 +3325,59 @@ const RRevisionDocumentos = () => {
                       }
                     }
 
+                    // Get payment info for this abono (if exists)
+                    const paymentInfo = abono.numeroEgreso
+                      ? abonosPaymentInfo[abono.numeroEgreso]
+                      : null;
+                    const bankAccount = paymentInfo?.cuentaBancaria;
+                    const metodoPago = paymentInfo?.metodoPago;
+
                     return (
-                      <div key={index} className="grid grid-cols-4 gap-2 text-sm py-1">
-                        <span>{fechaDisplay}</span>
-                        <span className="text-right text-cyan-600">{formatCLP(abono.monto)}</span>
-                        <span className="text-center">#{abono.numeroEgreso || '-'}</span>
-                        <span className="text-right truncate" title={abono.usuario}>
-                          {abono.usuario || '-'}
-                        </span>
+                      <div key={index}>
+                        <div className="grid grid-cols-4 gap-2 text-sm py-1">
+                          <span>{fechaDisplay}</span>
+                          <span className="text-right text-cyan-600">
+                            {formatCLP(abono.monto)}
+                          </span>
+                          <span className="text-center">#{abono.numeroEgreso || '-'}</span>
+                          <span className="text-right truncate" title={abono.usuario}>
+                            {abono.usuario || '-'}
+                          </span>
+                        </div>
+                        {/* Payment info for this payment (method and bank account) */}
+                        {(metodoPago || bankAccount) && (
+                          <div
+                            className={`ml-4 mb-2 p-2 rounded-lg text-xs ${
+                              isLightTheme ? 'bg-blue-50 text-blue-800' : 'bg-blue-900/30 text-blue-300'
+                            }`}
+                          >
+                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                              {metodoPago && (
+                                <span>
+                                  <strong>Método:</strong> {metodoPago}
+                                </span>
+                              )}
+                              {bankAccount && (
+                                <>
+                                  <span>
+                                    <strong>Banco:</strong> {bankAccount.banco}
+                                  </span>
+                                  <span>
+                                    <strong>N° Cuenta:</strong> {bankAccount.numeroCuenta}
+                                  </span>
+                                  <span>
+                                    <strong>Tipo:</strong> {bankAccount.tipoCuenta}
+                                  </span>
+                                  {bankAccount.titular && (
+                                    <span>
+                                      <strong>Titular:</strong> {bankAccount.titular}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

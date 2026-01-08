@@ -34,12 +34,34 @@ const drawRoundedRect = (pdf, x, y, width, height, fill = false, fillColor = COL
 };
 
 // Función para generar PDF
-export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, fechaPago = null, companyRUT = null) => {
+export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, fechaPago = null, companyRUT = null, cuentaBancaria = null, metodoPago = null) => {
   // Validate companyRUT is provided
   if (!companyRUT) {
     console.error("generarPDF: companyRUT is required");
     throw new Error("Company RUT is required to generate PDF");
   }
+
+  // If bank account has an ID but missing details, fetch from Firestore
+  let cuentaBancariaCompleta = cuentaBancaria;
+  if (cuentaBancaria && cuentaBancaria.id && (!cuentaBancaria.rut || !cuentaBancaria.titular)) {
+    try {
+      const cuentaRef = doc(db, companyRUT, '_root', 'cuentas_bancarias', cuentaBancaria.id);
+      const cuentaSnap = await getDoc(cuentaRef);
+      if (cuentaSnap.exists()) {
+        const cuentaData = cuentaSnap.data();
+        cuentaBancariaCompleta = {
+          ...cuentaBancaria,
+          rut: cuentaData.rutTitular || cuentaBancaria.rut,
+          titular: cuentaData.nombreTitular || cuentaBancaria.titular,
+          email: cuentaData.emailTitular || cuentaBancaria.email,
+        };
+      }
+    } catch (error) {
+      console.error("Error fetching bank account details:", error);
+      // Continue with partial data
+    }
+  }
+
   const pdf = new jsPDF();
   const pageWidth = 210;
   const marginLeft = 20;
@@ -115,7 +137,91 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
   pdf.setTextColor(...COLORS.black);
   pdf.text(fechaPagoStr, marginLeft + 38, 48);
 
-  let y = 60;
+  let y = 55;
+
+  // ═══════════════════════════════════════════════════════════════
+  // BANK ACCOUNT SECTION (if provided)
+  // ═══════════════════════════════════════════════════════════════
+  if (cuentaBancariaCompleta) {
+    y += 5;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(...COLORS.darkGray);
+    pdf.text("CUENTA BANCARIA", marginLeft, y);
+    drawHorizontalLine(pdf, y + 2, marginLeft, marginLeft + 38, COLORS.darkGray);
+    y += 8;
+
+    // Bank account details in two columns
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(9);
+    pdf.setTextColor(...COLORS.mediumGray);
+    pdf.text("Banco:", marginLeft, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...COLORS.black);
+    pdf.text(cuentaBancariaCompleta.banco || "-", marginLeft + 18, y);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(...COLORS.mediumGray);
+    pdf.text("Tipo:", marginLeft + 80, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...COLORS.black);
+    pdf.text(cuentaBancariaCompleta.tipoCuenta || "-", marginLeft + 92, y);
+    y += 5;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(...COLORS.mediumGray);
+    pdf.text("N° Cuenta:", marginLeft, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...COLORS.black);
+    pdf.text(cuentaBancariaCompleta.numeroCuenta || "-", marginLeft + 23, y);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(...COLORS.mediumGray);
+    pdf.text("RUT:", marginLeft + 80, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...COLORS.black);
+    pdf.text(cuentaBancariaCompleta.rut ? formatRUT(cuentaBancariaCompleta.rut) : "-", marginLeft + 92, y);
+    y += 5;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(...COLORS.mediumGray);
+    pdf.text("Titular:", marginLeft, y);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(...COLORS.black);
+    pdf.text(cuentaBancariaCompleta.titular || "-", marginLeft + 18, y);
+
+    if (cuentaBancariaCompleta.email) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(...COLORS.mediumGray);
+      pdf.text("Email:", marginLeft + 80, y);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(...COLORS.black);
+      pdf.text(cuentaBancariaCompleta.email, marginLeft + 95, y);
+    }
+
+    y += 10;
+  } else {
+    y += 5;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // PAYMENT METHOD SECTION (if provided)
+  // ═══════════════════════════════════════════════════════════════
+  if (metodoPago) {
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9);
+    pdf.setTextColor(...COLORS.darkGray);
+    pdf.text("MÉTODO DE PAGO", marginLeft, y);
+    drawHorizontalLine(pdf, y + 2, marginLeft, marginLeft + 35, COLORS.darkGray);
+    y += 8;
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(10);
+    pdf.setTextColor(...COLORS.black);
+    pdf.text(metodoPago, marginLeft, y);
+
+    y += 10;
+  }
 
   // Track grand total from subtotals (more accurate than passed totalEgreso when NC are involved)
   let grandTotal = 0;

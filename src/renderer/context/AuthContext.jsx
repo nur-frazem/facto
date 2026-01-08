@@ -278,6 +278,7 @@ export function AuthProvider({ children }) {
   // ==========================================
 
   // Ensure default roles exist in Firestore for a company
+  // Also syncs new permissions to existing default roles
   const ensureDefaultRolesExist = useCallback(async (companyRUT) => {
     if (!companyRUT) return;
 
@@ -300,6 +301,50 @@ export function AuthProvider({ children }) {
         });
         await Promise.all(createPromises);
         console.log('Default roles created successfully');
+      } else {
+        // Sync new permissions to existing default roles
+        // This ensures that when new permissions are added to the codebase,
+        // they get added to the existing default roles in Firestore
+        const updatePromises = [];
+        rolesSnapshot.forEach((roleDoc) => {
+          const roleId = roleDoc.id;
+          const existingData = roleDoc.data();
+          const defaultRole = DEFAULT_ROLES[roleId];
+
+          // Only update default roles (not custom roles)
+          if (defaultRole && existingData.isDefault) {
+            const existingPermisos = existingData.permisos || {};
+            const defaultPermisos = defaultRole.permisos || {};
+
+            // Find new permissions that don't exist in Firestore yet
+            const newPermisos = {};
+            let hasNewPermisos = false;
+            for (const [key, value] of Object.entries(defaultPermisos)) {
+              if (!(key in existingPermisos)) {
+                newPermisos[key] = value;
+                hasNewPermisos = true;
+              }
+            }
+
+            // If there are new permissions, update the role
+            if (hasNewPermisos) {
+              console.log(`Syncing new permissions to role ${roleId}:`, Object.keys(newPermisos));
+              const roleDocRef = doc(db, companyRUT, '_root', 'roles', roleId);
+              updatePromises.push(
+                setDoc(roleDocRef, {
+                  permisos: { ...existingPermisos, ...newPermisos },
+                  fechaModificacion: serverTimestamp(),
+                  modificadoPor: 'system'
+                }, { merge: true })
+              );
+            }
+          }
+        });
+
+        if (updatePromises.length > 0) {
+          await Promise.all(updatePromises);
+          console.log('Default roles permissions synced successfully');
+        }
       }
     } catch (err) {
       console.error('Error ensuring default roles exist:', err);

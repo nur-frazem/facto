@@ -52,6 +52,12 @@ const CIndex = () => {
                             onClick={() => navigate("/configuracion-auditoria")}
                         />
                     )}
+                    {tieneAcceso("CONFIGURACION_CUENTAS_BANCARIAS") && (
+                        <Card
+                            title="Administrar cuentas bancarias"
+                            onClick={() => navigate("/configuracion-cuentasBancarias")}
+                        />
+                    )}
                 </div>
 
                 {/* Footer */}

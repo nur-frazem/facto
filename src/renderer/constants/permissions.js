@@ -71,6 +71,11 @@ export const PERMISOS_ACCESO = {
         label: 'Auditoría',
         route: '/configuracion-auditoria',
       },
+      CONFIGURACION_CUENTAS_BANCARIAS: {
+        key: 'CONFIGURACION_CUENTAS_BANCARIAS',
+        label: 'Cuentas Bancarias',
+        route: '/configuracion-cuentasBancarias',
+      },
     },
   },
   INFORMES: {
@@ -112,6 +117,21 @@ export const PERMISOS_ACCIONES = {
     key: 'PROCESAR_PAGO',
     label: 'Procesar pago de documentos',
     grupo: 'Procesar Documentos',
+  },
+  CUENTAS_BANCARIAS_CREAR: {
+    key: 'CUENTAS_BANCARIAS_CREAR',
+    label: 'Crear cuenta bancaria',
+    grupo: 'Cuentas Bancarias',
+  },
+  CUENTAS_BANCARIAS_EDITAR: {
+    key: 'CUENTAS_BANCARIAS_EDITAR',
+    label: 'Editar cuenta bancaria',
+    grupo: 'Cuentas Bancarias',
+  },
+  CUENTAS_BANCARIAS_ELIMINAR: {
+    key: 'CUENTAS_BANCARIAS_ELIMINAR',
+    label: 'Eliminar cuenta bancaria',
+    grupo: 'Cuentas Bancarias',
   },
 };
 
@@ -205,6 +225,7 @@ export const DEFAULT_ROLES = {
       CONFIGURACION_EMPRESAS: false,
       CONFIGURACION_ROLES: false,
       CONFIGURACION_AUDITORIA: false,
+      CONFIGURACION_CUENTAS_BANCARIAS: false,
       INFORMES: true,
       INFORMES_INDEX: true,
       // Acciones
@@ -213,6 +234,9 @@ export const DEFAULT_ROLES = {
       REVISION_EDITAR: true,
       REVISION_ELIMINAR: true,
       PROCESAR_PAGO: true,
+      CUENTAS_BANCARIAS_CREAR: false,
+      CUENTAS_BANCARIAS_EDITAR: false,
+      CUENTAS_BANCARIAS_ELIMINAR: false,
       ASIGNAR_ADMIN: false,
     },
   },
@@ -238,6 +262,7 @@ export const DEFAULT_ROLES = {
       CONFIGURACION_EMPRESAS: false,
       CONFIGURACION_ROLES: false,
       CONFIGURACION_AUDITORIA: false,
+      CONFIGURACION_CUENTAS_BANCARIAS: false,
       INFORMES: false,
       INFORMES_INDEX: false,
       // Acciones
@@ -246,6 +271,9 @@ export const DEFAULT_ROLES = {
       REVISION_EDITAR: false,
       REVISION_ELIMINAR: false,
       PROCESAR_PAGO: false,
+      CUENTAS_BANCARIAS_CREAR: false,
+      CUENTAS_BANCARIAS_EDITAR: false,
+      CUENTAS_BANCARIAS_ELIMINAR: false,
       ASIGNAR_ADMIN: false,
     },
   },
@@ -271,6 +299,7 @@ export const DEFAULT_ROLES = {
       CONFIGURACION_EMPRESAS: false,
       CONFIGURACION_ROLES: false,
       CONFIGURACION_AUDITORIA: false,
+      CONFIGURACION_CUENTAS_BANCARIAS: false,
       INFORMES: false,
       INFORMES_INDEX: false,
       // Acciones
@@ -279,6 +308,9 @@ export const DEFAULT_ROLES = {
       REVISION_EDITAR: false,
       REVISION_ELIMINAR: false,
       PROCESAR_PAGO: false,
+      CUENTAS_BANCARIAS_CREAR: false,
+      CUENTAS_BANCARIAS_EDITAR: false,
+      CUENTAS_BANCARIAS_ELIMINAR: false,
       ASIGNAR_ADMIN: false,
     },
   },

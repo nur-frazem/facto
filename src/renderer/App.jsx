@@ -16,6 +16,7 @@ import CClientesProveedores from './pages/configuracion/CClientesProveedores';
 import CRolesUsuarios from './pages/configuracion/CRolesUsuarios';
 import CAuditoria from './pages/configuracion/CAuditoria';
 import CCuenta from './pages/configuracion/CCuenta';
+import CCuentaBanco from './pages/configuracion/CCuentaBanco';
 import ProtectedRoute from './components/ProtectedRoute';
 import FondoOscuro from "./assets/background/FondoModernoAzul.png";
 
@@ -89,6 +90,11 @@ function AppContent() {
               <Route path="/configuracion-cuenta" element={
                 <ProtectedRoute requiredPermission="CONFIGURACION_CUENTA">
                   <CCuenta/>
+                </ProtectedRoute>
+              } />
+              <Route path="/configuracion-cuentasBancarias" element={
+                <ProtectedRoute requiredPermission="CONFIGURACION_CUENTAS_BANCARIAS">
+                  <CCuentaBanco/>
                 </ProtectedRoute>
               } />
               <Route path="/recepcion-index/ingresar" element={

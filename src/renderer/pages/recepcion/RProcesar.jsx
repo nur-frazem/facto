@@ -78,6 +78,30 @@ const RProcesar = () => {
     // Cleanup cuando el componente se desmonte
     return () => unsubscribe();
   }, [currentCompanyRUT]);
+
+  // Fetch bank accounts
+  useEffect(() => {
+    if (!currentCompanyRUT) return;
+    const cuentasRef = collection(db, currentCompanyRUT, '_root', 'cuentas_bancarias');
+
+    const unsubscribe = onSnapshot(
+      cuentasRef,
+      (snapshot) => {
+        const cuentasData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setCuentasBancarias(cuentasData);
+      },
+      (error) => {
+        if (error.code === 'permission-denied') return;
+        console.error('Error obteniendo cuentas bancarias:', error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [currentCompanyRUT]);
+
   const [rows, setRows] = useState([]);
 
   //INFORMACION EMPRESAS
@@ -124,6 +148,14 @@ const RProcesar = () => {
 
   // Fecha de pago (por defecto hoy)
   const [fechaPagoSeleccionada, setFechaPagoSeleccionada] = useState(new Date());
+
+  // Bank account state
+  const [cuentasBancarias, setCuentasBancarias] = useState([]);
+  const [cuentaBancariaSeleccionada, setCuentaBancariaSeleccionada] = useState(null);
+
+  // Payment method state
+  const METODOS_PAGO = ['Efectivo', 'Transferencia', 'Cheque', 'Tarjeta de débito', 'Tarjeta de crédito'];
+  const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState(null);
 
   // Search state for filtering documents
   const [searchTerm, setSearchTerm] = useState('');
@@ -643,13 +675,30 @@ const RProcesar = () => {
 
         // Create pago_recepcion document
         const pagoRef = doc(db, currentCompanyRUT, '_root', 'pago_recepcion', String(numeroEgreso));
-        transaction.set(pagoRef, {
+        const pagoData = {
           numeroEgreso,
           fecha: fechaProceso,
           fechaPago: fechaPago,
           totalEgreso: totalDocumentos,
           facturas: facturasResult,
-        });
+        };
+        // Include bank account if selected
+        if (cuentaBancariaSeleccionada) {
+          pagoData.cuentaBancaria = {
+            id: cuentaBancariaSeleccionada.id,
+            banco: cuentaBancariaSeleccionada.banco,
+            numeroCuenta: cuentaBancariaSeleccionada.numeroCuenta,
+            tipoCuenta: cuentaBancariaSeleccionada.tipoCuenta,
+            rut: cuentaBancariaSeleccionada.rutTitular,
+            titular: cuentaBancariaSeleccionada.nombreTitular,
+            email: cuentaBancariaSeleccionada.emailTitular || '',
+          };
+        }
+        // Include payment method if selected
+        if (metodoPagoSeleccionado) {
+          pagoData.metodoPago = metodoPagoSeleccionado;
+        }
+        transaction.set(pagoRef, pagoData);
 
         return facturasResult;
       });
@@ -703,13 +752,17 @@ const RProcesar = () => {
         })),
         totalDocumentos,
         fechaPago,
-        currentCompanyRUT
+        currentCompanyRUT,
+        cuentaBancariaSeleccionada,
+        metodoPagoSeleccionado
       );
 
       setProcesarModal(false);
       setDocumentosAgregados([]);
       setFacturas([]);
       setFechaPagoSeleccionada(new Date()); // Reset to today
+      setCuentaBancariaSeleccionada(null); // Reset bank account
+      setMetodoPagoSeleccionado(null); // Reset payment method
       setLoadingModal(false);
       setIsProcessing(false);
     } catch (error) {
@@ -1440,17 +1493,50 @@ const RProcesar = () => {
 
               {documentosAgregados.length > 0 && (
                 <div className="flex flex-col gap-4">
-                  {/* Fecha de pago y Total */}
+                  {/* Fecha de pago, Cuenta bancaria y Total */}
                   <div className="flex justify-between items-end gap-4">
-                    <div className="flex-shrink-0">
-                      <DatepickerField
-                        label="Fecha de pago"
-                        selectedDate={fechaPagoSeleccionada}
-                        onChange={(date) => setFechaPagoSeleccionada(date)}
-                        placeholder="Seleccione fecha"
-                        maxDate={new Date()}
-                        className="w-48"
-                      />
+                    <div className="flex gap-4 items-end">
+                      <div className="flex-shrink-0">
+                        <DatepickerField
+                          label="Fecha de pago"
+                          selectedDate={fechaPagoSeleccionada}
+                          onChange={(date) => setFechaPagoSeleccionada(date)}
+                          placeholder="Seleccione fecha"
+                          maxDate={new Date()}
+                          className="w-48"
+                        />
+                      </div>
+                      <div className="flex-shrink-0 w-64">
+                        <DropdownMenu
+                          tittle="Cuenta bancaria"
+                          items={cuentasBancarias.map(
+                            (cuenta) => `${cuenta.banco} - ${cuenta.numeroCuenta}`
+                          )}
+                          value={
+                            cuentaBancariaSeleccionada
+                              ? `${cuentaBancariaSeleccionada.banco} - ${cuentaBancariaSeleccionada.numeroCuenta}`
+                              : null
+                          }
+                          searchable={cuentasBancarias.length > 5}
+                          searchPlaceholder="Buscar cuenta..."
+                          onSelect={(item) => {
+                            const cuenta = cuentasBancarias.find(
+                              (c) => `${c.banco} - ${c.numeroCuenta}` === item
+                            );
+                            setCuentaBancariaSeleccionada(cuenta || null);
+                          }}
+                          placeholder="Seleccionar cuenta (opcional)"
+                        />
+                      </div>
+                      <div className="flex-shrink-0 w-48">
+                        <DropdownMenu
+                          tittle="Método de pago"
+                          items={METODOS_PAGO}
+                          value={metodoPagoSeleccionado}
+                          onSelect={(item) => setMetodoPagoSeleccionado(item)}
+                          placeholder="Seleccionar (opcional)"
+                        />
+                      </div>
                     </div>
                     <div
                       className={`flex items-center gap-4 p-3 rounded-lg ${

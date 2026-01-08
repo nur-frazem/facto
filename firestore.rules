@@ -170,6 +170,16 @@ service cloud.firestore {
         // Only admins with access can create/update/delete roles
         allow write: if isAdminWithAccess(companyRut);
       }
+
+      // ═════════════════════════════════════════════════════════════
+      // CUENTAS_BANCARIAS - Bank accounts for the company
+      // ═════════════════════════════════════════════════════════════
+      match /cuentas_bancarias/{cuentaId} {
+        // All active users with access can read bank accounts (needed for payment processing)
+        allow read: if isVisorWithAccess(companyRut);
+        // Only admins with access can create/update/delete bank accounts
+        allow write: if isAdminWithAccess(companyRut);
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════
