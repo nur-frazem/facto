@@ -157,6 +157,11 @@ const RProcesar = () => {
   const METODOS_PAGO = ['Efectivo', 'Transferencia', 'Cheque', 'Tarjeta de débito', 'Tarjeta de crédito'];
   const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState(null);
 
+  // Check number state (only used when payment method is 'Cheque')
+  const [numeroCheque, setNumeroCheque] = useState('');
+  const [chequeErrorModal, setChequeErrorModal] = useState(false);
+  const [chequeErrorMessage, setChequeErrorMessage] = useState('');
+
   // Search state for filtering documents
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -468,6 +473,35 @@ const RProcesar = () => {
     try {
       setIsProcessing(true);
       setLoadingModal(true);
+
+      // Validate check number if payment method is 'Cheque'
+      if (metodoPagoSeleccionado === 'Cheque') {
+        if (!numeroCheque || numeroCheque.trim() === '') {
+          setLoadingModal(false);
+          setIsProcessing(false);
+          setChequeErrorMessage('Debe ingresar un número de cheque.');
+          setChequeErrorModal(true);
+          return;
+        }
+
+        // Check if the check number has been used before
+        const pagosRef = collection(db, currentCompanyRUT, '_root', 'pago_recepcion');
+        const pagosQuery = query(pagosRef, where('numeroCheque', '==', numeroCheque));
+        const pagosSnap = await getDocs(pagosQuery);
+
+        if (!pagosSnap.empty) {
+          // Check number already used - find which egreso used it
+          const pagoExistente = pagosSnap.docs[0].data();
+          setLoadingModal(false);
+          setIsProcessing(false);
+          setChequeErrorMessage(
+            `El cheque N° ${numeroCheque} ya fue utilizado en el Egreso N° ${pagoExistente.numeroEgreso}.`
+          );
+          setChequeErrorModal(true);
+          return;
+        }
+      }
+
       const fechaProceso = new Date(); // Fecha en que se procesa (hoy)
       const fechaPago = fechaPagoSeleccionada; // Fecha de pago seleccionada por el usuario
 
@@ -697,6 +731,10 @@ const RProcesar = () => {
         // Include payment method if selected
         if (metodoPagoSeleccionado) {
           pagoData.metodoPago = metodoPagoSeleccionado;
+          // Include check number if payment method is 'Cheque'
+          if (metodoPagoSeleccionado === 'Cheque' && numeroCheque) {
+            pagoData.numeroCheque = numeroCheque;
+          }
         }
         transaction.set(pagoRef, pagoData);
 
@@ -763,6 +801,7 @@ const RProcesar = () => {
       setFechaPagoSeleccionada(new Date()); // Reset to today
       setCuentaBancariaSeleccionada(null); // Reset bank account
       setMetodoPagoSeleccionado(null); // Reset payment method
+      setNumeroCheque(''); // Reset check number
       setLoadingModal(false);
       setIsProcessing(false);
     } catch (error) {
@@ -1533,7 +1572,13 @@ const RProcesar = () => {
                           tittle="Método de pago"
                           items={METODOS_PAGO}
                           value={metodoPagoSeleccionado}
-                          onSelect={(item) => setMetodoPagoSeleccionado(item)}
+                          onSelect={(item) => {
+                            setMetodoPagoSeleccionado(item);
+                            // Clear check number if payment method is not 'Cheque'
+                            if (item !== 'Cheque') {
+                              setNumeroCheque('');
+                            }
+                          }}
                           placeholder="Seleccionar (opcional)"
                         />
                       </div>
@@ -1555,13 +1600,36 @@ const RProcesar = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <XButton
                       className="ml-2"
                       text="Cancelar"
                       onClick={() => setProcesarModal(false)}
                       disabled={isProcessing}
                     />
+                    {/* Check number input - only visible when payment method is 'Cheque' */}
+                    {metodoPagoSeleccionado === 'Cheque' && (
+                      <div className="flex items-center gap-2">
+                        <label
+                          className={`text-sm font-medium whitespace-nowrap ${
+                            isLightTheme ? 'text-gray-700' : 'text-gray-300'
+                          }`}
+                        >
+                          N° Cheque:
+                        </label>
+                        <input
+                          type="text"
+                          value={numeroCheque}
+                          onChange={(e) => setNumeroCheque(e.target.value.replace(/\D/g, ''))}
+                          placeholder="Ej: 12345"
+                          className={`w-28 px-3 py-2 rounded-lg border-2 text-sm outline-none transition-colors ${
+                            isLightTheme
+                              ? 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-accent-blue'
+                              : 'bg-black/20 border-white/20 text-white placeholder-gray-400 focus:border-accent-blue'
+                          }`}
+                        />
+                      </div>
+                    )}
                     <YButton
                       className="mr-2"
                       text={isProcessing ? 'Procesando...' : 'Confirmar y Generar Egreso'}
@@ -2080,6 +2148,15 @@ const RProcesar = () => {
             onClose={() => setPermissionErrorModal(false)}
             title="Permisos insuficientes"
             message="No tiene permisos para procesar pagos de documentos."
+            variant="error"
+          />
+
+          {/* Modal de error de número de cheque */}
+          <AlertModal
+            isOpen={chequeErrorModal}
+            onClose={() => setChequeErrorModal(false)}
+            title="Error de cheque"
+            message={chequeErrorMessage}
             variant="error"
           />
         </div>
