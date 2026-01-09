@@ -302,7 +302,7 @@ export function AuthProvider({ children }) {
         await Promise.all(createPromises);
         console.log('Default roles created successfully');
       } else {
-        // Sync new permissions to existing default roles
+        // Sync new permissions and colors to existing default roles
         // This ensures that when new permissions are added to the codebase,
         // they get added to the existing default roles in Firestore
         const updatePromises = [];
@@ -326,16 +326,29 @@ export function AuthProvider({ children }) {
               }
             }
 
-            // If there are new permissions, update the role
-            if (hasNewPermisos) {
-              console.log(`Syncing new permissions to role ${roleId}:`, Object.keys(newPermisos));
+            // Check if color needs to be updated (sync with DEFAULT_ROLES)
+            const colorNeedsUpdate = existingData.color !== defaultRole.color;
+
+            // If there are new permissions or color changed, update the role
+            if (hasNewPermisos || colorNeedsUpdate) {
+              const updateData = {
+                fechaModificacion: serverTimestamp(),
+                modificadoPor: 'system'
+              };
+
+              if (hasNewPermisos) {
+                console.log(`Syncing new permissions to role ${roleId}:`, Object.keys(newPermisos));
+                updateData.permisos = { ...existingPermisos, ...newPermisos };
+              }
+
+              if (colorNeedsUpdate) {
+                console.log(`Syncing color for role ${roleId}: ${existingData.color} -> ${defaultRole.color}`);
+                updateData.color = defaultRole.color;
+              }
+
               const roleDocRef = doc(db, companyRUT, '_root', 'roles', roleId);
               updatePromises.push(
-                setDoc(roleDocRef, {
-                  permisos: { ...existingPermisos, ...newPermisos },
-                  fechaModificacion: serverTimestamp(),
-                  modificadoPor: 'system'
-                }, { merge: true })
+                setDoc(roleDocRef, updateData, { merge: true })
               );
             }
           }
@@ -343,7 +356,7 @@ export function AuthProvider({ children }) {
 
         if (updatePromises.length > 0) {
           await Promise.all(updatePromises);
-          console.log('Default roles permissions synced successfully');
+          console.log('Default roles synced successfully');
         }
       }
     } catch (err) {

@@ -137,15 +137,15 @@ export const PERMISOS_ACCIONES = {
 
 // Paleta de colores predefinidos para roles
 export const ROLE_COLORS = [
-  '#DC2626', // Red
-  '#EA580C', // Orange
-  '#CA8A04', // Yellow
-  '#16A34A', // Green
-  '#0D9488', // Teal
-  '#2563EB', // Blue
-  '#7C3AED', // Purple
-  '#DB2777', // Pink
-  '#6B7280', // Gray
+  '#EF4444', // Red (brighter, visible on dark theme)
+  '#F97316', // Orange (brighter)
+  '#EAB308', // Yellow (brighter)
+  '#22C55E', // Green (brighter)
+  '#14B8A6', // Teal (brighter)
+  '#3B82F6', // Blue (brighter)
+  '#8B5CF6', // Purple (brighter)
+  '#EC4899', // Pink (brighter)
+  '#9CA3AF', // Gray (brighter)
 ];
 
 // Helper para obtener todas las keys de permisos de acceso
@@ -185,7 +185,7 @@ export const DEFAULT_ROLES = {
     id: 'super_admin',
     nombre: 'Super Administrador',
     descripcion: 'Acceso total al sistema, puede asignar administradores',
-    color: '#DC2626',
+    color: '#EF4444',
     isDefault: true,
     permisos: {
       ...allPermissionsTrue(),
@@ -196,7 +196,7 @@ export const DEFAULT_ROLES = {
     id: 'admin',
     nombre: 'Administrador',
     descripcion: 'Acceso total excepto asignación de administradores',
-    color: '#2563EB',
+    color: '#3B82F6',
     isDefault: true,
     permisos: {
       ...allPermissionsTrue(),
@@ -207,7 +207,7 @@ export const DEFAULT_ROLES = {
     id: 'gestor',
     nombre: 'Gestor',
     descripcion: 'Acceso a recepción e informes con todas las acciones',
-    color: '#16A34A',
+    color: '#22C55E',
     isDefault: true,
     permisos: {
       // Acceso a vistas
@@ -244,7 +244,7 @@ export const DEFAULT_ROLES = {
     id: 'digitador',
     nombre: 'Digitador',
     descripcion: 'Puede ingresar documentos y ver detalles',
-    color: '#CA8A04',
+    color: '#EAB308',
     isDefault: true,
     permisos: {
       // Acceso a vistas
@@ -281,7 +281,7 @@ export const DEFAULT_ROLES = {
     id: 'visor',
     nombre: 'Visor',
     descripcion: 'Solo puede ver documentos, sin modificar',
-    color: '#6B7280',
+    color: '#9CA3AF',
     isDefault: true,
     permisos: {
       // Acceso a vistas
