@@ -10,7 +10,7 @@ import { Modal, LoadingModal } from "../../components/modal";
 import { useTheme } from "../../context/ThemeContext";
 import { useCompany } from "../../context/CompanyContext";
 
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, doc, getDoc } from "firebase/firestore";
 import { db } from "../../../firebaseConfig";
 
 import { formatRUT } from "../../utils/formatRUT";
@@ -55,6 +55,9 @@ const CAuditoria = () => {
   const [loading, setLoading] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
   const [detailModal, setDetailModal] = useState(false);
+  const [userNamesCache, setUserNamesCache] = useState({});
+  const [companyNamesCache, setCompanyNamesCache] = useState({});
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Format time from ISO string
   const formatTime = (isoString) => {
@@ -99,9 +102,9 @@ const CAuditoria = () => {
 
         // Filter logs by date and sort by time
         const filteredLogs = querySnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data()
+          .map(docSnap => ({
+            id: docSnap.id,
+            ...docSnap.data()
           }))
           .filter(log => {
             const logDate = log.fechaEliminacion || log.fechaEdicion || log.fechaProceso || log.fechaRevinculacion || log.fechaReversion || log.fechaCreacion || log.fecha;
@@ -115,6 +118,64 @@ const CAuditoria = () => {
           });
 
         setLogs(filteredLogs);
+
+        // Fetch user names for all unique emails in logs
+        const uniqueEmails = [...new Set(
+          filteredLogs.map(log =>
+            log.eliminadoPor || log.editadoPor || log.procesadoPor || log.revinculadoPor || log.reversadoPor || log.creadoPor || log.usuario
+          ).filter(Boolean)
+        )];
+
+        // Only fetch emails not already in cache
+        const emailsToFetch = uniqueEmails.filter(email => !userNamesCache[email]);
+
+        if (emailsToFetch.length > 0) {
+          const newNames = {};
+          await Promise.all(
+            emailsToFetch.map(async (email) => {
+              try {
+                const userDoc = await getDoc(doc(db, "usuarios", email));
+                if (userDoc.exists() && userDoc.data().nombre) {
+                  newNames[email] = userDoc.data().nombre;
+                }
+              } catch (err) {
+                console.error(`Error fetching user ${email}:`, err);
+              }
+            })
+          );
+
+          if (Object.keys(newNames).length > 0) {
+            setUserNamesCache(prev => ({ ...prev, ...newNames }));
+          }
+        }
+
+        // Fetch company names for all unique RUTs in logs
+        const uniqueRuts = [...new Set(
+          filteredLogs.map(log => log.empresaRut).filter(Boolean)
+        )];
+
+        // Only fetch RUTs not already in cache
+        const rutsToFetch = uniqueRuts.filter(rut => !companyNamesCache[rut]);
+
+        if (rutsToFetch.length > 0) {
+          const newCompanyNames = {};
+          await Promise.all(
+            rutsToFetch.map(async (rut) => {
+              try {
+                const companyDoc = await getDoc(doc(db, currentCompanyRUT, "_root", "empresas", rut));
+                if (companyDoc.exists() && companyDoc.data().razon) {
+                  newCompanyNames[rut] = companyDoc.data().razon;
+                }
+              } catch (err) {
+                console.error(`Error fetching company ${rut}:`, err);
+              }
+            })
+          );
+
+          if (Object.keys(newCompanyNames).length > 0) {
+            setCompanyNamesCache(prev => ({ ...prev, ...newCompanyNames }));
+          }
+        }
       } catch (error) {
         console.error("Error fetching audit logs:", error);
         setLogs([]);
@@ -140,6 +201,69 @@ const CAuditoria = () => {
   const getLogTimestamp = (log) => {
     return log.fechaEliminacion || log.fechaEdicion || log.fechaProceso || log.fechaRevinculacion || log.fechaReversion || log.fechaCreacion || log.fecha;
   };
+
+  // Get user email from log
+  const getLogUserEmail = (log) => {
+    return log.eliminadoPor || log.editadoPor || log.procesadoPor || log.revinculadoPor || log.reversadoPor || log.creadoPor || log.usuario || "";
+  };
+
+  // Get display name for user (from cache or fallback to email prefix)
+  const getUserDisplayName = (email) => {
+    if (!email) return "--";
+    if (userNamesCache[email]) return userNamesCache[email];
+    return email.split("@")[0];
+  };
+
+  // Get company name from cache
+  const getCompanyName = (rut) => {
+    if (!rut) return null;
+    return companyNamesCache[rut] || null;
+  };
+
+  // Get searchable text from a log entry
+  const getSearchableText = (log) => {
+    const parts = [];
+
+    // Action
+    parts.push(getAccionLabel(log).toLowerCase());
+
+    // Document info
+    if (log.tipo === "reversion_pago") {
+      parts.push(`egreso #${log.numeroEgreso || ""}`);
+    } else if (log.tipo === "reversion_abono") {
+      parts.push(`egreso #${log.numeroEgreso || ""}`);
+      parts.push(`doc #${log.documento?.numeroDoc || ""}`);
+    } else {
+      parts.push(getTipoDocLabel(log.tipoDocumento).toLowerCase());
+      parts.push(`#${log.numeroDocumento || ""}`);
+    }
+
+    // Company
+    if (log.empresaRut) {
+      parts.push(formatRUT(log.empresaRut));
+      parts.push(log.empresaRut);
+      const companyName = getCompanyName(log.empresaRut);
+      if (companyName) parts.push(companyName.toLowerCase());
+    }
+
+    // User
+    const userEmail = getLogUserEmail(log);
+    if (userEmail) {
+      parts.push(userEmail.toLowerCase());
+      const userName = getUserDisplayName(userEmail);
+      if (userName) parts.push(userName.toLowerCase());
+    }
+
+    return parts.join(" ");
+  };
+
+  // Filter logs based on search term
+  const filteredLogs = searchTerm.trim()
+    ? logs.filter(log => {
+        const searchable = getSearchableText(log);
+        return searchTerm.toLowerCase().split(" ").every(term => searchable.includes(term));
+      })
+    : logs;
 
   // Handle row click
   const handleRowClick = (log) => {
@@ -193,6 +317,43 @@ const CAuditoria = () => {
               </div>
             ) : (
               <div className="w-full max-w-4xl">
+                {/* Search bar */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Buscar por acción, documento, empresa o usuario..."
+                      className={`w-full px-4 py-2 pl-10 rounded-lg border transition-colors ${
+                        isLightTheme
+                          ? 'bg-white border-gray-300 text-gray-800 placeholder-gray-400 focus:border-accent-blue focus:ring-1 focus:ring-accent-blue'
+                          : 'bg-surface-light border-white/10 text-white placeholder-slate-400 focus:border-accent-blue focus:ring-1 focus:ring-accent-blue'
+                      }`}
+                    />
+                    <svg
+                      className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${isLightTheme ? 'text-gray-400' : 'text-slate-400'}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    {searchTerm && (
+                      <button
+                        onClick={() => setSearchTerm("")}
+                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full transition-colors ${
+                          isLightTheme ? 'hover:bg-gray-100 text-gray-400' : 'hover:bg-white/10 text-slate-400'
+                        }`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 <div className={`rounded-xl overflow-hidden flex flex-col max-h-[60vh] ${
                   isLightTheme
                     ? 'bg-white border border-gray-200 shadow-md'
@@ -215,7 +376,11 @@ const CAuditoria = () => {
                   <div className={`overflow-y-auto scrollbar-custom flex-1 ${
                     isLightTheme ? 'divide-y divide-gray-100' : 'divide-y divide-white/5'
                   }`}>
-                    {logs.map((log) => (
+                    {filteredLogs.length === 0 ? (
+                      <div className={`text-center py-8 ${isLightTheme ? 'text-gray-400' : 'text-slate-400'}`}>
+                        No se encontraron registros que coincidan con la búsqueda
+                      </div>
+                    ) : filteredLogs.map((log) => (
                       <div
                         key={log.id}
                         onClick={() => handleRowClick(log)}
@@ -255,7 +420,7 @@ const CAuditoria = () => {
                           {log.empresaRut ? formatRUT(log.empresaRut) : "--"}
                         </div>
                         <div className={`col-span-2 truncate ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
-                          {(log.eliminadoPor || log.editadoPor || log.procesadoPor || log.revinculadoPor || log.reversadoPor || log.creadoPor || log.usuario || "").split("@")[0]}
+                          {getUserDisplayName(getLogUserEmail(log))}
                         </div>
                       </div>
                     ))}
@@ -263,7 +428,15 @@ const CAuditoria = () => {
                 </div>
 
                 <div className={`text-center text-sm mt-4 ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
-                  {logs.length} registro{logs.length !== 1 ? "s" : ""} encontrado{logs.length !== 1 ? "s" : ""}
+                  {searchTerm ? (
+                    <>
+                      {filteredLogs.length} de {logs.length} registro{logs.length !== 1 ? "s" : ""}
+                    </>
+                  ) : (
+                    <>
+                      {logs.length} registro{logs.length !== 1 ? "s" : ""} encontrado{logs.length !== 1 ? "s" : ""}
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -341,14 +514,24 @@ const CAuditoria = () => {
                     <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Número</div>
                     <div className="font-mono">{selectedLog.numeroDocumento}</div>
                   </div>
-                  <div>
-                    <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Empresa (RUT)</div>
-                    <div>{selectedLog.empresaRut ? formatRUT(selectedLog.empresaRut) : "--"}</div>
+                  <div className="col-span-2">
+                    <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Empresa</div>
+                    <div>
+                      {getCompanyName(selectedLog.empresaRut) && (
+                        <span className="font-medium">{getCompanyName(selectedLog.empresaRut)}</span>
+                      )}
+                      {selectedLog.empresaRut && (
+                        <span className={`${getCompanyName(selectedLog.empresaRut) ? 'ml-2' : ''} ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                          ({formatRUT(selectedLog.empresaRut)})
+                        </span>
+                      )}
+                      {!selectedLog.empresaRut && "--"}
+                    </div>
                   </div>
                   <div>
                     <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Usuario</div>
                     <div className="truncate">
-                      {selectedLog.eliminadoPor || selectedLog.editadoPor || selectedLog.procesadoPor || selectedLog.revinculadoPor || selectedLog.creadoPor || selectedLog.usuario || "--"}
+                      {getUserDisplayName(getLogUserEmail(selectedLog))}
                     </div>
                   </div>
                 </div>
@@ -377,7 +560,7 @@ const CAuditoria = () => {
                   <div>
                     <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Usuario</div>
                     <div className="truncate">
-                      {selectedLog.reversadoPor || "--"}
+                      {getUserDisplayName(selectedLog.reversadoPor)}
                     </div>
                   </div>
                 </div>
@@ -449,7 +632,7 @@ const CAuditoria = () => {
                   {selectedLog.datosEliminados.ingresoUsuario && (
                     <div>
                       <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Ingresado por</div>
-                      <div className="truncate">{selectedLog.datosEliminados.ingresoUsuario}</div>
+                      <div className="truncate">{getUserDisplayName(selectedLog.datosEliminados.ingresoUsuario)}</div>
                     </div>
                   )}
                 </div>
@@ -563,7 +746,7 @@ const CAuditoria = () => {
                   {selectedLog.procesadoPor && (
                     <div>
                       <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Procesado por</div>
-                      <div className="truncate">{selectedLog.procesadoPor}</div>
+                      <div className="truncate">{getUserDisplayName(selectedLog.procesadoPor)}</div>
                     </div>
                   )}
                 </div>
@@ -608,7 +791,7 @@ const CAuditoria = () => {
                   {selectedLog.procesadoPor && (
                     <div>
                       <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Procesado por</div>
-                      <div className="truncate">{selectedLog.procesadoPor}</div>
+                      <div className="truncate">{getUserDisplayName(selectedLog.procesadoPor)}</div>
                     </div>
                   )}
                 </div>
@@ -635,8 +818,18 @@ const CAuditoria = () => {
                         </div>
                       </div>
                       <div>
-                        <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Empresa (RUT)</div>
-                        <div>{selectedLog.documento.rut ? formatRUT(selectedLog.documento.rut) : "--"}</div>
+                        <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Empresa</div>
+                        <div>
+                          {getCompanyName(selectedLog.documento.rut) && (
+                            <span className="font-medium">{getCompanyName(selectedLog.documento.rut)}</span>
+                          )}
+                          {selectedLog.documento.rut && (
+                            <span className={`${getCompanyName(selectedLog.documento.rut) ? 'ml-2' : ''} ${isLightTheme ? 'text-gray-500' : 'text-slate-400'}`}>
+                              ({formatRUT(selectedLog.documento.rut)})
+                            </span>
+                          )}
+                          {!selectedLog.documento.rut && "--"}
+                        </div>
                       </div>
                       {selectedLog.documento.montoRevertido && (
                         <div>
@@ -649,7 +842,7 @@ const CAuditoria = () => {
                   {selectedLog.reversadoPor && (
                     <div>
                       <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Reversado por</div>
-                      <div className="truncate">{selectedLog.reversadoPor}</div>
+                      <div className="truncate">{getUserDisplayName(selectedLog.reversadoPor)}</div>
                     </div>
                   )}
                   {selectedLog.descripcion && (
@@ -677,7 +870,7 @@ const CAuditoria = () => {
                       </div>
                       <div>
                         <div className={`text-xs ${isLightTheme ? 'text-gray-400' : 'text-slate-500'}`}>Revinculado por</div>
-                        <div className="truncate">{selectedLog.revinculadoPor || "--"}</div>
+                        <div className="truncate">{getUserDisplayName(selectedLog.revinculadoPor)}</div>
                       </div>
                     </>
                   )}
