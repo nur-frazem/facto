@@ -149,6 +149,7 @@ const DOC_TYPES = [
   { subcol: 'boletas', tipo: 'Boleta', isAdditive: true },
   { subcol: 'boletasExentas', tipo: 'Boleta Exenta', isAdditive: true },
   { subcol: 'notasCredito', tipo: 'Nota de Crédito', isAdditive: false },
+  { subcol: 'notasDebito', tipo: 'Nota de Débito', isAdditive: true },
 ];
 
 // Cache configuration (outside component)

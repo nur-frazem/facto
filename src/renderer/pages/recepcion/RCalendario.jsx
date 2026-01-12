@@ -28,6 +28,7 @@ const getDocTypeShort = (tipo) => {
     facturas: 'Fact.',
     facturasExentas: 'Fact. Ex.',
     notasCredito: 'NC',
+    notasDebito: 'ND',
     boletas: 'Boleta',
     boletasExentas: 'Bol. Ex.',
   };
@@ -104,7 +105,7 @@ const RCalendario = () => {
   const empresasDataRef = useRef([]);
 
   // Document types to fetch
-  const tiposDoc = useMemo(() => ['facturas', 'facturasExentas', 'notasCredito', 'boletas', 'boletasExentas'], []);
+  const tiposDoc = useMemo(() => ['facturas', 'facturasExentas', 'notasCredito', 'notasDebito', 'boletas', 'boletasExentas'], []);
 
   // Calculate the cutoff date for initial load (12 months ago)
   const initialLoadCutoff = useMemo(() => {
@@ -499,11 +500,21 @@ const RCalendario = () => {
           // Check if overdue (today or past due date)
           if (doc.fechaV <= today) {
             overdueCount++;
-            overdueTotal += amountRemaining;
+            // Credit notes are subtractive, debit notes and invoices are additive
+            if (doc.tipo === 'notasCredito') {
+              overdueTotal -= amountRemaining;
+            } else {
+              overdueTotal += amountRemaining;
+            }
           } else {
             // Future expiring
             pendingCount++;
-            pendingTotal += amountRemaining;
+            // Credit notes are subtractive, debit notes and invoices are additive
+            if (doc.tipo === 'notasCredito') {
+              pendingTotal -= amountRemaining;
+            } else {
+              pendingTotal += amountRemaining;
+            }
           }
         }
       }
@@ -525,7 +536,12 @@ const RCalendario = () => {
             const docYear = abonoDate.getFullYear();
             if (docMonth === currentMonth && docYear === currentYear) {
               paidCount++;
-              paidTotal += abono.monto || 0;
+              // Credit notes are subtractive, debit notes and invoices are additive
+              if (doc.tipo === 'notasCredito') {
+                paidTotal -= abono.monto || 0;
+              } else {
+                paidTotal += abono.monto || 0;
+              }
             }
           }
         });
@@ -535,7 +551,12 @@ const RCalendario = () => {
         const docYear = doc.fechaPago.getFullYear();
         if (docMonth === currentMonth && docYear === currentYear) {
           paidCount++;
-          paidTotal += doc.total || 0;
+          // Credit notes are subtractive, debit notes and invoices are additive
+          if (doc.tipo === 'notasCredito') {
+            paidTotal -= doc.total || 0;
+          } else {
+            paidTotal += doc.total || 0;
+          }
         }
       } else if ((doc.tipo === 'boletas' || doc.tipo === 'boletasExentas') && doc.estado === 'pagado' && doc.fechaE) {
         // Boletas and Boletas exentas are paid on emission date (fechaE)
@@ -607,7 +628,14 @@ const RCalendario = () => {
           };
         }
         grouped[doc.rut].documentos.push(doc);
-        grouped[doc.rut].total += doc.displayTotal || doc.total || 0;
+        // Credit notes are subtractive, debit notes and invoices are additive
+        const amount = doc.displayTotal || doc.total || 0;
+        if (doc.tipo === 'notasCredito') {
+          grouped[doc.rut].total -= amount;
+        } else {
+          // Invoices, debit notes, boletas, etc. are additive
+          grouped[doc.rut].total += amount;
+        }
       });
       // Sort by total descending, then sort documents by fechaV
       return Object.values(grouped)
@@ -1126,9 +1154,13 @@ const RCalendario = () => {
                                           <div className="flex items-center gap-2">
                                             <span
                                               className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                                isOverdueDate
-                                                  ? 'bg-danger/20 text-danger'
-                                                  : 'bg-yellow-500/20 text-yellow-400'
+                                                doc.tipo === 'notasCredito'
+                                                  ? 'bg-blue-500/20 text-blue-400'
+                                                  : doc.tipo === 'notasDebito'
+                                                    ? 'bg-green-500/20 text-green-400'
+                                                    : isOverdueDate
+                                                      ? 'bg-danger/20 text-danger'
+                                                      : 'bg-yellow-500/20 text-yellow-400'
                                               }`}
                                             >
                                               {getDocTypeShort(doc.tipo)}
@@ -1149,9 +1181,14 @@ const RCalendario = () => {
                                           </div>
                                           <div
                                             className={`font-medium text-sm ${
-                                              isLightTheme ? 'text-gray-800' : 'text-white'
+                                              doc.tipo === 'notasCredito'
+                                                ? 'text-blue-400'
+                                                : doc.tipo === 'notasDebito'
+                                                  ? 'text-green-400'
+                                                  : isLightTheme ? 'text-gray-800' : 'text-white'
                                             }`}
                                           >
+                                            {doc.tipo === 'notasCredito' ? '-' : doc.tipo === 'notasDebito' ? '+' : ''}
                                             {formatCLP(doc.displayTotal || doc.total)}
                                           </div>
                                         </div>
@@ -1234,7 +1271,13 @@ const RCalendario = () => {
                                     }`}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-success/20 text-success">
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                        doc.tipo === 'notasCredito'
+                                          ? 'bg-blue-500/20 text-blue-400'
+                                          : doc.tipo === 'notasDebito'
+                                            ? 'bg-green-500/20 text-green-400'
+                                            : 'bg-success/20 text-success'
+                                      }`}>
                                         {getDocTypeShort(doc.tipo)}
                                       </span>
                                       <span
@@ -1257,9 +1300,14 @@ const RCalendario = () => {
                                       </span>
                                       <span
                                         className={`font-medium text-sm ${
-                                          isLightTheme ? 'text-gray-800' : 'text-white'
+                                          doc.tipo === 'notasCredito'
+                                            ? 'text-blue-400'
+                                            : doc.tipo === 'notasDebito'
+                                              ? 'text-green-400'
+                                              : isLightTheme ? 'text-gray-800' : 'text-white'
                                         }`}
                                       >
+                                        {doc.tipo === 'notasCredito' ? '-' : doc.tipo === 'notasDebito' ? '+' : ''}
                                         {formatCLP(doc.displayTotal || doc.total)}
                                       </span>
                                     </div>
@@ -1291,8 +1339,15 @@ const RCalendario = () => {
                   {selectedDayDocuments.expiring.length > 0 &&
                     (() => {
                       const isOverdueDate = selectedDay <= today;
+                      // Credit notes are subtractive, debit notes and invoices are additive
                       const expiringTotal = selectedDayDocuments.expiring.reduce(
-                        (sum, doc) => sum + (doc.displayTotal || doc.total || 0),
+                        (sum, doc) => {
+                          const amount = doc.displayTotal || doc.total || 0;
+                          if (doc.tipo === 'notasCredito') {
+                            return sum - amount;
+                          }
+                          return sum + amount;
+                        },
                         0
                       );
                       return (
@@ -1327,8 +1382,15 @@ const RCalendario = () => {
                   {/* Paid Total */}
                   {selectedDayDocuments.paid.length > 0 &&
                     (() => {
+                      // Credit notes are subtractive, debit notes and invoices are additive
                       const paidTotal = selectedDayDocuments.paid.reduce(
-                        (sum, doc) => sum + (doc.displayTotal || doc.total || 0),
+                        (sum, doc) => {
+                          const amount = doc.displayTotal || doc.total || 0;
+                          if (doc.tipo === 'notasCredito') {
+                            return sum - amount;
+                          }
+                          return sum + amount;
+                        },
                         0
                       );
                       return (

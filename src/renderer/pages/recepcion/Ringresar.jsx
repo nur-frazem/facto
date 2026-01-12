@@ -65,7 +65,8 @@ const RIngresar = () => {
     "Factura exenta",
     "Boleta",
     "Boleta exenta",
-    "Nota de crédito"
+    "Nota de crédito",
+    "Nota de débito"
   ];
 
   const FORMAS_PAGO = [
@@ -80,6 +81,7 @@ const RIngresar = () => {
   const [numeroDoc, setNumeroDoc] = useState("");
   const [numeroDocNc, setNumeroDocNc] = useState("");
   const [tipoDocNc, setTipoDocNc] = useState(""); // Tipo de documento a vincular con NC
+  const [numeroDocDb, setNumeroDocDb] = useState(""); // Número de NC a vincular con ND
   const [formaPago, setFormaPago] = useState("");
 
   const [fechaE, setFechaE] = useState(null);
@@ -118,6 +120,7 @@ const RIngresar = () => {
     setFechaV("");
     setTipoDocNc("");
     setNumeroDocNc("");
+    setNumeroDocDb("");
   }, [selectedDoc, selectedGiro]);
 
   //modal
@@ -176,6 +179,11 @@ const RIngresar = () => {
     if (selectedGiro && selectedDoc === "Nota de crédito") {
       if (!tipoDocNc) newErrors.tipoDocNc = ECampo;
       if (numeroDocNc === "") newErrors.numeroDocNc = ECampo;
+    }
+
+    // ND solo si visible
+    if (selectedGiro && selectedDoc === "Nota de débito") {
+      if (numeroDocDb === "") newErrors.numeroDocDb = ECampo;
     }
   
     // Totales solo si visible
@@ -243,6 +251,12 @@ const RIngresar = () => {
       if (!ncNumResult.valid) validationErrors.push("N° documento asociado: " + ncNumResult.error);
     }
 
+    // Validate debit note reference
+    if (selectedDoc === "Nota de débito") {
+      const ndNumResult = validateNumeroDoc(numeroDocDb);
+      if (!ndNumResult.valid) validationErrors.push("N° nota de crédito asociada: " + ndNumResult.error);
+    }
+
     // If validation errors, show them and return
     if (validationErrors.length > 0) {
       setErrorDoc(validationErrors.join(". "));
@@ -255,7 +269,7 @@ const RIngresar = () => {
     let estado = fechaVDate < fechaActual ? "vencido" : "pendiente";
     if(formaPago !== "Crédito"){
       estado = "pagado";
-      if(selectedDoc === "Nota de crédito"){
+      if(selectedDoc === "Nota de crédito" || selectedDoc === "Nota de débito"){
         estado = "pendiente"
       }
     }
@@ -328,6 +342,22 @@ const RIngresar = () => {
     const notaCredito = {
       numeroDoc,
       numeroDocNc,
+      fechaE,
+      neto: Number(neto),
+      flete: Number(flete),
+      retencion: Number(retencion),
+      otros: Number(otros),
+      impuestosAdicionales: impuestosAdicionalesParaGuardar,
+      iva: Number(iva),
+      total,
+      estado,
+      ingresoUsuario: userId,
+      fechaIngreso: fechaActual
+    };
+
+    const notaDebito = {
+      numeroDoc,
+      numeroDocDb, // Número de la nota de crédito vinculada
       fechaE,
       neto: Number(neto),
       flete: Number(flete),
@@ -619,6 +649,124 @@ const RIngresar = () => {
         }
       }
     }
+
+    // Nota de débito
+    if(selectedDoc === "Nota de débito"){
+      try {
+        const documentoRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), "notasDebito", String(numeroDoc));
+        const notaCreditoRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), "notasCredito", String(numeroDocDb));
+
+        // Use transaction to prevent race conditions
+        await runTransaction(db, async (transaction) => {
+          // Read both documents within transaction
+          const docSnap = await transaction.get(documentoRef);
+          const ncSnap = await transaction.get(notaCreditoRef);
+
+          if (docSnap.exists()) {
+            throw new Error("DUPLICATE");
+          }
+
+          if (!ncSnap.exists()) {
+            throw new Error("NC_NOT_FOUND");
+          }
+
+          const ncData = ncSnap.data();
+
+          if (ncData.estado === "pagado") {
+            throw new Error("ALREADY_PAID");
+          }
+
+          // Calculate new values atomically using current data
+          const abonoActual = ncData.abonoNd || 0;
+          const currentNotasDebito = ncData.notasDebito || [];
+
+          // Validate that ND total doesn't exceed remaining credit note balance
+          const ncTotal = ncData.total || 0;
+          const remainingBalance = ncTotal - abonoActual;
+          if (total > remainingBalance) {
+            throw new Error("ND_EXCEEDS_BALANCE");
+          }
+
+          // Write debit note
+          transaction.set(documentoRef, notaDebito);
+
+          // Update credit note atomically
+          transaction.update(notaCreditoRef, {
+            abonoNd: abonoActual + total,
+            notasDebito: [...currentNotasDebito, numeroDoc],
+            totalDescontado: (ncData.totalDescontado ?? ncData.total) - total
+          });
+
+          // Also update the linked invoice to add the debit note amount (abonoNd)
+          // This increases the invoice's totalDescontado since debit notes reduce credit note value
+          if (ncData.numeroDocNc) {
+            const tipoFactura = ncData.tipoFacturaAsociada || "facturas";
+            const facturaRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), tipoFactura, String(ncData.numeroDocNc));
+            const facturaSnap = await transaction.get(facturaRef);
+
+            if (facturaSnap.exists()) {
+              const facturaData = facturaSnap.data();
+              const abonoNdActual = facturaData.abonoNd || 0;
+              const facturaTotal = facturaData.total || 0;
+              const facturaAbonoNc = facturaData.abonoNc || 0;
+
+              // New abonoNd for the invoice (sum of all debit notes on its credit notes)
+              const nuevoAbonoNd = abonoNdActual + total;
+              // Recalculate totalDescontado: invoice total - credit notes + debit notes
+              const nuevoTotalDescontado = facturaTotal - facturaAbonoNc + nuevoAbonoNd;
+
+              transaction.update(facturaRef, {
+                abonoNd: nuevoAbonoNd,
+                totalDescontado: nuevoTotalDescontado
+              });
+            }
+          }
+        });
+
+        // Registrar en auditoría
+        try {
+          await addDoc(collection(db, currentCompanyRUT, "_root", "auditoria"), {
+            tipo: "creacion",
+            tipoDocumento: "notasDebito",
+            numeroDocumento: numeroDoc,
+            empresaRut: giroRut,
+            creadoPor: userId,
+            fechaCreacion: new Date().toISOString(),
+            datos: {
+              total: total,
+              neto: Number(neto),
+              documentoVinculado: {
+                tipo: "Nota de crédito",
+                numero: numeroDocDb
+              }
+            }
+          });
+        } catch (auditErr) {
+          console.warn("No se pudo registrar en auditoría:", auditErr);
+        }
+
+        setLoadingModal(false);
+        setIsModalOpen(false);
+        handleResetParams();
+        lastDocTime.current = Date.now();
+        setSuccessDoc(`Nota de débito N° ${numeroDoc} ingresada exitosamente`);
+      } catch (err) {
+        console.error("Error guardando nota de débito:", err);
+        setLoadingModal(false);
+
+        if (err.message === "DUPLICATE") {
+          setErrorDoc("Este documento ya está ingresado");
+        } else if (err.message === "NC_NOT_FOUND") {
+          setErrorDoc(`No se encuentra la nota de crédito N° ${numeroDocDb}`);
+        } else if (err.message === "ALREADY_PAID") {
+          setErrorDoc("La nota de crédito asociada ya se encuentra pagada");
+        } else if (err.message === "ND_EXCEEDS_BALANCE") {
+          setErrorDoc("El monto de la nota de débito excede el saldo restante de la nota de crédito");
+        } else {
+          setErrorDoc("Error al guardar la nota de débito");
+        }
+      }
+    }
   }
 
   const handleResetParams = () => {
@@ -631,6 +779,7 @@ const RIngresar = () => {
     setFechaV("");
     setNumeroDocNc("");
     setTipoDocNc("");
+    setNumeroDocDb("");
     setNeto(0);
     setFlete(0);
     setRetencion(0);
@@ -882,6 +1031,29 @@ const RIngresar = () => {
                   </div>
                 </div>
               )}
+
+              {/* Nota de débito - Campo adicional */}
+              {selectedDoc === "Nota de débito" && (
+                <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t ${isLightTheme ? 'border-gray-200' : 'border-white/10'}`}>
+                  <Textfield
+                    label={
+                      <>
+                        N° de Nota de crédito a vincular
+                        {errors.numeroDocDb && (
+                          <span className="text-red-300 font-black"> - {errors.numeroDocDb}</span>
+                        )}
+                      </>
+                    }
+                    type="number"
+                    value={numeroDocDb}
+                    onChange={(e) => {
+                      setNumeroDocDb(e.target.value);
+                      setErrors((prev) => ({ ...prev, numeroDocDb: undefined }));
+                    }}
+                    classNameInput={errors.numeroDocDb ? "ring-red-400 ring-2" : ""}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Card 3: Montos */}
@@ -1045,6 +1217,12 @@ const RIngresar = () => {
                 <>
                   <p className="font-semibold">Vinculada a:</p>
                   <p>{tipoDocNc} N° {numeroDocNc}</p>
+                </>
+              )}
+              {selectedDoc === "Nota de débito" && (
+                <>
+                  <p className="font-semibold">Vinculada a:</p>
+                  <p>Nota de crédito N° {numeroDocDb}</p>
                 </>
               )}
               <p className="font-semibold">Monto total:</p>

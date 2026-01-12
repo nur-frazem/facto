@@ -135,6 +135,12 @@ const RProcesar = () => {
     0
   );
 
+  // Total de notas de débito aplicadas (reducen el valor de las NC, por lo que son aditivas al total)
+  const totalNotasDebitoAplicadas = documentosAgregados.reduce(
+    (acc, doc) => acc + (doc.abonoNd || 0),
+    0
+  );
+
   // Total de abonos anteriores (pagos parciales previos)
   const totalAbonosAnteriores = documentosAgregados.reduce(
     (acc, doc) => acc + (doc.totalAbonado || 0),
@@ -690,7 +696,9 @@ const RProcesar = () => {
                 total: docData.total,
                 totalDescontado: docData.totalDescontado ?? docData.total,
                 abonoNc: shouldIncludeNC ? (docData.abonoNc ?? 0) : 0,
+                abonoNd: docData.abonoNd ?? 0,
                 notasCredito: notasCreditoDetalle,
+                notasDebito: docData.notasDebito ?? [],
                 // Abono tracking
                 montoPagado: montoAPagar,
                 esAbono: readData.esAbono,
@@ -1211,8 +1219,10 @@ const RProcesar = () => {
                               total: row.totalDescontado ?? row.total,
                               totalOriginal: row.total,
                               abonoNc: row.abonoNc || 0,
+                              abonoNd: row.abonoNd || 0,
                               // Credit note info
                               notasCredito: row.notasCredito || [],
+                              notasDebito: row.notasDebito || [],
                               // Abono fields
                               saldoPendiente: saldoPendiente,
                               montoAPagar: saldoPendiente, // Default to full saldoPendiente
@@ -1451,6 +1461,12 @@ const RProcesar = () => {
                         <div className="flex justify-between text-red-400">
                           <span>Notas de crédito:</span>
                           <span>-{formatCLP(totalNotasCreditoAplicadas)}</span>
+                        </div>
+                      )}
+                      {totalNotasDebitoAplicadas > 0 && (
+                        <div className="flex justify-between text-green-400">
+                          <span>Notas de débito:</span>
+                          <span>+{formatCLP(totalNotasDebitoAplicadas)}</span>
                         </div>
                       )}
                       {totalAbonosAnteriores > 0 && (

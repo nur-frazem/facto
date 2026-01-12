@@ -486,6 +486,51 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
           // For full payments with NC: montoAPagar is the original total, so we subtract NC
           subtotalEmpresa -= ncData.total || 0;
           y += rowHeight - 1;
+
+          // Show debit notes linked to this credit note (if any)
+          if (ncData.notasDebito && ncData.notasDebito.length > 0) {
+            for (const ndNum of ncData.notasDebito) {
+              const ndNumero = typeof ndNum === "object" ? ndNum.numeroDoc : ndNum;
+              const ndRef = doc(db, companyRUT, "_root", "empresas", empresa.rut, "notasDebito", String(ndNumero));
+              const ndSnap = await getDoc(ndRef);
+              if (!ndSnap.exists()) continue;
+              const ndData = ndSnap.data();
+
+              // Parse debit note date safely
+              let fechaND = "";
+              if (ndData.fechaE) {
+                if (ndData.fechaE.toDate) {
+                  fechaND = ndData.fechaE.toDate().toLocaleDateString("es-CL");
+                } else if (ndData.fechaE.seconds) {
+                  fechaND = new Date(ndData.fechaE.seconds * 1000).toLocaleDateString("es-CL");
+                } else if (ndData.fechaE instanceof Date) {
+                  fechaND = ndData.fechaE.toLocaleDateString("es-CL");
+                }
+              }
+
+              // Debit note row (indented more and in green for additive)
+              pdf.setFont("helvetica", "bold");
+              pdf.setFontSize(8);
+              pdf.setTextColor(0, 128, 0); // Green for additive
+
+              colX = marginLeft + 10; // More indented than NC
+              pdf.text("+ N.D.", colX, y + 4);
+              colX = marginLeft + 3 + colWidths.tipo;
+              pdf.text(String(ndData.numeroDoc || ndNumero), colX, y + 4);
+              colX += colWidths.numero;
+              pdf.text(fechaND, colX, y + 4);
+              pdf.text(`+${formatCLP(ndData.total || 0)}`, marginRight - 5, y + 4, { align: "right" });
+
+              // Row bottom border (lighter)
+              pdf.setDrawColor(...COLORS.lightGray);
+              pdf.setLineWidth(0.1);
+              pdf.line(marginLeft + 5, y + rowHeight - 1, marginRight, y + rowHeight - 1);
+
+              // Debit notes are ADDITIVE (they reduce the credit note's effect)
+              subtotalEmpresa += ndData.total || 0;
+              y += rowHeight - 1;
+            }
+          }
         }
       }
     }

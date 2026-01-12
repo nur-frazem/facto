@@ -5,7 +5,7 @@ module.exports = {
   packagerConfig: {
     asar: true,
   },
-  outDir: './out/v1.0.3',
+  outDir: './out/v1.0.4',
   rebuildConfig: {},
   makers: [
     {

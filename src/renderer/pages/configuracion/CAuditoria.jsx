@@ -21,6 +21,7 @@ const TIPO_DOC_LABELS = {
   facturas: "Factura",
   facturasExentas: "Factura Exenta",
   notasCredito: "Nota de Crédito",
+  notasDebito: "Nota de Débito",
   boletas: "Boleta",
   boletasExentas: "Boleta Exenta"
 };
