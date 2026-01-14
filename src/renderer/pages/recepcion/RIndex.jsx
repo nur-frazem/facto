@@ -281,8 +281,25 @@ const RIndex = () => {
               }
             }
 
+            // Calculate neto if missing (debit notes might not have it stored)
+            let neto = docData.neto;
+            if (neto === undefined || neto === null) {
+              // Try to calculate from total - iva - otros (otros are NOT subject to IVA)
+              const otros = docData.otros || 0;
+              if (docData.total && docData.iva !== undefined) {
+                neto = docData.total - docData.iva - otros;
+              } else if (docData.total) {
+                // Fallback: calculate from total (assuming 19% IVA for non-exempt docs)
+                const isExempt = docType.subcol === 'facturasExentas' || docType.subcol === 'boletasExentas';
+                neto = isExempt ? docData.total : Math.round((docData.total - otros) / 1.19);
+              } else {
+                neto = 0;
+              }
+            }
+
             return {
               ...docData,
+              neto,
               rut,
               razon: empresaData.razon,
               tipoDoc: docType.tipo,
@@ -340,6 +357,33 @@ const RIndex = () => {
       setLastRefreshTime(0);
       setLoading(true);
 
+      // Helper to ensure neto is calculated for all documents
+      const ensureNetoCalculated = (docs) => {
+        return docs.map(doc => {
+          if (doc.neto === undefined || doc.neto === null) {
+            let neto;
+            if (doc.total && doc.iva !== undefined) {
+              // Neto = Total - IVA - Other taxes (otros are NOT subject to IVA)
+              const otros = doc.otros || 0;
+              neto = doc.total - doc.iva - otros;
+            } else if (doc.total) {
+              const isExempt = doc.tipoDoc === 'Factura Exenta' || doc.tipoDoc === 'Boleta Exenta';
+              if (isExempt) {
+                neto = doc.total;
+              } else {
+                // Neto = (Total - otros) / 1.19
+                const otros = doc.otros || 0;
+                neto = Math.round((doc.total - otros) / 1.19);
+              }
+            } else {
+              neto = 0;
+            }
+            return { ...doc, neto };
+          }
+          return doc;
+        });
+      };
+
       // Try to load company-specific cache
       const loadCachedData = () => {
         try {
@@ -353,7 +397,8 @@ const RIndex = () => {
             // If cache is still valid (less than 30 minutes old)
             if (age < CACHE_DURATION_MS) {
               const parsedData = JSON.parse(cachedData);
-              setAllDocuments(parsedData);
+              // Ensure neto is calculated for cached data (for backwards compatibility)
+              setAllDocuments(ensureNetoCalculated(parsedData));
               setLastRefreshTime(timestamp);
               setLoading(false);
               return true; // Cache was valid and loaded

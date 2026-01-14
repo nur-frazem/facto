@@ -174,8 +174,14 @@ const RRevisionDocumentos = () => {
   // Modal para vincular notas de débito a otra nota de crédito
   const [vincularNdModal, setVincularNdModal] = useState(false);
   const [vincularNdNumeroDoc, setVincularNdNumeroDoc] = useState('');
+  // Flag para desvincular NDs sin eliminar la NC (similar a vincularSinEliminar para facturas)
+  const [vincularNdSinEliminar, setVincularNdSinEliminar] = useState(false);
   // Info de la NC que se está eliminando (para cascada de ND)
   const [ncInfoParaNd, setNcInfoParaNd] = useState({ rut: '', numeroDoc: '', notasDebito: [] });
+  // Track if we're deleting from invoice cascade (to handle ND modal in that context)
+  const [deletingFromInvoiceCascade, setDeletingFromInvoiceCascade] = useState(false);
+  // Store all debit notes from all NCs when deleting from invoice cascade
+  const [allDebitNotesFromCascade, setAllDebitNotesFromCascade] = useState([]);
 
   // Estado para guardar info del documento actual en edición (solo se usa el setter)
   const [, setCurrentDocRut] = useState('');
@@ -1098,6 +1104,20 @@ const RRevisionDocumentos = () => {
               });
               if (found) return { id: docSnap.id, ...data };
             }
+
+            // Buscar en notas de débito dentro de las notas de crédito
+            if (tipoDoc === 'notasDebito') {
+              const found = empresa.facturas.some((f) => {
+                if (!Array.isArray(f.notasCredito) || f.includeNotaCredito !== true) return false;
+                return f.notasCredito.some((nc) => {
+                  if (!Array.isArray(nc.notasDebitoDetalle)) return false;
+                  return nc.notasDebitoDetalle.some(
+                    (nd) => String(nd.numeroDoc) === String(numeroDoc)
+                  );
+                });
+              });
+              if (found) return { id: docSnap.id, ...data };
+            }
           }
         }
       }
@@ -1163,6 +1183,27 @@ const RRevisionDocumentos = () => {
                 });
               }
             }
+
+            // Buscar en notas de débito dentro de las notas de crédito
+            if (tipoDoc === 'notasDebito') {
+              const found = empresa.facturas.some((f) => {
+                if (!Array.isArray(f.notasCredito) || f.includeNotaCredito !== true) return false;
+                return f.notasCredito.some((nc) => {
+                  if (!Array.isArray(nc.notasDebitoDetalle)) return false;
+                  return nc.notasDebitoDetalle.some(
+                    (nd) => String(nd.numeroDoc) === String(numeroDoc)
+                  );
+                });
+              });
+              if (found) {
+                egresosEncontrados.push({
+                  id: docSnap.id,
+                  ...data,
+                  esAbono: false,
+                  montoAPagar: null,
+                });
+              }
+            }
           }
         }
       }
@@ -1216,8 +1257,10 @@ const RRevisionDocumentos = () => {
             });
 
             // Agregar notas de débito si existen (vinculadas a la nota de crédito)
-            if (Array.isArray(nc.notasDebito)) {
-              nc.notasDebito.forEach((nd) => {
+            // Use notasDebitoDetalle (full data) if available, fallback to notasDebito
+            const notasDebitoArray = nc.notasDebitoDetalle || nc.notasDebito || [];
+            if (Array.isArray(notasDebitoArray)) {
+              notasDebitoArray.forEach((nd) => {
                 const ndNumero = typeof nd === 'object' && nd.numeroDoc ? nd.numeroDoc : nd;
                 const ndTotal = typeof nd === 'object' && nd.total ? nd.total : 0;
                 documentos.push({
@@ -1469,7 +1512,7 @@ const RRevisionDocumentos = () => {
             if (facturaConNC) break;
           }
 
-          // If this abono included NC, revert the credit note status
+          // If this abono included NC, revert the credit note status and its debit notes
           if (facturaConNC && facturaConNC.includeNotaCredito === true && Array.isArray(facturaConNC.notasCredito)) {
             for (const nc of facturaConNC.notasCredito) {
               const ncNumero = typeof nc === 'object' ? nc.numeroDoc : nc;
@@ -1485,6 +1528,25 @@ const RRevisionDocumentos = () => {
                 });
               } catch (ncError) {
                 console.warn(`No se pudo revertir NC ${ncNumero}:`, ncError);
+              }
+
+              // Also revert associated debit notes
+              if (typeof nc === 'object' && Array.isArray(nc.notasDebitoDetalle)) {
+                for (const nd of nc.notasDebitoDetalle) {
+                  const ndNumero = nd.numeroDoc;
+                  if (!ndNumero) continue;
+                  const ndRef = doc(db, currentCompanyRUT, '_root', 'empresas', rut, 'notasDebito', String(ndNumero));
+                  try {
+                    await updateDoc(ndRef, {
+                      estado: 'pendiente',
+                      pagoUsuario: deleteField(),
+                      fechaPago: deleteField(),
+                      fechaProceso: deleteField(),
+                    });
+                  } catch (ndError) {
+                    console.warn(`No se pudo revertir ND ${ndNumero}:`, ndError);
+                  }
+                }
               }
             }
           }
@@ -1746,6 +1808,28 @@ const RRevisionDocumentos = () => {
                   String(nc.numeroDoc)
                 );
                 await deleteDoc(ncRef);
+
+                // Also delete associated debit notes
+                if (Array.isArray(nc.notasDebitoDetalle)) {
+                  for (const nd of nc.notasDebitoDetalle) {
+                    const ndNumero = nd.numeroDoc;
+                    if (!ndNumero) continue;
+                    const ndRef = doc(
+                      db,
+                      currentCompanyRUT,
+                      '_root',
+                      'empresas',
+                      empresa.rut,
+                      'notasDebito',
+                      String(ndNumero)
+                    );
+                    try {
+                      await deleteDoc(ndRef);
+                    } catch (err) {
+                      console.warn(`No se pudo eliminar ND ${ndNumero}:`, err);
+                    }
+                  }
+                }
               } else {
                 const ncRef = doc(
                   db,
@@ -1762,6 +1846,33 @@ const RRevisionDocumentos = () => {
                   fechaPago: deleteField(),
                   fechaProceso: deleteField(),
                 });
+
+                // Also revert associated debit notes
+                if (Array.isArray(nc.notasDebitoDetalle)) {
+                  for (const nd of nc.notasDebitoDetalle) {
+                    const ndNumero = nd.numeroDoc;
+                    if (!ndNumero) continue;
+                    const ndRef = doc(
+                      db,
+                      currentCompanyRUT,
+                      '_root',
+                      'empresas',
+                      empresa.rut,
+                      'notasDebito',
+                      String(ndNumero)
+                    );
+                    try {
+                      await updateDoc(ndRef, {
+                        estado: 'pendiente',
+                        pagoUsuario: deleteField(),
+                        fechaPago: deleteField(),
+                        fechaProceso: deleteField(),
+                      });
+                    } catch (err) {
+                      console.warn(`No se pudo revertir ND ${ndNumero}:`, err);
+                    }
+                  }
+                }
               }
             }
           }
@@ -1983,30 +2094,53 @@ const RRevisionDocumentos = () => {
             String(iNumeroDocNuevo)
           );
 
-          // Crear entrada de historial con valores anteriores
+          // Helper function to recursively remove undefined values
+          const removeUndefined = (obj) => {
+            if (obj === null || obj === undefined) return null;
+            if (Array.isArray(obj)) {
+              return obj.map(removeUndefined).filter((item) => item !== null && item !== undefined);
+            }
+            if (typeof obj === 'object' && !(obj instanceof Date) && !obj.toDate) {
+              const cleaned = {};
+              Object.keys(obj).forEach((key) => {
+                const value = obj[key];
+                if (value !== undefined) {
+                  cleaned[key] = removeUndefined(value);
+                }
+              });
+              return cleaned;
+            }
+            return obj;
+          };
+
+          // Crear entrada de historial con valores anteriores (only defined values)
+          const valoresAnteriores = {};
+          if (datosOriginales.numeroDoc !== undefined) valoresAnteriores.numeroDoc = datosOriginales.numeroDoc;
+          if (datosOriginales.fechaE !== undefined) valoresAnteriores.fechaE = datosOriginales.fechaE;
+          if (datosOriginales.fechaV !== undefined) valoresAnteriores.fechaV = datosOriginales.fechaV;
+          if (datosOriginales.neto !== undefined) valoresAnteriores.neto = datosOriginales.neto;
+          if (datosOriginales.iva !== undefined) valoresAnteriores.iva = datosOriginales.iva;
+          if (datosOriginales.flete !== undefined) valoresAnteriores.flete = datosOriginales.flete;
+          if (datosOriginales.retencion !== undefined) valoresAnteriores.retencion = datosOriginales.retencion;
+          if (datosOriginales.otros !== undefined) valoresAnteriores.otros = datosOriginales.otros;
+          if (datosOriginales.total !== undefined) valoresAnteriores.total = datosOriginales.total;
+
           const historialEdicion = {
             fecha: fechaEdicionActual,
             usuario: user?.email || 'desconocido',
-            valoresAnteriores: {
-              numeroDoc: datosOriginales.numeroDoc,
-              fechaE: datosOriginales.fechaE,
-              fechaV: datosOriginales.fechaV,
-              neto: datosOriginales.neto,
-              iva: datosOriginales.iva,
-              flete: datosOriginales.flete,
-              retencion: datosOriginales.retencion,
-              otros: datosOriginales.otros,
-              total: datosOriginales.total,
-            },
+            valoresAnteriores,
           };
 
           // Combinar datos originales con actualizados, incluyendo historial
           const historialExistente = datosOriginales.historialEdiciones || [];
-          await setDoc(nuevoDocRef, {
+
+          const datosParaGuardar = removeUndefined({
             ...datosOriginales,
             ...datosActualizados,
             historialEdiciones: [...historialExistente, historialEdicion],
           });
+
+          await setDoc(nuevoDocRef, datosParaGuardar);
           await deleteDoc(docRefAntiguo);
 
           // Si es una nota de crédito, actualizar la referencia en la factura asociada
@@ -2037,6 +2171,23 @@ const RRevisionDocumentos = () => {
                 });
                 await updateDoc(facturaRef, { notasCredito: nuevasNotas });
               }
+            }
+
+            // También actualizar las notas de débito vinculadas a esta NC
+            if (Array.isArray(datosOriginales.notasDebito) && datosOriginales.notasDebito.length > 0) {
+              await Promise.all(
+                datosOriginales.notasDebito.map(async (nd) => {
+                  const ndNumero = typeof nd === 'object' ? nd.numeroDoc : nd;
+                  if (!ndNumero) return;
+
+                  const ndRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasDebito', String(ndNumero));
+                  try {
+                    await updateDoc(ndRef, { numeroDocDb: iNumeroDocNuevo });
+                  } catch (err) {
+                    console.warn(`No se pudo actualizar numeroDocDb en ND ${ndNumero}:`, err);
+                  }
+                })
+              );
             }
           }
 
@@ -2069,21 +2220,23 @@ const RRevisionDocumentos = () => {
         if (docSnapActual.exists()) {
           const datosActuales = docSnapActual.data();
 
-          // Crear entrada de historial con valores anteriores
+          // Crear entrada de historial con valores anteriores (filtrar undefined para arrayUnion)
+          const valoresAnteriores = {
+            numeroDoc: datosActuales.numeroDoc ?? null,
+            fechaE: datosActuales.fechaE ?? null,
+            fechaV: datosActuales.fechaV ?? null,
+            neto: datosActuales.neto ?? null,
+            iva: datosActuales.iva ?? null,
+            flete: datosActuales.flete ?? null,
+            retencion: datosActuales.retencion ?? null,
+            otros: datosActuales.otros ?? null,
+            total: datosActuales.total ?? null,
+          };
+
           const historialEdicion = {
             fecha: fechaEdicionActual,
             usuario: user?.email || 'desconocido',
-            valoresAnteriores: {
-              numeroDoc: datosActuales.numeroDoc,
-              fechaE: datosActuales.fechaE,
-              fechaV: datosActuales.fechaV,
-              neto: datosActuales.neto,
-              iva: datosActuales.iva,
-              flete: datosActuales.flete,
-              retencion: datosActuales.retencion,
-              otros: datosActuales.otros,
-              total: datosActuales.total,
-            },
+            valoresAnteriores,
           };
 
           await updateDoc(docRef, {
@@ -2355,9 +2508,9 @@ const RRevisionDocumentos = () => {
 
       const docData = docSnap.data();
 
-      // Si es factura y tiene notasCredito (array no vacío) -> abrir modal especial
+      // Si es factura (o factura exenta) y tiene notasCredito (array no vacío) -> abrir modal especial
       if (
-        tipoDoc === 'facturas' &&
+        (tipoDoc === 'facturas' || tipoDoc === 'facturasExentas') &&
         Array.isArray(docData.notasCredito) &&
         docData.notasCredito.length > 0
       ) {
@@ -2414,16 +2567,27 @@ const RRevisionDocumentos = () => {
             const totalNc = Number(docData.total) || 0;
             const nuevoAbonoNc = Math.max((facturaData.abonoNc || 0) - totalNc, 0);
             const totalFactura = Number(facturaData.total) || 0;
-            const nuevoTotalDescontado = totalFactura - nuevoAbonoNc;
+            // Include existing abonoNd in totalDescontado calculation (debit notes from other NCs)
+            const facturaAbonoNd = facturaData.abonoNd || 0;
+            const nuevoTotalDescontado = totalFactura - nuevoAbonoNc + facturaAbonoNd;
 
             // Actualizar la factura
             if (nuevasNotas.length === 0) {
-              // Si no quedan notas de crédito, eliminar los campos
-              await updateDoc(facturaRef, {
-                notasCredito: deleteField(),
-                abonoNc: deleteField(),
-                totalDescontado: deleteField(),
-              });
+              // Si no quedan notas de crédito, eliminar los campos de NC
+              // But keep abonoNd and totalDescontado if there are still debit notes
+              if (facturaAbonoNd > 0) {
+                await updateDoc(facturaRef, {
+                  notasCredito: deleteField(),
+                  abonoNc: deleteField(),
+                  totalDescontado: totalFactura + facturaAbonoNd,
+                });
+              } else {
+                await updateDoc(facturaRef, {
+                  notasCredito: deleteField(),
+                  abonoNc: deleteField(),
+                  totalDescontado: deleteField(),
+                });
+              }
             } else {
               await updateDoc(facturaRef, {
                 notasCredito: nuevasNotas,
@@ -2552,6 +2716,62 @@ const RRevisionDocumentos = () => {
   };
 
   const handleEliminarConNotasCredito = async () => {
+    const { rut } = deleteInfo;
+
+    try {
+      setHasNotasCreditoModal(false);
+      setLoadingModal(true);
+
+      // First, collect ALL debit notes from ALL credit notes
+      const allDebitNotes = [];
+
+      if (Array.isArray(iNotasCredito) && iNotasCredito.length > 0) {
+        for (const nc of iNotasCredito) {
+          const ncNumero = typeof nc === 'object' && nc.numeroDoc ? String(nc.numeroDoc) : String(nc);
+          if (!ncNumero) continue;
+
+          const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', ncNumero);
+          const ncSnap = await getDoc(ncRef);
+
+          if (ncSnap.exists()) {
+            const ncData = ncSnap.data();
+            // Check both notasDebito and notasDebitoDetalle (NDs might be stored in either)
+            const notasDebitoArray = ncData.notasDebitoDetalle || ncData.notasDebito || [];
+            if (Array.isArray(notasDebitoArray) && notasDebitoArray.length > 0) {
+              for (const nd of notasDebitoArray) {
+                const ndNumero = typeof nd === 'object' && nd.numeroDoc ? String(nd.numeroDoc) : String(nd);
+                if (ndNumero) {
+                  allDebitNotes.push(ndNumero);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      setLoadingModal(false);
+
+      // If there are debit notes, show modal asking what to do
+      if (allDebitNotes.length > 0) {
+        setINotasDebito(allDebitNotes);
+        setAllDebitNotesFromCascade(allDebitNotes);
+        setNcInfoParaNd({ rut: String(rut), numeroDoc: '', notasDebito: allDebitNotes });
+        setDeletingFromInvoiceCascade(true);
+        setHasNotasDebitoModal(true);
+        return;
+      }
+
+      // No debit notes, proceed with direct deletion
+      await executeEliminarFacturaConNotasCredito();
+    } catch (error) {
+      console.error('Error verificando notas de débito:', error);
+      setLoadingModal(false);
+      setErrorModal('Error verificando las notas de débito');
+    }
+  };
+
+  // Execute the actual deletion of invoice with credit notes (and optionally debit notes)
+  const executeEliminarFacturaConNotasCredito = async (deleteDebitNotes = true) => {
     const { rut, tipoDoc, numeroDoc } = deleteInfo;
     const fechaEliminacion = new Date().toISOString();
     const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
@@ -2567,34 +2787,34 @@ const RRevisionDocumentos = () => {
     };
 
     try {
-      setHasNotasCreditoModal(false);
       setLoadingModal(true);
 
       const notasDebitoEliminadas = [];
 
       // 1) Eliminar cada nota de crédito referenciada con registro de auditoría
-      // También eliminar las notas de débito vinculadas a cada NC
       if (Array.isArray(iNotasCredito) && iNotasCredito.length > 0) {
         for (const nc of iNotasCredito) {
-          const ncNumero =
-            typeof nc === 'object' && nc.numeroDoc ? String(nc.numeroDoc) : String(nc);
+          const ncNumero = typeof nc === 'object' && nc.numeroDoc ? String(nc.numeroDoc) : String(nc);
           if (!ncNumero) continue;
+
           const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', ncNumero);
           try {
             const ncSnap = await getDoc(ncRef);
             if (ncSnap.exists()) {
               const ncData = ncSnap.data();
 
-              // Primero eliminar las notas de débito vinculadas a esta NC
-              if (Array.isArray(ncData.notasDebito) && ncData.notasDebito.length > 0) {
-                for (const nd of ncData.notasDebito) {
+              // Delete debit notes only if requested
+              // Check both notasDebito and notasDebitoDetalle (NDs might be stored in either)
+              const notasDebitoArray = ncData.notasDebitoDetalle || ncData.notasDebito || [];
+              if (deleteDebitNotes && Array.isArray(notasDebitoArray) && notasDebitoArray.length > 0) {
+                for (const nd of notasDebitoArray) {
                   const ndNumero = typeof nd === 'object' && nd.numeroDoc ? String(nd.numeroDoc) : String(nd);
                   if (!ndNumero) continue;
+
                   const ndRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasDebito', ndNumero);
                   try {
                     const ndSnap = await getDoc(ndRef);
                     if (ndSnap.exists()) {
-                      // Registrar ND en auditoría
                       await registrarAuditoria({
                         tipo: 'eliminacion',
                         tipoDocumento: 'notasDebito',
@@ -2614,7 +2834,7 @@ const RRevisionDocumentos = () => {
                 }
               }
 
-              // Registrar NC en auditoría (no bloquea si falla)
+              // Registrar NC en auditoría
               await registrarAuditoria({
                 tipo: 'eliminacion',
                 tipoDocumento: 'notasCredito',
@@ -2624,9 +2844,9 @@ const RRevisionDocumentos = () => {
                 eliminadoPor: user?.email || 'desconocido',
                 fechaEliminacion: fechaEliminacion,
                 motivoEliminacion: `Eliminación en cascada con factura ${numeroDoc}`,
-                notasDebitoEliminadas: ncData.notasDebito ? ncData.notasDebito.map((nd) =>
-                  typeof nd === 'object' && nd.numeroDoc ? String(nd.numeroDoc) : String(nd)
-                ) : [],
+                notasDebitoEliminadas: deleteDebitNotes && ncData.notasDebito
+                  ? ncData.notasDebito.map((nd) => typeof nd === 'object' && nd.numeroDoc ? String(nd.numeroDoc) : String(nd))
+                  : [],
               });
               await deleteDoc(ncRef);
             }
@@ -2641,7 +2861,6 @@ const RRevisionDocumentos = () => {
       const facturaSnap = await getDoc(facturaRef);
 
       if (facturaSnap.exists()) {
-        // Registrar eliminación de factura en auditoría (no bloquea si falla)
         await registrarAuditoria({
           tipo: 'eliminacion',
           tipoDocumento: tipoDoc,
@@ -2660,9 +2879,18 @@ const RRevisionDocumentos = () => {
       // Eliminar la factura
       await deleteDoc(facturaRef);
 
+      // Calculate ND count before resetting cascade state (use cascade count as fallback)
+      const ndCount = deleteDebitNotes
+        ? Math.max(notasDebitoEliminadas.length, allDebitNotesFromCascade.length)
+        : 0;
+
+      // Reset cascade state
+      setDeletingFromInvoiceCascade(false);
+      setAllDebitNotesFromCascade([]);
+
       setLoadingModal(false);
       setEditarModal(false);
-      const msgNd = notasDebitoEliminadas.length > 0 ? `, ${notasDebitoEliminadas.length} nota(s) de débito` : '';
+      const msgNd = ndCount > 0 ? `, ${ndCount} nota(s) de débito` : '';
       setErrorModal(`Factura, ${iNotasCredito.length} nota(s) de crédito${msgNd} eliminadas correctamente`);
       handleBuscar();
     } catch (error) {
@@ -2681,6 +2909,12 @@ const RRevisionDocumentos = () => {
     try {
       setHasNotasDebitoModal(false);
       setLoadingModal(true);
+
+      // If we're in invoice cascade mode, use the dedicated function to delete all
+      if (deletingFromInvoiceCascade) {
+        await executeEliminarFacturaConNotasCredito(true); // true = delete debit notes
+        return;
+      }
 
       // 1) Obtener datos de la NC para saber la factura vinculada
       const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', String(numeroDoc));
@@ -2833,6 +3067,9 @@ const RRevisionDocumentos = () => {
     const { rut, numeroDoc, notasDebito } = ncInfoParaNd;
     const destinoNumero = String(vincularNdNumeroDoc).trim();
 
+    // Use allDebitNotesFromCascade if in invoice cascade mode, otherwise use ncInfoParaNd.notasDebito
+    const notasDebitoToLink = deletingFromInvoiceCascade ? allDebitNotesFromCascade : notasDebito;
+
     if (!destinoNumero) {
       setErrorModal('Error - Número de nota de crédito inexistente');
       return;
@@ -2851,7 +3088,8 @@ const RRevisionDocumentos = () => {
         return;
       }
 
-      if (String(destinoNumero) === String(numeroDoc)) {
+      // In single NC deletion mode, validate that destination is different from original
+      if (!deletingFromInvoiceCascade && String(destinoNumero) === String(numeroDoc)) {
         setLoadingModal(false);
         setErrorModal('Error - El número de nota de crédito a vincular es el actual');
         return;
@@ -2864,21 +3102,25 @@ const RRevisionDocumentos = () => {
         return;
       }
 
-      // 2) Obtener datos de la NC original
-      const ncOriginalRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', String(numeroDoc));
-      const ncOriginalSnap = await getDoc(ncOriginalRef);
+      // Variables for non-cascade mode
+      let ncOriginalData = null;
 
-      if (!ncOriginalSnap.exists()) {
-        setLoadingModal(false);
-        setErrorModal('No se encontró la nota de crédito original');
-        return;
+      // 2) Obtener datos de la NC original (only in non-cascade mode)
+      if (!deletingFromInvoiceCascade) {
+        const ncOriginalRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', String(numeroDoc));
+        const ncOriginalSnap = await getDoc(ncOriginalRef);
+
+        if (!ncOriginalSnap.exists()) {
+          setLoadingModal(false);
+          setErrorModal('No se encontró la nota de crédito original');
+          return;
+        }
+        ncOriginalData = ncOriginalSnap.data();
       }
-
-      const ncOriginalData = ncOriginalSnap.data();
 
       // 3) Calcular totales de las ND que se van a mover
       let totalNdMovido = 0;
-      for (const nd of notasDebito) {
+      for (const nd of notasDebitoToLink) {
         const ndNumero = typeof nd === 'object' && nd.numeroDoc ? String(nd.numeroDoc) : String(nd);
         if (!ndNumero) continue;
         const ndRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasDebito', ndNumero);
@@ -2900,7 +3142,7 @@ const RRevisionDocumentos = () => {
       }
 
       // 4) Actualizar cada ND para apuntar a la nueva NC
-      for (const nd of notasDebito) {
+      for (const nd of notasDebitoToLink) {
         const ndNumero = typeof nd === 'object' && nd.numeroDoc ? String(nd.numeroDoc) : String(nd);
         if (!ndNumero) continue;
         const ndRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasDebito', ndNumero);
@@ -2908,7 +3150,7 @@ const RRevisionDocumentos = () => {
       }
 
       // 5) Actualizar la NC destino (agregar ND al array, actualizar abonoNd y totalDescontado)
-      const nuevasNdDestino = [...(destinoData.notasDebito || []), ...notasDebito.map((nd) =>
+      const nuevasNdDestino = [...(destinoData.notasDebito || []), ...notasDebitoToLink.map((nd) =>
         typeof nd === 'object' && nd.numeroDoc ? nd.numeroDoc : nd
       )];
       const nuevoAbonoNdDestino = ncDestinoAbonoNd + totalNdMovido;
@@ -2920,8 +3162,14 @@ const RRevisionDocumentos = () => {
         totalDescontado: nuevoTotalDescontadoDestino,
       });
 
-      // 6) Actualizar la factura de la NC destino (si es diferente a la original)
-      if (destinoData.numeroDocNc) {
+      // 6) Actualizar la factura de la NC destino
+      // IMPORTANT: Only update invoice's abonoNd if source and destination NCs are linked to DIFFERENT invoices
+      // If they're linked to the same invoice, the abonoNd is already counted there
+      const sourceInvoiceNum = ncOriginalData ? ncOriginalData.numeroDocNc : null;
+      const destInvoiceNum = destinoData.numeroDocNc;
+      const sameInvoice = sourceInvoiceNum && destInvoiceNum && String(sourceInvoiceNum) === String(destInvoiceNum);
+
+      if (destinoData.numeroDocNc && !sameInvoice) {
         const tipoFacturaDest = destinoData.tipoFacturaAsociada || 'facturas';
         let facturaDestRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), tipoFacturaDest, String(destinoData.numeroDocNc));
         let facturaDestSnap = await getDoc(facturaDestRef);
@@ -2945,8 +3193,37 @@ const RRevisionDocumentos = () => {
         }
       }
 
-      // 7) Actualizar la factura de la NC original (restar abonoNd)
-      if (ncOriginalData.numeroDocNc && ncOriginalData.numeroDocNc !== destinoData.numeroDocNc) {
+      // If in invoice cascade mode, delete the invoice with all NCs (without deleting NDs since they were linked)
+      if (deletingFromInvoiceCascade) {
+        // Registrar en auditoría
+        try {
+          const auditoriaRef = collection(db, currentCompanyRUT, '_root', 'auditoria');
+          await addDoc(auditoriaRef, {
+            tipo: 'vinculacion_nd_cascada',
+            notasCreditoDestino: destinoNumero,
+            notasDebitoVinculadas: notasDebitoToLink.map((nd) =>
+              typeof nd === 'object' && nd.numeroDoc ? String(nd.numeroDoc) : String(nd)
+            ),
+            empresaRut: rut,
+            vinculadoPor: user?.email || 'desconocido',
+            fechaVinculacion: new Date().toISOString(),
+            motivoVinculacion: 'Vinculación en cascada desde eliminación de factura',
+          });
+        } catch (auditError) {
+          console.warn('No se pudo registrar vinculación en auditoría:', auditError);
+        }
+
+        setVincularNdModal(false);
+        setVincularNdNumeroDoc('');
+
+        // Delete invoice with all NCs, but NOT delete NDs (they were linked to another NC)
+        await executeEliminarFacturaConNotasCredito(false);
+        return;
+      }
+
+      // 7) Actualizar la factura de la NC original (restar abonoNd) - only in non-cascade mode
+      // Only update if source and destination NCs are linked to DIFFERENT invoices
+      if (ncOriginalData && ncOriginalData.numeroDocNc && !sameInvoice) {
         const tipoFacturaOrig = ncOriginalData.tipoFacturaAsociada || 'facturas';
         let facturaOrigRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), tipoFacturaOrig, String(ncOriginalData.numeroDocNc));
         let facturaOrigSnap = await getDoc(facturaOrigRef);
@@ -2978,6 +3255,7 @@ const RRevisionDocumentos = () => {
       }
 
       // 8) Actualizar la NC original (quitar ND) - ahora se puede eliminar sin ND
+      const ncOriginalRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', String(numeroDoc));
       await updateDoc(ncOriginalRef, {
         notasDebito: deleteField(),
         abonoNd: deleteField(),
@@ -2991,7 +3269,7 @@ const RRevisionDocumentos = () => {
           tipo: 'vinculacion_nd',
           notasCreditoOrigen: numeroDoc,
           notasCreditoDestino: destinoNumero,
-          notasDebitoVinculadas: notasDebito.map((nd) =>
+          notasDebitoVinculadas: notasDebitoToLink.map((nd) =>
             typeof nd === 'object' && nd.numeroDoc ? String(nd.numeroDoc) : String(nd)
           ),
           empresaRut: rut,
@@ -3005,6 +3283,15 @@ const RRevisionDocumentos = () => {
       setVincularNdModal(false);
       setVincularNdNumeroDoc('');
       setLoadingModal(false);
+
+      // Si es solo desvinculación (sin eliminar la NC), mostrar mensaje y salir
+      if (vincularNdSinEliminar) {
+        setVincularNdSinEliminar(false);
+        setEditarModal(false);
+        handleBuscar();
+        setErrorModal('Notas de débito desvinculadas y asociadas a la nueva nota de crédito correctamente');
+        return;
+      }
 
       // Ahora proceder a eliminar la NC original (ya sin ND)
       // Llamar a handleConfirmDelete con los datos correctos
@@ -4308,6 +4595,24 @@ const RRevisionDocumentos = () => {
                     </div>
                   )}
 
+                  {/* Info sobre notas de débito vinculadas (para notas de crédito) */}
+                  {iNotasDebito && iNotasDebito.length > 0 && iNotasDebito[0] !== '' && (
+                    <div
+                      className={`rounded-lg p-3 mb-2 ${isLightTheme ? 'bg-green-50 border border-green-200' : 'bg-green-500/20 border border-green-500/50'}`}
+                    >
+                      <p
+                        className={`text-sm font-semibold ${isLightTheme ? 'text-green-700' : 'text-green-200'}`}
+                      >
+                        Notas de débito asociadas: {iNotasDebito.length}
+                      </p>
+                      <p
+                        className={`text-xs mt-1 ${isLightTheme ? 'text-green-600' : 'text-green-100/80'}`}
+                      >
+                        Este documento tiene notas de débito vinculadas
+                      </p>
+                    </div>
+                  )}
+
                   {/* Botón desvincular NC - solo para facturas con NC y usuarios con permiso de edición */}
                   {puedeEditar &&
                     (iTipoDoc === 'Factura electrónica' || iTipoDoc === 'Factura exenta') &&
@@ -4322,6 +4627,28 @@ const RRevisionDocumentos = () => {
                           setVincularTipoDoc('Factura electrónica');
                           setVincularSinEliminar(true);
                           setVincularModal(true);
+                        }}
+                      />
+                    )}
+
+                  {/* Botón desvincular ND - solo para notas de crédito con ND y usuarios con permiso de edición */}
+                  {puedeEditar &&
+                    iTipoDoc === 'Nota de crédito' &&
+                    iNotasDebito &&
+                    iNotasDebito.length > 0 &&
+                    iNotasDebito[0] !== '' && (
+                      <TextButton
+                        text="Desvincular notas de débito"
+                        className="bg-accent-blue text-white font-semibold hover:bg-blue-600 active:bg-blue-700 w-full justify-center py-3 rounded-lg"
+                        onClick={() => {
+                          setVincularNdNumeroDoc('');
+                          setNcInfoParaNd({
+                            rut: deleteInfo.rut,
+                            numeroDoc: iNumeroDoc,
+                            notasDebito: iNotasDebito,
+                          });
+                          setVincularNdSinEliminar(true);
+                          setVincularNdModal(true);
                         }}
                       />
                     )}
@@ -4439,12 +4766,18 @@ const RRevisionDocumentos = () => {
 
         {hasNotasDebitoModal && (
           <Modal
-            onClickOutside={() => setHasNotasDebitoModal(false)}
+            onClickOutside={() => {
+              setHasNotasDebitoModal(false);
+              setDeletingFromInvoiceCascade(false);
+              setAllDebitNotesFromCascade([]);
+            }}
             className="!absolute !top-24"
           >
             <div className="flex flex-col items-center gap-4 p-6 max-w-[100%]">
               <p className="text-lg font-bold text-center">
-                La Nota de crédito N°{ncInfoParaNd.numeroDoc} tiene Notas de débito asociadas:
+                {deletingFromInvoiceCascade
+                  ? 'Las notas de crédito de esta factura tienen Notas de débito asociadas:'
+                  : `La Nota de crédito N°${ncInfoParaNd.numeroDoc} tiene Notas de débito asociadas:`}
               </p>
 
               <div className="w-full max-h-56 overflow-y-auto bg-black/20 rounded p-3">
@@ -4467,7 +4800,11 @@ const RRevisionDocumentos = () => {
                 <TextButton
                   text="Cancelar"
                   className="bg-slate-600 text-white font-black m-2 hover:bg-slate-500 active:bg-slate-700 w-[95%] justify-center py-7 rounded-3xl"
-                  onClick={() => setHasNotasDebitoModal(false)}
+                  onClick={() => {
+                    setHasNotasDebitoModal(false);
+                    setDeletingFromInvoiceCascade(false);
+                    setAllDebitNotesFromCascade([]);
+                  }}
                 />
 
                 <TextButton
@@ -4496,11 +4833,18 @@ const RRevisionDocumentos = () => {
           <Modal
             onClickOutside={() => {
               setVincularNdModal(false);
+              setVincularNdSinEliminar(false);
+              setDeletingFromInvoiceCascade(false);
+              setAllDebitNotesFromCascade([]);
             }}
             className="!absolute !top-24"
           >
             <div className="flex flex-col gap-4 p-6 w-[90%] max-w-xl">
-              <p className="text-lg font-bold">Vincular notas de débito a otra nota de crédito</p>
+              <p className="text-lg font-bold">
+                {vincularNdSinEliminar
+                  ? 'Desvincular notas de débito a otra nota de crédito'
+                  : 'Vincular notas de débito a otra nota de crédito'}
+              </p>
 
               <Textfield
                 label="Número de nota de crédito destino"
@@ -4515,6 +4859,9 @@ const RRevisionDocumentos = () => {
                   className="bg-slate-600 text-white font-black m-2 hover:bg-slate-500 active:bg-slate-700 w-[95%] justify-center rounded-3xl py-2"
                   onClick={() => {
                     setVincularNdModal(false);
+                    setVincularNdSinEliminar(false);
+                    setDeletingFromInvoiceCascade(false);
+                    setAllDebitNotesFromCascade([]);
                   }}
                 />
                 <TextButton

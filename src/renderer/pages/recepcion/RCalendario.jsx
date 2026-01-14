@@ -129,8 +129,10 @@ const RCalendario = () => {
 
     // Calculate abono status
     const totalAbonado = docData.totalAbonado ?? 0;
-    const totalOriginal = docData.totalDescontado ?? docData.total ?? 0;
-    const saldoPendiente = docData.saldoPendiente ?? totalOriginal;
+    // Use original total for all document types (since they're all displayed separately in calendar)
+    // The calendar shows each document individually, so we don't want pre-calculated adjustments
+    const totalOriginal = docData.total ?? 0;
+    const saldoPendiente = docData.saldoPendiente ?? (docData.totalDescontado ?? totalOriginal);
     const tieneAbonos = (docData.abonos?.length ?? 0) > 0;
 
     // Build array of individual abono payments for calendar display
@@ -143,6 +145,7 @@ const RCalendario = () => {
       razon,
       numeroDoc: docData.numeroDoc,
       total: totalOriginal,
+      totalDescontado: docData.totalDescontado ?? totalOriginal, // Net amount after credit/debit notes
       saldoPendiente,
       totalAbonado,
       estado: isOverdue ? 'vencido' : docData.estado,
@@ -412,11 +415,13 @@ const RCalendario = () => {
       // Add individual abono payments to paid map
       if (doc.abonos && doc.abonos.length > 0) {
         // Determine if this is a true partial payment scenario or a full payment with abonos array
-        // A full payment has: estado === 'pagado' AND only 1 abono AND that abono equals the total
+        // A full payment has: estado === 'pagado' AND only 1 abono AND that abono covers the amount owed
+        // The abono might equal totalDescontado (net after credit/debit notes) instead of original total
+        const abonoMonto = doc.abonos[0]?.monto || 0;
         const isFullPaymentWithAbono =
           doc.estado === 'pagado' &&
           doc.abonos.length === 1 &&
-          doc.abonos[0].monto >= (doc.total || 0);
+          (abonoMonto >= (doc.total || 0) || abonoMonto >= (doc.totalDescontado || 0));
 
         doc.abonos.forEach((abono, index) => {
           // Parse abono date
@@ -436,11 +441,12 @@ const RCalendario = () => {
             }
 
             // If it's a full payment (single abono that covers the total), mark as not an abono entry
+            // and show the original document total, not the abono amount
             const isActualAbono = !isFullPaymentWithAbono;
 
             map.paid[dateKey].push({
               ...doc,
-              displayTotal: abono.monto,
+              displayTotal: isFullPaymentWithAbono ? doc.total : abono.monto,
               isAbonoEntry: isActualAbono,
               abonoMonto: abono.monto,
               abonoFecha: abonoDate,

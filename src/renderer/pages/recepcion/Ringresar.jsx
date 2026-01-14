@@ -657,14 +657,11 @@ const RIngresar = () => {
         const notaCreditoRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), "notasCredito", String(numeroDocDb));
 
         // Use transaction to prevent race conditions
+        // IMPORTANT: Firestore requires all reads before any writes
         await runTransaction(db, async (transaction) => {
-          // Read both documents within transaction
+          // === ALL READS FIRST ===
           const docSnap = await transaction.get(documentoRef);
           const ncSnap = await transaction.get(notaCreditoRef);
-
-          if (docSnap.exists()) {
-            throw new Error("DUPLICATE");
-          }
 
           if (!ncSnap.exists()) {
             throw new Error("NC_NOT_FOUND");
@@ -672,11 +669,24 @@ const RIngresar = () => {
 
           const ncData = ncSnap.data();
 
+          // Read linked invoice if it exists (must happen before any writes)
+          let facturaRef = null;
+          let facturaSnap = null;
+          if (ncData.numeroDocNc) {
+            const tipoFactura = ncData.tipoFacturaAsociada || "facturas";
+            facturaRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), tipoFactura, String(ncData.numeroDocNc));
+            facturaSnap = await transaction.get(facturaRef);
+          }
+
+          // === VALIDATIONS (after all reads) ===
+          if (docSnap.exists()) {
+            throw new Error("DUPLICATE");
+          }
+
           if (ncData.estado === "pagado") {
             throw new Error("ALREADY_PAID");
           }
 
-          // Calculate new values atomically using current data
           const abonoActual = ncData.abonoNd || 0;
           const currentNotasDebito = ncData.notasDebito || [];
 
@@ -687,39 +697,32 @@ const RIngresar = () => {
             throw new Error("ND_EXCEEDS_BALANCE");
           }
 
+          // === ALL WRITES AFTER READS ===
+
           // Write debit note
           transaction.set(documentoRef, notaDebito);
 
-          // Update credit note atomically
+          // Update credit note
           transaction.update(notaCreditoRef, {
             abonoNd: abonoActual + total,
             notasDebito: [...currentNotasDebito, numeroDoc],
             totalDescontado: (ncData.totalDescontado ?? ncData.total) - total
           });
 
-          // Also update the linked invoice to add the debit note amount (abonoNd)
-          // This increases the invoice's totalDescontado since debit notes reduce credit note value
-          if (ncData.numeroDocNc) {
-            const tipoFactura = ncData.tipoFacturaAsociada || "facturas";
-            const facturaRef = doc(db, currentCompanyRUT, "_root", "empresas", String(giroRut), tipoFactura, String(ncData.numeroDocNc));
-            const facturaSnap = await transaction.get(facturaRef);
+          // Update linked invoice if it exists
+          if (facturaRef && facturaSnap && facturaSnap.exists()) {
+            const facturaData = facturaSnap.data();
+            const abonoNdActual = facturaData.abonoNd || 0;
+            const facturaTotal = facturaData.total || 0;
+            const facturaAbonoNc = facturaData.abonoNc || 0;
 
-            if (facturaSnap.exists()) {
-              const facturaData = facturaSnap.data();
-              const abonoNdActual = facturaData.abonoNd || 0;
-              const facturaTotal = facturaData.total || 0;
-              const facturaAbonoNc = facturaData.abonoNc || 0;
+            const nuevoAbonoNd = abonoNdActual + total;
+            const nuevoTotalDescontado = facturaTotal - facturaAbonoNc + nuevoAbonoNd;
 
-              // New abonoNd for the invoice (sum of all debit notes on its credit notes)
-              const nuevoAbonoNd = abonoNdActual + total;
-              // Recalculate totalDescontado: invoice total - credit notes + debit notes
-              const nuevoTotalDescontado = facturaTotal - facturaAbonoNc + nuevoAbonoNd;
-
-              transaction.update(facturaRef, {
-                abonoNd: nuevoAbonoNd,
-                totalDescontado: nuevoTotalDescontado
-              });
-            }
+            transaction.update(facturaRef, {
+              abonoNd: nuevoAbonoNd,
+              totalDescontado: nuevoTotalDescontado
+            });
           }
         });
 

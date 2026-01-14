@@ -536,6 +536,7 @@ const RProcesar = () => {
         // Phase 1: READ all documents first (required by Firestore transactions)
         const docReads = [];
         const ncReads = [];
+        const ndReads = []; // Debit notes linked to credit notes
 
         // Read all invoice documents
         for (const docAgregado of documentosAgregados) {
@@ -607,6 +608,33 @@ const RProcesar = () => {
                   parentNumeroDoc: numeroDoc,
                   parentTipoDoc: tipoDoc,
                 });
+
+                // If credit note has debit notes, queue them for reading too
+                if (ncSnap.exists()) {
+                  const ncData = ncSnap.data();
+                  if (ncData.notasDebito && ncData.notasDebito.length > 0) {
+                    for (const ndNum of ncData.notasDebito) {
+                      const ndNumero = typeof ndNum === 'object' ? ndNum.numeroDoc : ndNum;
+                      const ndRef = doc(
+                        db,
+                        currentCompanyRUT,
+                        '_root',
+                        'empresas',
+                        String(giroRut),
+                        'notasDebito',
+                        String(ndNumero)
+                      );
+                      const ndSnap = await transaction.get(ndRef);
+                      ndReads.push({
+                        ndRef,
+                        ndSnap,
+                        giroRut,
+                        ndNumero,
+                        parentNcNumero: ncNumero,
+                      });
+                    }
+                  }
+                }
               }
             }
           }
@@ -664,6 +692,18 @@ const RProcesar = () => {
           }
         }
 
+        // Update all notas de débito linked to the credit notes
+        for (const { ndRef, ndSnap } of ndReads) {
+          if (ndSnap.exists()) {
+            transaction.update(ndRef, {
+              estado: 'pagado',
+              pagoUsuario: userId,
+              fechaPago: fechaPago,
+              fechaProceso: fechaProceso,
+            });
+          }
+        }
+
         // Build facturas data for pago_recepcion (using data already read)
         const facturasResult = Object.entries(docsPorEmpresa).map(([rut, docs]) => {
           const facturasConNotas = docs.map(
@@ -687,7 +727,22 @@ const RProcesar = () => {
                         return String(ncNumero) === String(nc.ncNumero);
                       });
                     })
-                    .map((nc) => nc.ncSnap.data())
+                    .map((nc) => {
+                      const ncData = nc.ncSnap.data();
+                      // Find debit notes linked to this credit note and add their full data
+                      const notasDebitoDetalle = ndReads
+                        .filter(
+                          (nd) =>
+                            nd.giroRut === rut &&
+                            String(nd.parentNcNumero) === String(nc.ncNumero) &&
+                            nd.ndSnap.exists()
+                        )
+                        .map((nd) => nd.ndSnap.data());
+                      return {
+                        ...ncData,
+                        notasDebitoDetalle, // Full debit note data
+                      };
+                    })
                 : [];
 
               return {
