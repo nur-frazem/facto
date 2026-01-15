@@ -1008,7 +1008,77 @@ const RRevisionDocumentos = () => {
         }
       } else if (puedeReversarPago && docData.estado === 'pagado') {
         // Si es admin/super_admin y el documento está pagado, buscar TODOS los egresos
-        const egresos = await findAllEgresosForDocument(rut, numeroDoc, tipoDoc);
+        let egresos = await findAllEgresosForDocument(rut, numeroDoc, tipoDoc);
+
+        // For NC/ND: Also check the PARENT INVOICE for multiple egresos
+        // This ensures we show the abono modal when the parent invoice has multiple payments
+        let parentInvoiceData = null;
+        let parentInvoiceTipoDoc = null;
+        let parentInvoiceNumeroDoc = null;
+
+        if (tipoDoc === 'notasCredito' && docData.numeroDocNc) {
+          // NC has a parent invoice - find all egresos for that invoice
+          parentInvoiceTipoDoc = docData.tipoFacturaAsociada || 'facturas';
+          parentInvoiceNumeroDoc = docData.numeroDocNc;
+
+          const parentInvoiceRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), parentInvoiceTipoDoc, String(parentInvoiceNumeroDoc));
+          const parentInvoiceSnap = await getDoc(parentInvoiceRef);
+
+          // Try the other invoice type if not found
+          if (!parentInvoiceSnap.exists()) {
+            const altTipo = parentInvoiceTipoDoc === 'facturas' ? 'facturasExentas' : 'facturas';
+            const altRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), altTipo, String(parentInvoiceNumeroDoc));
+            const altSnap = await getDoc(altRef);
+            if (altSnap.exists()) {
+              parentInvoiceData = altSnap.data();
+              parentInvoiceTipoDoc = altTipo;
+            }
+          } else {
+            parentInvoiceData = parentInvoiceSnap.data();
+          }
+
+          if (parentInvoiceData) {
+            const parentEgresos = await findAllEgresosForDocument(rut, parentInvoiceNumeroDoc, parentInvoiceTipoDoc);
+            if (parentEgresos.length > egresos.length) {
+              egresos = parentEgresos;
+            }
+          }
+        } else if (tipoDoc === 'notasDebito' && docData.numeroDocDb) {
+          // ND has a parent NC - find the NC's parent invoice
+          const ncRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), 'notasCredito', String(docData.numeroDocDb));
+          const ncSnap = await getDoc(ncRef);
+
+          if (ncSnap.exists()) {
+            const ncData = ncSnap.data();
+            if (ncData.numeroDocNc) {
+              parentInvoiceTipoDoc = ncData.tipoFacturaAsociada || 'facturas';
+              parentInvoiceNumeroDoc = ncData.numeroDocNc;
+
+              const parentInvoiceRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), parentInvoiceTipoDoc, String(parentInvoiceNumeroDoc));
+              const parentInvoiceSnap = await getDoc(parentInvoiceRef);
+
+              // Try the other invoice type if not found
+              if (!parentInvoiceSnap.exists()) {
+                const altTipo = parentInvoiceTipoDoc === 'facturas' ? 'facturasExentas' : 'facturas';
+                const altRef = doc(db, currentCompanyRUT, '_root', 'empresas', String(rut), altTipo, String(parentInvoiceNumeroDoc));
+                const altSnap = await getDoc(altRef);
+                if (altSnap.exists()) {
+                  parentInvoiceData = altSnap.data();
+                  parentInvoiceTipoDoc = altTipo;
+                }
+              } else {
+                parentInvoiceData = parentInvoiceSnap.data();
+              }
+
+              if (parentInvoiceData) {
+                const parentEgresos = await findAllEgresosForDocument(rut, parentInvoiceNumeroDoc, parentInvoiceTipoDoc);
+                if (parentEgresos.length > egresos.length) {
+                  egresos = parentEgresos;
+                }
+              }
+            }
+          }
+        }
 
         if (egresos.length > 0) {
           // Preparar datos del documento actual
@@ -1021,21 +1091,39 @@ const RRevisionDocumentos = () => {
           // Un documento tiene abonos reales si:
           // 1. Tiene un array de abonos con más de 1 entrada, O
           // 2. Está en múltiples egresos diferentes (egresos.length > 1)
+          // 3. For NC/ND: The parent invoice has multiple egresos
           const tieneAbonosReales =
             (docData.abonos && docData.abonos.length > 1) ||
-            egresos.length > 1;
+            egresos.length > 1 ||
+            (parentInvoiceData && parentInvoiceData.abonos && parentInvoiceData.abonos.length > 1);
 
           if (tieneAbonosReales) {
             // Documento con múltiples abonos - mostrar modal de reversión de abonos
-            setDocumentoActualAbono({
-              rut,
-              numeroDoc,
-              tipoDoc,
-              total: docData.total,
-              totalAbonado: docData.totalAbonado || docData.totalDescontado || docData.total,
-              saldoPendiente: docData.saldoPendiente || 0,
-              abonos: docData.abonos || [],
-            });
+            // For NC/ND: Use the parent invoice data for the abono modal
+            if ((tipoDoc === 'notasCredito' || tipoDoc === 'notasDebito') && parentInvoiceData && parentInvoiceNumeroDoc) {
+              setDocumentoActualAbono({
+                rut,
+                numeroDoc: parentInvoiceNumeroDoc,
+                tipoDoc: parentInvoiceTipoDoc,
+                total: parentInvoiceData.total,
+                totalAbonado: parentInvoiceData.totalAbonado || parentInvoiceData.totalDescontado || parentInvoiceData.total,
+                saldoPendiente: parentInvoiceData.saldoPendiente || 0,
+                abonos: parentInvoiceData.abonos || [],
+                // Track original NC/ND that initiated the flow
+                origenNC: tipoDoc === 'notasCredito' ? numeroDoc : null,
+                origenND: tipoDoc === 'notasDebito' ? numeroDoc : null,
+              });
+            } else {
+              setDocumentoActualAbono({
+                rut,
+                numeroDoc,
+                tipoDoc,
+                total: docData.total,
+                totalAbonado: docData.totalAbonado || docData.totalDescontado || docData.total,
+                saldoPendiente: docData.saldoPendiente || 0,
+                abonos: docData.abonos || [],
+              });
+            }
             setEgresosConAbono(egresos);
             setEgresosSeleccionados([]);
 

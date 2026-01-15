@@ -377,8 +377,10 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
         montoAPagar = factura.total;
       } else if (hasNCToShow) {
         // Abono with NC OR completing payment after previous abonos
-        // Show payment + NC so the subtraction makes visual sense
-        montoAPagar = montoAPagarRaw + (factura.abonoNc || 0);
+        // Show payment + net NC effect (NC - ND) so the subtraction makes visual sense
+        // abonoNc is the total of credit notes, abonoNd is the total of debit notes that offset them
+        const netNcEffect = (factura.abonoNc || 0) - (factura.abonoNd || 0);
+        montoAPagar = montoAPagarRaw + netNcEffect;
       } else {
         // No NC to show
         montoAPagar = montoAPagarRaw;
@@ -526,7 +528,8 @@ export const generarPDF = async (numeroEgreso, facturasPorEmpresa, totalEgreso, 
               pdf.setLineWidth(0.1);
               pdf.line(marginLeft + 5, y + rowHeight - 1, marginRight, y + rowHeight - 1);
 
-              // Debit notes are ADDITIVE (they reduce the credit note's effect)
+              // Debit notes ADD to the subtotal because they offset the credit note subtraction
+              // Display: Invoice ($219k) - NC1 ($119k) + ND ($119k) - NC2 ($119k) = $100k
               subtotalEmpresa += ndData.total || 0;
               y += rowHeight - 1;
             }
